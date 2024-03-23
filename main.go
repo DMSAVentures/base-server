@@ -4,6 +4,7 @@ import (
 	"base-server/internal/api"
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
+	"base-server/internal/store"
 	"context"
 	"log"
 	"net/http"
@@ -16,9 +17,14 @@ import (
 )
 
 func main() {
-	r := gin.Default()
-	authProcessor := processor.New()
+	store, err := store.New()
+	if err != nil {
+		log.Fatalf("failed to initialize the database: %s", err)
+	}
+	authProcessor := processor.New(store)
 	authHandler := handler.New(authProcessor)
+
+	r := gin.Default()
 	api := api.New(r.Group("/"), authHandler)
 	api.Handler()
 
