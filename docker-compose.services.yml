@@ -12,5 +12,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  flyway:
+    image: flyway/flyway
+    depends_on:
+      - postgres
+    volumes:
+      - ./sql_migrations:/flyway/sql
+    environment:
+      FLYWAY_URL: jdbc:postgresql://postgres:5432/base-server
+      FLYWAY_USER: base-user
+      FLYWAY_PASSWORD: basepassword
+      FLYWAY_SCHEMAS: public
+      FLYWAY_CONNECT_RETRIES: 60 # Optional: attempts to connect to DB, useful for waiting until the DB is up
+    command: migrate
 volumes:
   postgres_data:
