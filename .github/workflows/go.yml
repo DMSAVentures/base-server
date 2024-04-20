@@ -50,7 +50,7 @@ jobs:
       run: |
         REPO_NAME="${{ github.event.repository.name }}"
         IMAGE_TAG=$REPO_NAME:$GITHUB_SHA
-        aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-west-2.amazonaws.com/$REPO_NAME
+        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com/$REPO_NAME
         docker build -t $IMAGE_TAG .
-        docker tag $IMAGE_TAG 123456789012.dkr.ecr.us-west-2.amazonaws.com/$IMAGE_TAG
-        docker push 123456789012.dkr.ecr.us-west-2.amazonaws.com/$IMAGE_TAG
+        docker tag $IMAGE_TAG 123456789012.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_TAG
+        docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_TAG
