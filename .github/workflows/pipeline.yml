@@ -1,4 +1,4 @@
-name: Build and Deploy Golang Application
+name: Build and Deploy Base Server
 
 permissions:
   id-token: write  # Required for OIDC-based authentication
