@@ -51,5 +51,5 @@ jobs:
         IMAGE_TAG=$REPO_NAME:$GITHUB_SHA
         aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 339713122183.dkr.ecr.us-east-1.amazonaws.com/$REPO_NAME
         docker build -t $IMAGE_TAG .
-        docker tag $IMAGE_TAG 123456789012.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_TAG
-        docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_TAG
+        docker tag $IMAGE_TAG 339713122183.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_TAG
+        docker push 339713122183.dkr.ecr.us-east-1.amazonaws.com/$IMAGE_TAG
