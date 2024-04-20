@@ -6,6 +6,7 @@ import (
 	"base-server/internal/auth/processor"
 	"base-server/internal/store"
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -34,7 +35,7 @@ func main() {
 	}
 	// Run the server in a goroutine so that it doesn't block
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
