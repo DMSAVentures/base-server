@@ -21,6 +21,7 @@ jobs:
         aws-region: us-east-1
         role-to-assume: arn:aws:iam::339713122183:role/github-actions-admin-aws
         role-session-name: GitHubActions
+        web-identity-token-file: ${{ github.token_path }}
 
     - name: Set up Go
       uses: actions/setup-go@v4
