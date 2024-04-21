@@ -1,6 +1,9 @@
 # Start from the official Golang base image
 FROM golang:1.22-alpine AS builder
 
+# Install curl
+RUN apk --no-cache add curl
+
 # Set the Current Working Directory inside the container
 WORKDIR /app
 
