@@ -67,20 +67,20 @@ jobs:
           # Authenticate with ECR
           aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REPO
           
-          # Build the Docker image and tag it with the SHA
-          docker build -t $IMAGE_SHA_TAG .
+          # Build the Docker image and tag with the unique SHA tag
+          docker build -t "$REPO_NAME:${{ github.sha }}" .
           
           # Tag the built image with the SHA in ECR
-          docker tag $IMAGE_SHA_TAG "$ECR_REPO:$IMAGE_SHA_TAG"
+          docker tag "$REPO_NAME:${{ github.sha }}" "$ECR_REPO:${{ github.sha }}"
           
           # Tag the built image with "latest" in ECR
-          docker tag $IMAGE_SHA_TAG "$ECR_REPO:$IMAGE_LATEST_TAG"
+          docker tag "$REPO_NAME:${{ github.sha }}" "$ECR_REPO:latest"
           
           # Push the unique SHA tag to ECR
-          docker push "$ECR_REPO:$IMAGE_SHA_TAG"
+          docker push "$ECR_REPO:${{ github.sha }}"
           
           # Push the "latest" tag to ECR
-          docker push "$ECR_REPO:$IMAGE_LATEST_TAG"
+          docker push "$ECR_REPO:latest"
 
   deploy-ecs:
       name: Deploy
