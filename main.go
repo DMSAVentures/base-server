@@ -1,10 +1,6 @@
 package main
 
 import (
-	"base-server/internal/api"
-	"base-server/internal/auth/handler"
-	"base-server/internal/auth/processor"
-	"base-server/internal/store"
 	"context"
 	"errors"
 	"log"
@@ -18,19 +14,27 @@ import (
 )
 
 func main() {
-	store, err := store.New()
-	if err != nil {
-		log.Fatalf("failed to initialize the database: %s", err)
-	}
-	authProcessor := processor.New(store)
-	authHandler := handler.New(authProcessor)
+	//store, err := store.New()
+	//if err != nil {
+	//	log.Fatalf("failed to initialize the database: %s", err)
+	//}
+	//authProcessor := processor.New(store)
+	//authHandler := handler.New(authProcessor)
+
+	//r := gin.Default()
+	//api := api.New(r.Group("/"), authHandler)
+	//api.Handler()
 
 	r := gin.Default()
-	api := api.New(r.Group("/"), authHandler)
-	api.Handler()
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "pong"})
+	})
 
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
 	srv := &http.Server{
-		Addr:    "localhost:3000",
+		Addr:    ":8080",
 		Handler: r,
 	}
 	// Run the server in a goroutine so that it doesn't block
