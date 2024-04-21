@@ -26,11 +26,12 @@ func main() {
 	//api.Handler()
 
 	r := gin.Default()
-	r.GET("/ping", func(c *gin.Context) {
+	apiGroup := r.Group("/api")
+	apiGroup.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "pongingtest"})
 	})
 
-	r.GET("/health", func(c *gin.Context) {
+	apiGroup.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 	srv := &http.Server{
