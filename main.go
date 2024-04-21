@@ -34,7 +34,7 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 	srv := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":80",
 		Handler: r,
 	}
 	// Run the server in a goroutine so that it doesn't block
