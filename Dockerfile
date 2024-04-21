@@ -1,9 +1,6 @@
 # Start from the official Golang base image
 FROM golang:1.22-alpine AS builder
 
-# Install curl
-RUN apk --no-cache add curl
-
 # Set the Current Working Directory inside the container
 WORKDIR /app
 
@@ -21,6 +18,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
 # Start a new stage from scratch
 FROM alpine:latest
+
+# Install curl
+RUN apk --no-cache add curl
 
 WORKDIR /root/
 
