@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"log"
+	"os"
 
 	_ "github.com/lib/pq"
 )
@@ -12,8 +13,11 @@ type Store struct {
 }
 
 func New() (Store, error) {
-	connStr := "postgres://base-user:basepassword@localhost:5432/base-server?sslmode=verify-full"
-	db, err := sql.Open("postgres", connStr)
+	dbHost := os.Getenv("DB_HOST")
+	dbUsername := os.Getenv("DB_USERNAME")
+	dbPassword := os.Getenv("DB_PASSWORD")
+	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + ":5432" + "/protoapp_db"
+	db, err := sql.Open("postgres", connectionString)
 	if err != nil {
 		log.Fatal(err)
 		return Store{}, err

@@ -4,9 +4,9 @@ services:
   db:
     image: postgres:latest
     environment:
-      POSTGRES_DB: base-server
-      POSTGRES_USER: base-user
-      POSTGRES_PASSWORD: basepassword
+      POSTGRES_DB: base_db
+      POSTGRES_USER: base_user
+      POSTGRES_PASSWORD: base_password
     ports:
       - "5432:5432"
     volumes:
@@ -15,13 +15,13 @@ services:
   flyway:
     image: flyway/flyway
     depends_on:
-      - postgres
+      - db
     volumes:
-      - ./sql_migrations:/flyway/sql
+      - ./migrations:/flyway/sql
     environment:
-      FLYWAY_URL: jdbc:postgresql://postgres:5432/base-server
-      FLYWAY_USER: base-user
-      FLYWAY_PASSWORD: basepassword
+      FLYWAY_URL: jdbc:postgresql://db:5432/base_db
+      FLYWAY_USER: base_user
+      FLYWAY_PASSWORD: base_password
       FLYWAY_SCHEMAS: public
       FLYWAY_CONNECT_RETRIES: 60 # Optional: attempts to connect to DB, useful for waiting until the DB is up
     command: migrate
