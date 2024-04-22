@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 var ErrEmptyEnvironmentVariable = errors.New("empty environment variable")
@@ -20,6 +21,14 @@ func main() {
 	logger := observability.NewLogger()
 	ctx := context.Background()
 	ctx = observability.WithFields(ctx, observability.Field{Key: "service-name", Value: "base-server"})
+
+	if os.Getenv("GO_ENV") != "production" {
+		// Load the .env file
+		err := godotenv.Load("dev.env")
+		if err != nil {
+			logger.Fatal(ctx, "Error loading .env file", err)
+		}
+	}
 
 	dbHost := os.Getenv("DB_HOST")
 	if dbHost == "" {
@@ -62,9 +71,12 @@ func main() {
 	//r := gin.Default()
 	//api := api.New(r.Group("/"), authHandler)
 	//api.Handler()
-	r := gin.Default()
+	r := gin.New()
+	r.Use(observability.Middleware(logger), gin.Recovery())
 	apiGroup := r.Group("/api")
 	apiGroup.GET("/ping", func(c *gin.Context) {
+		ctx := c.Request.Context()
+		logger.Info(ctx, "pinging")
 		c.JSON(http.StatusOK, gin.H{
 			"message":     "pongingtest",
 			"db_endpoint": dbHost,

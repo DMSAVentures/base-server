@@ -2,7 +2,9 @@ package observability
 
 import (
 	"context"
+	"time"
 
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -32,6 +34,31 @@ func getObservabilityFields(ctx context.Context) []Field {
 	return nil
 }
 
+// Middleware to add observability fields to Gin context.
+func Middleware(l *Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Create an initial context with some observability fields.
+		ctx := context.Background()
+		ctx = WithFields(ctx,
+			Field{"request_id", c.Writer.Header().Get("X-Request-ID")},
+			Field{"path", c.Request.URL.Path},
+			Field{"method", c.Request.Method},
+		)
+
+		// Store the context in Gin context for later use.
+		c.Request = c.Request.WithContext(ctx)
+
+		// Process the request.
+		start := time.Now()
+		c.Next() // Proceed with request handling.
+		latency := time.Since(start)
+
+		// Additional logging after request processing.
+		ctx = WithFields(ctx, Field{"latency_ns", latency.Nanoseconds()})
+		l.Info(ctx, "Request processed")
+	}
+}
+
 // Logger represents a custom logger with Zap integration.
 type Logger struct {
 	zapLogger *zap.Logger
@@ -40,6 +67,8 @@ type Logger struct {
 // NewLogger creates a new instance of custom logger.
 func NewLogger() *Logger {
 	zapLogger, _ := zap.NewProduction()
+	zapLogger = zapLogger.WithOptions(zap.AddCallerSkip(1))
+	zapLogger = zapLogger.WithOptions(zap.AddStacktrace(zapcore.ErrorLevel))
 	return &Logger{zapLogger: zapLogger}
 }
 
