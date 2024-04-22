@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,12 @@ import (
 
 // Field represents a key-value pair for observability.
 type Field struct {
+	Key   string
+	Value interface{}
+}
+
+// MetricField represents a key-value pair for logging metrics.
+type MetricField struct {
 	Key   string
 	Value interface{}
 }
@@ -34,6 +41,31 @@ func getObservabilityFields(ctx context.Context) []Field {
 	return nil
 }
 
+// Merge fields from context and additional metric fields, avoiding duplicates.
+func mergeFields(ctx context.Context, fields []MetricField) []zapcore.Field {
+	fieldMap := make(map[string]zapcore.Field)
+
+	// Add context-based fields to the map (ensures uniqueness).
+	if ctxFields, ok := ctx.Value("observability_fields").([]zapcore.Field); ok {
+		for _, field := range ctxFields {
+			fieldMap[field.Key] = field
+		}
+	}
+
+	// Add additional metric fields to the map.
+	for _, field := range fields {
+		fieldMap[field.Key] = zap.Any(field.Key, field.Value)
+	}
+
+	// Convert map to a slice of zapcore.Field.
+	mergedFields := make([]zapcore.Field, 0, len(fieldMap))
+	for _, field := range fieldMap {
+		mergedFields = append(mergedFields, field)
+	}
+
+	return mergedFields
+}
+
 // Middleware to add observability fields to Gin context.
 func Middleware(l *Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -50,12 +82,31 @@ func Middleware(l *Logger) gin.HandlerFunc {
 
 		// Process the request.
 		start := time.Now()
-		c.Next() // Proceed with request handling.
-		latency := time.Since(start)
+		// Capture any panic and handle it.
+		defer func() {
+			if r := recover(); r != nil {
+				// Handle the panic and log the error.
+				l.Error(c.Request.Context(), "Recovered from panic", fmt.Errorf("reason: %+v", r))
+				c.AbortWithStatus(500) // Respond with a 500 error.
+			}
 
-		// Additional logging after request processing.
-		ctx = WithFields(ctx, Field{"latency_ns", latency.Nanoseconds()})
-		l.Info(ctx, "Request processed")
+			// Calculate the request latency.
+			latency := time.Since(start)
+			// Additional logging after request processing.
+			ctx = WithFields(ctx, Field{"latency_ns", latency.Nanoseconds()})
+			l.Info(ctx, "Request processed")
+
+			// Emit additional metrics or logging.
+			// For example, you could log the request method, status, and latency.
+			status := c.Writer.Status() // Get the response status code.
+			l.Metrics(c.Request.Context(),
+				MetricField{"method", c.Request.Method},
+				MetricField{"path", c.Request.URL.Path},
+				MetricField{"status", status},
+				MetricField{"latency", latency},
+			)
+		}()
+		c.Next() // Proceed with request handling.
 	}
 }
 
@@ -112,4 +163,11 @@ func (l *Logger) Debug(ctx context.Context, msg string) {
 // Fatal logs a fatal message with context-based fields.
 func (l *Logger) Fatal(ctx context.Context, msg string, err error) {
 	l.loggerFromContext(ctx).Fatal(msg, zap.Error(err))
+}
+
+// Metrics logs metrics-related information using custom MetricField type.
+func (l *Logger) Metrics(ctx context.Context, fields ...MetricField) {
+	mergeFields := mergeFields(ctx, fields)
+	// Log with correct stack depth and context.
+	l.zapLogger.Info("Metrics", mergeFields...)
 }
