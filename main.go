@@ -24,11 +24,20 @@ func main() {
 	//r := gin.Default()
 	//api := api.New(r.Group("/"), authHandler)
 	//api.Handler()
-
+	ginMode := os.Getenv("GIN_MODE")
+	env := os.Getenv("GO_ENV")
+	db_endopoint := os.Getenv("DB_ENDPOINT")
+	db_username := os.Getenv("DB_USERNAME")
 	r := gin.Default()
 	apiGroup := r.Group("/api")
 	apiGroup.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "pongingtest"})
+		c.JSON(http.StatusOK, gin.H{
+			"message":     "pongingtest",
+			"go_env":      env,
+			"gin_mode":    ginMode,
+			"db_endpoint": db_endopoint,
+			"db_username": db_username,
+		})
 	})
 
 	r.GET("/health", func(c *gin.Context) {
