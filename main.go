@@ -1,6 +1,9 @@
 package main
 
 import (
+	"base-server/internal/api"
+	"base-server/internal/auth/handler"
+	"base-server/internal/auth/processor"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
@@ -60,40 +63,27 @@ func main() {
 
 	}
 
-	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + ":5432/" + dbName
-	_, err := store.New(connectionString)
+	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + ":5432/" + dbName + "?sslmode=disable"
+	store, err := store.New(connectionString, logger)
 	if err != nil {
 		logger.Error(ctx, "failed to connect to database", err)
 	}
-	//authProcessor := processor.New(store)
-	//authHandler := handler.New(authProcessor)
-
-	//r := gin.Default()
-	//api := api.New(r.Group("/"), authHandler)
-	//api.Handler()
 	r := gin.New()
-	r.Use(observability.Middleware(logger), gin.Recovery())
-	apiGroup := r.Group("/api")
-	apiGroup.GET("/ping", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		logger.Info(ctx, "pinging")
-		c.JSON(http.StatusOK, gin.H{
-			"message":     "pongingtest",
-			"db_endpoint": dbHost,
-			"dbUsername":  dbUsername,
-		})
-	})
+	r.Use(observability.Middleware(logger))
+	rootRouter := r.Group("/")
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	})
-	srv := &http.Server{
+	authProcessor := processor.New(store, logger)
+	authHandler := handler.New(authProcessor, logger)
+	api := api.New(rootRouter, authHandler)
+	api.RegisterRoutes()
+
+	server := &http.Server{
 		Addr:    ":80",
 		Handler: r,
 	}
 	// Run the server in a goroutine so that it doesn't block
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error(ctx, "server failed to start", err)
 			os.Exit(1)
 		}
@@ -114,7 +104,7 @@ func main() {
 	// the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(ctx); err != nil {
 		logger.Fatal(ctx, "Server forced to shutdown:", err)
 	}
 

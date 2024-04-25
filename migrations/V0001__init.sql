@@ -1,7 +1,7 @@
 -- Users Table with BIGINT and external_id as UUID
 CREATE TABLE Users
 (
-    user_id     BIGINT PRIMARY KEY,
+    id     BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     external_id UUID      DEFAULT gen_random_uuid(), -- Unique identifier for APIs
     first_name  VARCHAR(100),
     last_name   VARCHAR(100),
@@ -12,12 +12,12 @@ CREATE TABLE Users
 -- User Authentication Table with BIGINT
 CREATE TABLE User_Auth
 (
-    auth_id    BIGINT PRIMARY KEY,
+    auth_id    BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     user_id    BIGINT,
     auth_type  VARCHAR(50), -- Types: 'email', 'google', 'saml'
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES Users (user_id)
+    FOREIGN KEY (user_id) REFERENCES Users (id)
 );
 
 -- Email Authentication Table with BIGINT
