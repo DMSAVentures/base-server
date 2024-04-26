@@ -29,6 +29,10 @@ func (a *API) RegisterRoutes() {
 		authGroup.POST("/signup/email", a.authHandler.HandleEmailSignup)
 		authGroup.POST("/signup/oauth", a.authHandler.HandleOAuthSignup)
 	}
+	protectedGroup := apiGroup.Group("/protected", a.authHandler.HandleJWTMiddleware)
+	{
+		protectedGroup.GET("/user", a.authHandler.GetUserInfo)
+	}
 }
 
 func (a *API) Health() {

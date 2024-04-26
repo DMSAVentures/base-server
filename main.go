@@ -63,6 +63,13 @@ func main() {
 
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		logger.Error(ctx, "JWT_SECRET is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+
+	}
+
 	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + ":5432/" + dbName + "?sslmode=disable"
 	store, err := store.New(connectionString, logger)
 	if err != nil {
@@ -72,7 +79,7 @@ func main() {
 	r.Use(observability.Middleware(logger))
 	rootRouter := r.Group("/")
 
-	authProcessor := processor.New(store, logger)
+	authProcessor := processor.New(store, jwtSecret, logger)
 	authHandler := handler.New(authProcessor, logger)
 	api := api.New(rootRouter, authHandler)
 	api.RegisterRoutes()

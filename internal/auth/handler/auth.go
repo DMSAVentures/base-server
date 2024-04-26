@@ -4,8 +4,10 @@ import (
 	"base-server/internal/auth/processor"
 	"base-server/internal/observability"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -37,14 +39,13 @@ func (h *Handler) HandleEmailLogin(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	loggedInUser, err := h.authProcessor.Login(ctx, emailLoginRequest.Email, emailLoginRequest.Password)
+	token, err := h.authProcessor.Login(ctx, emailLoginRequest.Email, emailLoginRequest.Password)
 	if err != nil {
 		h.logger.Error(ctx, "failed to login", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-
 	}
-	c.JSON(http.StatusOK, loggedInUser)
+	c.JSON(http.StatusOK, gin.H{"token": token})
 	return
 }
 
@@ -78,5 +79,55 @@ func (h *Handler) HandleOAuthLogin(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "FOUND IT",
 	})
+	return
+}
+
+func (h *Handler) HandleJWTMiddleware(c *gin.Context) {
+	ctx := c.Request.Context()
+	tokeHeader := c.GetHeader("Authorization")
+
+	if tokeHeader == "" || !strings.HasPrefix(tokeHeader, "Bearer ") {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token is missing or invalid"})
+		c.Abort() // Stop further processing
+		return
+	}
+
+	// Extract the JWT token from the header
+	tokenString := strings.TrimPrefix(tokeHeader, "Bearer ")
+
+	claims, err := h.authProcessor.ValidateJWTToken(ctx, tokenString)
+
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.Abort() // Stop further processing
+		return
+	}
+	sub, err := claims.GetSubject()
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		c.Abort() // Stop further processing
+		return
+	}
+	c.Set("User-ID", sub)
+	// Continue to the next handler if the token is valid
+	c.Next()
+}
+
+func (h *Handler) GetUserInfo(context *gin.Context) {
+	ctx := context.Request.Context()
+	user, ok := context.Get("User-ID")
+	if !ok {
+		h.logger.Error(ctx, "failed to get user from context", nil)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user from context"})
+		return
+	}
+	userID, err := uuid.Parse(user.(string))
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse user id", err)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse user id"})
+		return
+	}
+	user, err = h.authProcessor.GetUserByExternalID(ctx, userID)
+	context.JSON(http.StatusOK, gin.H{"user": user})
 	return
 }
