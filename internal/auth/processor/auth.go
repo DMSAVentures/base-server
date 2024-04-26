@@ -29,7 +29,8 @@ type SignedUpUser struct {
 	Email     string `json:"email"`
 }
 
-func (p AuthProcessor) Signup(ctx context.Context, firstName string, lastName string, email string, password string) (SignedUpUser, error) {
+func (p AuthProcessor) Signup(
+	ctx context.Context, firstName string, lastName string, email string, password string) (SignedUpUser, error) {
 	ctx = observability.WithFields(ctx, observability.Field{Key: "email", Value: email})
 	exists, err := p.store.CheckIfEmailExists(ctx, email)
 	if err != nil {
