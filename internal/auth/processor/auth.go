@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -29,7 +30,13 @@ type SignedUpUser struct {
 	Email     string `json:"email"`
 }
 
-func (p AuthProcessor) Signup(
+type LoggedInUser struct {
+	FirstName  string    `json:"first_name"`
+	LastName   string    `json:"last_name"`
+	ExternalID uuid.UUID `json:"external_id"`
+}
+
+func (p *AuthProcessor) Signup(
 	ctx context.Context, firstName string, lastName string, email string, password string) (SignedUpUser, error) {
 	ctx = observability.WithFields(ctx, observability.Field{Key: "email", Value: email})
 	exists, err := p.store.CheckIfEmailExists(ctx, email)
@@ -55,4 +62,25 @@ func (p AuthProcessor) Signup(
 		LastName:  user.LastName,
 		Email:     email,
 	}, nil
+}
+
+func (p *AuthProcessor) Login(ctx context.Context, email string, password string) (LoggedInUser, error) {
+	ctx = observability.WithFields(ctx, observability.Field{Key: "email", Value: email})
+	credentialsByEmail, err := p.store.GetCredentialsByEmail(ctx, email)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get user by email", err)
+		return LoggedInUser{}, err
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(credentialsByEmail.HashedPassword), []byte(password))
+	if err != nil {
+		p.logger.Error(ctx, "failed to compare hashed password", err)
+		return LoggedInUser{}, err
+	}
+	user, err := p.store.GetUserByAuthID(ctx, credentialsByEmail.AuthID)
+	return LoggedInUser{
+		FirstName:  user.FirstName,
+		LastName:   user.LastName,
+		ExternalID: user.ExternalID,
+	}, nil
+
 }

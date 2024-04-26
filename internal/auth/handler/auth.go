@@ -20,14 +20,31 @@ type EmailSignupRequest struct {
 	Password  string `json:"password" binding:"required,min=8"`
 }
 
+type EmailLoginRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=8"`
+}
+
 func New(authProcessor processor.AuthProcessor, logger *observability.Logger) Handler {
 	return Handler{authProcessor: authProcessor, logger: logger}
 }
 
-func (h *Handler) HandleEmailLogin(ctx *gin.Context) {
-	ctx.JSON(http.StatusOK, gin.H{
-		"message": "FOUND IT",
-	})
+func (h *Handler) HandleEmailLogin(c *gin.Context) {
+	var emailLoginRequest EmailLoginRequest
+	ctx := c.Request.Context()
+	if err := c.ShouldBindJSON(&emailLoginRequest); err != nil {
+		h.logger.Error(ctx, "failed to bind request", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	loggedInUser, err := h.authProcessor.Login(ctx, emailLoginRequest.Email, emailLoginRequest.Password)
+	if err != nil {
+		h.logger.Error(ctx, "failed to login", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+
+	}
+	c.JSON(http.StatusOK, loggedInUser)
 	return
 }
 

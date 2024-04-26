@@ -1,7 +1,10 @@
 package store
 
-import "context"
-import "github.com/google/uuid"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 type User struct {
 	ID         int       `db:"id"`
@@ -27,27 +30,59 @@ type UserWithEmail struct {
 	Email string
 }
 
+type AuthenticatedUser struct {
+	User
+	UserAuth
+}
+
 const sqlCheckIfEmailExistsQuery = `
 SELECT EXISTS(SELECT 1 
               FROM email_auth 
               WHERE email  = $1
               )`
+
 const sqlCheckIfOauthEmailExistsQuery = `
 SELECT EXISTS(SELECT 1 
               FROM oauth_auth 
               WHERE email  = $1)`
+
 const sqlCreateUser = `
 INSERT INTO users (first_name, last_name) 
 VALUES ($1, $2) 
 RETURNING id, external_id, first_name, last_name`
+
 const sqlCreateUserAuth = `
 INSERT INTO user_auth (user_id, auth_type) 
 VALUES ($1, $2)
 RETURNING auth_id, user_id, auth_type`
+
 const sqlCreateEmailAuth = `
 INSERT INTO email_auth (auth_id, email, hashed_password) 
 VALUES ($1, $2, $3) 
 RETURNING email, hashed_password, auth_id`
+
+const sqlGetUserByEmail = `
+SELECT 
+    email,
+    hashed_password,
+    auth_id 
+FROM email_auth 
+WHERE email = $1`
+
+const sqlGetUserByAuthID = `
+SELECT
+    loggedInUser.id,
+    loggedInUser.external_id,
+    loggedInUser.first_name,
+    loggedInUser.last_name,
+    auth.auth_id,
+    auth.auth_type
+FROM users AS loggedInUser
+LEFT JOIN user_auth auth
+ON
+    loggedInUser.id = auth.user_id
+WHERE auth.auth_id = $1
+`
 
 func (s *Store) CheckIfEmailExists(ctx context.Context, email string) (bool, error) {
 	var existsOnEmailAuth bool
@@ -101,4 +136,24 @@ func (s *Store) CreateUserOnEmailSignup(
 		return User{}, "", err
 	}
 	return user, email, nil
+}
+
+func (s *Store) GetCredentialsByEmail(ctx context.Context, email string) (EmailAuth, error) {
+	var userAuthByEmail EmailAuth
+	err := s.db.GetContext(ctx, &userAuthByEmail, sqlGetUserByEmail, email)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get user by email", err)
+		return EmailAuth{}, err
+	}
+	return userAuthByEmail, nil
+}
+
+func (s *Store) GetUserByAuthID(ctx context.Context, authID int) (AuthenticatedUser, error) {
+	var authenticatedUser AuthenticatedUser
+	err := s.db.GetContext(ctx, &authenticatedUser, sqlGetUserByAuthID, authID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get user by auth id", err)
+		return AuthenticatedUser{}, err
+	}
+	return authenticatedUser, nil
 }
