@@ -4,6 +4,7 @@ import (
 	"base-server/internal/api"
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
+	"base-server/internal/clients/googleoauth"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
@@ -70,6 +71,27 @@ func main() {
 
 	}
 
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	if googleClientID == "" {
+		logger.Error(ctx, "GOOGLE_CLIENT_ID is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+
+	}
+
+	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+	if googleClientSecret == "" {
+		logger.Error(ctx, "GOOGLE_CLIENT_SECRET is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
+	googleRedirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
+	if googleRedirectURL == "" {
+		logger.Error(ctx, "GOOGLE_REDIRECT_URL is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
+	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
+
 	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + ":5432/" + dbName + "?sslmode=disable"
 	store, err := store.New(connectionString, logger)
 	if err != nil {
@@ -79,13 +101,23 @@ func main() {
 	r.Use(observability.Middleware(logger))
 	rootRouter := r.Group("/")
 
-	authProcessor := processor.New(store, jwtSecret, logger)
+	authConfig := processor.AuthConfig{
+		Email: processor.EmailConfig{
+			JWTSecret: jwtSecret,
+		},
+		Google: processor.GoogleOauthConfig{
+			ClientID:          googleClientID,
+			ClientSecret:      googleClientSecret,
+			ClientRedirectURL: googleRedirectURL,
+		},
+	}
+	authProcessor := processor.New(store, authConfig, googleOauthClient, logger)
 	authHandler := handler.New(authProcessor, logger)
 	api := api.New(rootRouter, authHandler)
 	api.RegisterRoutes()
 
 	server := &http.Server{
-		Addr:    ":80",
+		Addr:    ":8080",
 		Handler: r,
 	}
 	// Run the server in a goroutine so that it doesn't block

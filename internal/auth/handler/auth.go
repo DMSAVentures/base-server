@@ -4,6 +4,7 @@ import (
 	"base-server/internal/auth/processor"
 	"base-server/internal/observability"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -129,5 +130,32 @@ func (h *Handler) GetUserInfo(context *gin.Context) {
 	}
 	user, err = h.authProcessor.GetUserByExternalID(ctx, userID)
 	context.JSON(http.StatusOK, gin.H{"user": user})
+	return
+}
+
+func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
+	ctx := c.Request.Context()
+	// Extract the authorization code from the query parameters
+	code := c.Request.URL.Query().Get("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code is missing"})
+		return
+	}
+	// Exchange the authorization code for an access token
+	token, err := h.authProcessor.SignInGoogleUserWithCode(ctx, code)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	redirectUrl := url.URL{
+		Scheme: "http",
+		Host:   "localhost:3000",
+		Path:   "oauth/signedin",
+	}
+	query := redirectUrl.Query()
+	query.Add("token", token)
+	redirectUrl.RawQuery = query.Encode()
+
+	c.Redirect(http.StatusFound, redirectUrl.String())
 	return
 }
