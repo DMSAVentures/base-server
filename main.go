@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -97,7 +98,20 @@ func main() {
 	if err != nil {
 		logger.Error(ctx, "failed to connect to database", err)
 	}
+
 	r := gin.New()
+
+	if os.Getenv("GO_ENV") != "production" {
+		config := cors.DefaultConfig()
+		config.AllowAllOrigins = true // For development, allows all origins
+		// For production, specify allowed origins instead of AllowAllOrigins
+		// config.AllowOrigins = []string{"https://example.com"}
+
+		config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
+		config.AllowHeaders = []string{"Origin", "Content-Type", "Access-Control-Allowed-Headers", "Authorization"}
+		r.Use(cors.New(config))
+	}
+
 	r.Use(observability.Middleware(logger))
 	rootRouter := r.Group("/")
 

@@ -25,7 +25,6 @@ func (a *API) RegisterRoutes() {
 	{
 		authGroup := apiGroup.Group("/auth")
 		authGroup.POST("/login/email", a.authHandler.HandleEmailLogin)
-		authGroup.POST("/login/oauth", a.authHandler.HandleOAuthLogin)
 		authGroup.POST("/signup/email", a.authHandler.HandleEmailSignup)
 		authGroup.GET("/google/callback", a.authHandler.HandleGoogleOauthCallback)
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -71,6 +72,9 @@ func Middleware(l *Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Create an initial context with some observability fields.
 		ctx := context.Background()
+		if c.Request.Header.Get("X-Request-ID") == "" {
+			c.Request.Header.Set("X-Request-ID", "req-"+uuid.New().String())
+		}
 		ctx = WithFields(ctx,
 			Field{"request_id", c.Writer.Header().Get("X-Request-ID")},
 			Field{"path", c.Request.URL.Path},
@@ -104,6 +108,7 @@ func Middleware(l *Logger) gin.HandlerFunc {
 				MetricField{"path", c.Request.URL.Path},
 				MetricField{"status", status},
 				MetricField{"latency", latency},
+				MetricField{"request_id", c.Writer.Header().Get("X-Request-ID")},
 			)
 		}()
 		c.Next() // Proceed with request handling.

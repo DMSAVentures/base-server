@@ -45,6 +45,7 @@ func New(store store.Store, authConfig AuthConfig, googleOauthClient *googleoaut
 }
 
 var ErrEmailAlreadyExists = errors.New("email already exists")
+var ErrEmailDoesNotExist = errors.New("email does not exist")
 
 type SignedUpUser struct {
 	FirstName string `json:"first_name"`
@@ -108,6 +109,14 @@ func (p *AuthProcessor) Signup(
 
 func (p *AuthProcessor) Login(ctx context.Context, email string, password string) (string, error) {
 	ctx = observability.WithFields(ctx, observability.Field{Key: "email", Value: email})
+	exists, err := p.store.CheckIfEmailExists(ctx, email)
+	if err != nil {
+		p.logger.Error(ctx, "failed to check if email exists", err)
+		return "", err
+	}
+	if !exists {
+		return "", ErrEmailDoesNotExist
+	}
 	credentialsByEmail, err := p.store.GetCredentialsByEmail(ctx, email)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get user by email", err)

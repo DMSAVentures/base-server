@@ -69,20 +69,6 @@ func (h *Handler) HandleEmailSignup(c *gin.Context) {
 	return
 }
 
-func (h *Handler) HandleOAuthSignup(ctx *gin.Context) {
-	ctx.JSON(http.StatusOK, gin.H{
-		"message": "FOUND IT",
-	})
-	return
-}
-
-func (h *Handler) HandleOAuthLogin(ctx *gin.Context) {
-	ctx.JSON(http.StatusOK, gin.H{
-		"message": "FOUND IT",
-	})
-	return
-}
-
 func (h *Handler) HandleJWTMiddleware(c *gin.Context) {
 	ctx := c.Request.Context()
 	tokeHeader := c.GetHeader("Authorization")
