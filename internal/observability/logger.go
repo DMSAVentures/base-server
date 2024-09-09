@@ -73,7 +73,7 @@ func Middleware(l *Logger) gin.HandlerFunc {
 		// Create an initial context with some observability fields.
 		ctx := context.Background()
 		if c.Request.Header.Get("X-Request-ID") == "" {
-			c.Request.Header.Set("X-Request-ID", "req-"+uuid.New().String())
+			c.Request.Header.Set("X-Request-ID", fmt.Sprintf("req-%s", uuid.New().String()))
 		}
 		ctx = WithFields(ctx,
 			Field{"request_id", c.Writer.Header().Get("X-Request-ID")},
