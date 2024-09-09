@@ -85,9 +85,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	googleRedirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
+	googleRedirectURL := os.Getenv("GOOGLE_REDIRECT_URI")
 	if googleRedirectURL == "" {
-		logger.Error(ctx, "GOOGLE_REDIRECT_URL is not set", ErrEmptyEnvironmentVariable)
+		logger.Error(ctx, "GOOGLE_REDIRECT_URI is not set", ErrEmptyEnvironmentVariable)
 		os.Exit(1)
 	}
 
