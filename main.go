@@ -131,7 +131,7 @@ func main() {
 	api.RegisterRoutes()
 
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    ":80",
 		Handler: r,
 	}
 	// Run the server in a goroutine so that it doesn't block
