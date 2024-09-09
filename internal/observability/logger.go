@@ -94,6 +94,10 @@ func Middleware(l *Logger) gin.HandlerFunc {
 				c.AbortWithStatus(500) // Respond with a 500 error.
 			}
 
+			// Skip additional logging for health check endpoint.
+			if c.Request.URL.Path == "/health" {
+				return
+			}
 			// Calculate the request latency.
 			latency := time.Since(start)
 			// Additional logging after request processing.
