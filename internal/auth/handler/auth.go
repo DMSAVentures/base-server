@@ -127,19 +127,19 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code is missing"})
 		return
 	}
-	// Exchange the authorization code for an access token
-	token, err := h.authProcessor.SignInGoogleUserWithCode(ctx, code)
+	// Exchange the authorization code for access JWTToken
+	JWTToken, err := h.authProcessor.SignInGoogleUserWithCode(ctx, code)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	redirectUrl := url.URL{
 		Scheme: "https",
-		Host:   "protoapp.xyz",
+		Host:   h.authProcessor.GetWebAppHost(),
 		Path:   "oauth/signedin",
 	}
 	query := redirectUrl.Query()
-	query.Add("token", token)
+	query.Add("token", JWTToken)
 	redirectUrl.RawQuery = query.Encode()
 
 	c.Redirect(http.StatusFound, redirectUrl.String())

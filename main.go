@@ -86,6 +86,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	webAppURL := os.Getenv("WEBAPP_URI")
+	if webAppURL == "" {
+		logger.Error(ctx, "WEBAPP_URI is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
 	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
 
 	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + "/" + dbName
@@ -118,6 +124,7 @@ func main() {
 			ClientID:          googleClientID,
 			ClientSecret:      googleClientSecret,
 			ClientRedirectURL: googleRedirectURL,
+			WebAppHost:        webAppURL,
 		},
 	}
 	authProcessor := processor.New(store, authConfig, googleOauthClient, logger)

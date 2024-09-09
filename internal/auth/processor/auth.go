@@ -27,6 +27,7 @@ type GoogleOauthConfig struct {
 	ClientID          string
 	ClientSecret      string
 	ClientRedirectURL string
+	WebAppHost        string
 }
 
 type AuthConfig struct {
@@ -148,4 +149,8 @@ func (p *AuthProcessor) GetUserByExternalID(ctx context.Context, externalID uuid
 		ExternalID: user.ExternalID,
 	}, nil
 
+}
+
+func (p *AuthProcessor) GetWebAppHost() string {
+	return p.authConfig.Google.WebAppHost
 }
