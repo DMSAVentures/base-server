@@ -88,7 +88,7 @@ func main() {
 
 	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
 
-	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + "/" + dbName + "?sslmode=disable"
+	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + "/" + dbName
 	store, err := store.New(connectionString, logger)
 	if err != nil {
 		logger.Error(ctx, "failed to connect to database", err)
