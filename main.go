@@ -47,11 +47,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if dbHost == "" {
-		logger.Error(ctx, "DB_HOST is not set", ErrEmptyEnvironmentVariable)
-		os.Exit(1)
-	}
-
 	dbPassword := os.Getenv("DB_PASSWORD")
 	if dbPassword == "" {
 		logger.Error(ctx, "DB_PASSWORD is not set", ErrEmptyEnvironmentVariable)
@@ -93,7 +88,7 @@ func main() {
 
 	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
 
-	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + ":5432/" + dbName + "?sslmode=disable"
+	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + dbName + "?sslmode=disable"
 	store, err := store.New(connectionString, logger)
 	if err != nil {
 		logger.Error(ctx, "failed to connect to database", err)
