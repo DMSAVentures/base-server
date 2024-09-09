@@ -134,8 +134,8 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 		return
 	}
 	redirectUrl := url.URL{
-		Scheme: "http",
-		Host:   "localhost:3000",
+		Scheme: "https",
+		Host:   "protoapp.xyz",
 		Path:   "oauth/signedin",
 	}
 	query := redirectUrl.Query()
