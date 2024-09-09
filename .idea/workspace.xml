@@ -6,12 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="6784a386-3556-4722-afd4-6f9eb9945736" name="Changes" comment="test">
       <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/base-server.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/base-server.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.local.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.local.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources/3dfe97bc-86d9-4576-b7a8-fab9157e1440.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/dataSources/3dfe97bc-86d9-4576-b7a8-fab9157e1440.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/dev.env" beforeDir="false" afterPath="$PROJECT_DIR$/dev.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dev.env" beforeDir="false" afterPath="$PROJECT_DIR$/.dev.env" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -121,9 +117,9 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Go Build.go build base-server" />
       <item itemvalue="Docker.docker-compose.services.yml: Compose Deployment" />
       <item itemvalue="Docker.docker-compose.services.yml.flyway: Compose Deployment" />
+      <item itemvalue="Go Build.go build base-server" />
     </list>
     <recent_temporary>
       <list>
