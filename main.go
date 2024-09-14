@@ -9,9 +9,11 @@ import (
 	"base-server/internal/store"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -92,6 +94,18 @@ func main() {
 		os.Exit(1)
 	}
 
+	serverPort := os.Getenv("SERVER_PORT")
+	if serverPort == "" {
+		logger.Error(ctx, "SERVER_PORT is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
+	parsedServerPort, err := strconv.Atoi(serverPort)
+	if err != nil {
+		logger.Error(ctx, "failed to parse SERVER_PORT", err)
+		os.Exit(1)
+	}
+
 	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
 
 	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + "/" + dbName
@@ -133,7 +147,7 @@ func main() {
 	api.RegisterRoutes()
 
 	server := &http.Server{
-		Addr:    ":80",
+		Addr:    fmt.Sprintf(":%d", parsedServerPort),
 		Handler: r,
 	}
 	// Run the server in a goroutine so that it doesn't block

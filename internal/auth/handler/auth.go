@@ -134,9 +134,8 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 		return
 	}
 	redirectUrl := url.URL{
-		Scheme: "https",
-		Host:   h.authProcessor.GetWebAppHost(),
-		Path:   "oauth/signedin",
+		Host: h.authProcessor.GetWebAppHost(),
+		Path: "oauth/signedin",
 	}
 	query := redirectUrl.Query()
 	query.Add("token", JWTToken)
