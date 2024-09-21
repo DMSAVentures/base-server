@@ -4,7 +4,7 @@ import (
 	"base-server/internal/observability"
 	"log"
 
-	_ "github.com/jackc/pgx/v4/stdlib" // Import the pgx stdlib for sqlx
+	_ "github.com/jackc/pgx/v5/stdlib" // Import the pgx stdlib for sqlx
 	"github.com/jmoiron/sqlx"
 )
 
