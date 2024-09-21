@@ -3,6 +3,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"context"
+	"encoding/json"
 
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/paymentintent"
@@ -17,8 +18,8 @@ type BillingProcessor struct {
 }
 
 type PaymentIntentItem struct {
-	Id     string
-	Amount int64
+	Id     string `json:"id" binding:"required"`
+	Amount int64  `json:"amount" binding:"required"`
 }
 
 func New(stripKey string, webhookSecret string, logger *observability.Logger) BillingProcessor {
@@ -33,13 +34,17 @@ func New(stripKey string, webhookSecret string, logger *observability.Logger) Bi
 
 func (p *BillingProcessor) CreateStripePaymentIntent(ctx context.Context, items []PaymentIntentItem) (string, error) {
 	// Create a Tax Calculation for the items being sold
-	taxCalculation := p.calculateTax(items, stripe.CurrencyCAD, stripe.Address{
+	taxCalculation, err := p.calculateTax(items, stripe.CurrencyCAD, stripe.Address{
 		Line1:      "147 Scout St",
 		City:       "Ottawa",
 		PostalCode: "K2C 4E3",
 		Country:    "CA",
 		State:      "Ontario",
 	})
+	if err != nil {
+		p.logger.Error(ctx, "failed to calculate tax", err)
+		return "", err
+	}
 
 	totalAmount := p.calculateOrderAmount(taxCalculation)
 
@@ -65,7 +70,7 @@ func (p *BillingProcessor) CreateStripePaymentIntent(ctx context.Context, items 
 }
 
 func (p *BillingProcessor) calculateTax(items []PaymentIntentItem, currency stripe.Currency,
-	customerAddress stripe.Address) *stripe.TaxCalculation {
+	customerAddress stripe.Address) (*stripe.TaxCalculation, error) {
 	var lineItems []*stripe.TaxCalculationLineItemParams
 	for _, item := range items {
 		lineItems = append(lineItems, p.buildLineItem(item))
@@ -86,8 +91,13 @@ func (p *BillingProcessor) calculateTax(items []PaymentIntentItem, currency stri
 		LineItems: lineItems,
 	}
 
-	taxCalculation, _ := calculation.New(taxCalculationParams)
-	return taxCalculation
+	taxCalculation, err := calculation.New(taxCalculationParams)
+	if err != nil {
+		p.logger.Error(context.Background(), "failed to create tax calculation", err)
+		return nil, err
+	}
+
+	return taxCalculation, nil
 }
 
 func (p *BillingProcessor) buildLineItem(i PaymentIntentItem) *stripe.TaxCalculationLineItemParams {
@@ -109,7 +119,7 @@ func (p *BillingProcessor) PaymentIntentSucceeded(ctx context.Context, paymentIn
 	// Create a Tax Transaction for the successful payment
 	params := &stripe.TaxTransactionCreateFromCalculationParams{
 		Calculation: stripe.String(paymentIntent.Metadata["tax_calculation"]),
-		Reference:   stripe.String(paymentIntent.Metadata["order_id"]),
+		Reference:   stripe.String("123"),
 	}
 	params.AddExpand("line_items")
 
@@ -158,7 +168,7 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 	switch event.Type {
 	case "payment_intent.succeeded":
 		var paymentIntent stripe.PaymentIntent
-		err := event.Data.Raw.Unmarshal(&paymentIntent)
+		err := json.Unmarshal(event.Data.Raw, &paymentIntent)
 		if err != nil {
 			p.logger.Error(ctx, "failed to unmarshal payment intent", err)
 			return err
