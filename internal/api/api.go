@@ -2,20 +2,23 @@ package api
 
 import (
 	authHandler "base-server/internal/auth/handler"
+	billingHandler "base-server/internal/billing/handler"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 type API struct {
-	router      *gin.RouterGroup
-	authHandler authHandler.Handler
+	router         *gin.RouterGroup
+	authHandler    authHandler.Handler
+	billingHandler billingHandler.Handler
 }
 
-func New(router *gin.RouterGroup, authHandler authHandler.Handler) API {
+func New(router *gin.RouterGroup, authHandler authHandler.Handler, handler billingHandler.Handler) API {
 	return API{
-		router:      router,
-		authHandler: authHandler,
+		router:         router,
+		authHandler:    authHandler,
+		billingHandler: handler,
 	}
 }
 
@@ -31,7 +34,9 @@ func (a *API) RegisterRoutes() {
 	protectedGroup := apiGroup.Group("/protected", a.authHandler.HandleJWTMiddleware)
 	{
 		protectedGroup.GET("/user", a.authHandler.GetUserInfo)
+		protectedGroup.POST("pay/create-payment-intent", a.billingHandler.HandleCreatePaymentIntent)
 	}
+	a.router.POST("billing/webhook", a.billingHandler.HandleWebhook)
 }
 
 func (a *API) Health() {

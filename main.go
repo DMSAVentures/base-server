@@ -4,6 +4,8 @@ import (
 	"base-server/internal/api"
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
+	billingHandler "base-server/internal/billing/handler"
+	billingProcessor "base-server/internal/billing/processor"
 	"base-server/internal/clients/googleoauth"
 	"base-server/internal/observability"
 	"base-server/internal/store"
@@ -106,6 +108,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	stripeSecretKey := os.Getenv("STRIPE_SECRET_KEY")
+	if stripeSecretKey == "" {
+		logger.Error(ctx, "STRIPE_SECRET_KEY is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
+	// Get your Stripe webhook signing secret from environment or config
+	webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	if webhookSecret == "" {
+		logger.Error(ctx, "STRIPE_WEBHOOK_SECRET is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
 	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
 
 	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + "/" + dbName
@@ -143,7 +158,10 @@ func main() {
 	}
 	authProcessor := processor.New(store, authConfig, googleOauthClient, logger)
 	authHandler := handler.New(authProcessor, logger)
-	api := api.New(rootRouter, authHandler)
+
+	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, logger)
+	billingHandler := billingHandler.New(billingProcessor, logger)
+	api := api.New(rootRouter, authHandler, billingHandler)
 	api.RegisterRoutes()
 
 	server := &http.Server{
