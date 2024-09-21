@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79/webhook"
 )
 
@@ -35,6 +36,43 @@ func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
 	clientSecret, err := h.processor.CreateStripePaymentIntent(ctx, req.Items)
 	if err != nil {
 		h.logger.Error(ctx, "failed to create payment intent", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"client_secret": clientSecret})
+	return
+}
+
+type CreateSubscriptionRequest struct {
+	PriceID string `json:"price_id" binding:"required"`
+}
+
+func (h *Handler) HandleCreateSubscription(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req CreateSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error(ctx, "failed to bind request", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID, exists := c.Get("User-ID")
+	if !exists {
+		h.logger.Error(ctx, "User-ID does not exist on context", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	parsedUserID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse userID", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	clientSecret, err := h.processor.CreateSubscription(ctx, parsedUserID, req.PriceID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to create subscription", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

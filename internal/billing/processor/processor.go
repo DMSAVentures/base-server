@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/paymentintent"
+	"github.com/stripe/stripe-go/v79/subscription"
 	"github.com/stripe/stripe-go/v79/tax/calculation"
 	"github.com/stripe/stripe-go/v79/tax/transaction"
 )
@@ -112,6 +114,30 @@ func (p *BillingProcessor) calculateOrderAmount(taxCalculation *stripe.TaxCalcul
 	// Calculate the order total with any exclusive taxes on the server to prevent
 	// people from directly manipulating the amount on the client
 	return taxCalculation.AmountTotal
+}
+
+func (p *BillingProcessor) CreateSubscription(ctx context.Context, userID uuid.UUID, priceID string) (string, error) {
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", userID})
+
+	p.logger.Info(ctx, "Creating subscription for user")
+	// Create the subscription
+	params := &stripe.SubscriptionParams{
+		Customer: stripe.String("cus_QqQonyC9psLVAl"),
+		Items: []*stripe.SubscriptionItemsParams{
+			{
+				Price: stripe.String(priceID), // The recurring price ID
+			},
+		},
+		PaymentBehavior: stripe.String("default_incomplete"), // Handle payment confirmation manually
+	}
+
+	subscriptionInitialized, err := subscription.New(params)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create subscription", err)
+		return "", err
+	}
+
+	return subscriptionInitialized.LatestInvoice.PaymentIntent.ClientSecret, nil
 }
 
 // Invoke this method in your webhook handler when `payment_intent.succeeded` webhook is received
