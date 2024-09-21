@@ -35,6 +35,7 @@ func (a *API) RegisterRoutes() {
 	{
 		protectedGroup.GET("/user", a.authHandler.GetUserInfo)
 		protectedGroup.POST("pay/create-payment-intent", a.billingHandler.HandleCreatePaymentIntent)
+		protectedGroup.POST("pay/create-subscription-intent", a.billingHandler.HandleCreateSubscriptionIntent)
 	}
 	a.router.POST("billing/webhook", a.billingHandler.HandleWebhook)
 }

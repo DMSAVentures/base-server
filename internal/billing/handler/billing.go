@@ -47,7 +47,7 @@ type CreateSubscriptionRequest struct {
 	PriceID string `json:"price_id" binding:"required"`
 }
 
-func (h *Handler) HandleCreateSubscription(c *gin.Context) {
+func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

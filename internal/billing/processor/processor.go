@@ -4,6 +4,7 @@ import (
 	"base-server/internal/observability"
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
@@ -129,6 +130,10 @@ func (p *BillingProcessor) CreateSubscription(ctx context.Context, userID uuid.U
 			},
 		},
 		PaymentBehavior: stripe.String("default_incomplete"), // Handle payment confirmation manually
+		Expand: []*string{
+			stripe.String("customer"),                      // Expand the customer object to include email and other details
+			stripe.String("latest_invoice.payment_intent"), // Expand the latest invoice object to include the payment intent
+		},
 	}
 
 	subscriptionInitialized, err := subscription.New(params)
@@ -137,7 +142,18 @@ func (p *BillingProcessor) CreateSubscription(ctx context.Context, userID uuid.U
 		return "", err
 	}
 
-	return subscriptionInitialized.LatestInvoice.PaymentIntent.ClientSecret, nil
+	// Check if a PaymentIntent exists on the latest invoice
+	var clientSecret string
+	if subscriptionInitialized.LatestInvoice != nil && subscriptionInitialized.LatestInvoice.PaymentIntent != nil {
+		clientSecret = subscriptionInitialized.LatestInvoice.PaymentIntent.ClientSecret
+	}
+
+	if clientSecret == "" {
+		p.logger.Error(ctx, "failed to get client secret for payment intent", nil)
+		return "", errors.New("failed to create payment intent")
+	}
+
+	return clientSecret, nil
 }
 
 // Invoke this method in your webhook handler when `payment_intent.succeeded` webhook is received
