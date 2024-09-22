@@ -70,13 +70,72 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 		return
 	}
 
-	clientSecret, err := h.processor.CreateSubscription(ctx, parsedUserID, req.PriceID)
+	clientSecret, err := h.processor.CreateSubscriptionIntent(ctx, parsedUserID, req.PriceID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to create subscription", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"client_secret": clientSecret})
+	return
+}
+
+func (h *Handler) HandleCancelSubscription(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID, exists := c.Get("User-ID")
+	if !exists {
+		h.logger.Error(ctx, "User-ID does not exist on context", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	parsedUserID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse userID", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = h.processor.CancelSubscription(ctx, parsedUserID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to cancel subscription", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+	return
+}
+
+func (h *Handler) HandleUpdateSubscription(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID, exists := c.Get("User-ID")
+	if !exists {
+		h.logger.Error(ctx, "User-ID does not exist on context", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	parsedUserID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse userID", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var req CreateSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error(ctx, "failed to bind request", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = h.processor.UpdateSubscription(ctx, parsedUserID, req.PriceID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to update subscription", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
 	return
 }
 
