@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/stripe/stripe-go/v79"
+	"github.com/stripe/stripe-go/v79/product"
 )
 
 func (p *ProductService) CreateProduct(ctx context.Context, productCreated stripe.Product) error {
@@ -19,19 +20,42 @@ func (p *ProductService) CreateProduct(ctx context.Context, productCreated strip
 
 // HandlePriceCreationWebhookEvent handles the price creation webhook event
 func (p *ProductService) CreatePrice(ctx context.Context, priceCreated stripe.Price) error {
-	product, err := p.store.GetProductByStripeID(ctx, priceCreated.Product.ID)
+	// Try to get the product from the local database
+	productInDB, err := p.store.GetProductByStripeID(ctx, priceCreated.Product.ID)
 	if err != nil {
-		p.logger.Error(ctx, "failed to get product", err)
-		return err
+		// Log error but continue to fetch product from Stripe if it's not in the local database
+		p.logger.Warn(ctx, "product not found in database, fetching from Stripe")
+
+		// Fetch product from Stripe
+		productGot, err := product.Get(priceCreated.Product.ID, nil)
+		if err != nil {
+			p.logger.Error(ctx, "failed to fetch product from Stripe", err)
+			return err
+		}
+
+		// Create the product in the local database
+		if err := p.CreateProduct(ctx, *productGot); err != nil {
+			p.logger.Error(ctx, "failed to create product in local database", err)
+			return err
+		}
+
+		// After creating the product, retrieve it from the local database
+		productInDB, err = p.store.GetProductByStripeID(ctx, priceCreated.Product.ID)
+		if err != nil {
+			p.logger.Error(ctx, "failed to retrieve newly created product from local database", err)
+			return err
+		}
 	}
 
-	err = p.store.CreatePrice(ctx, store.Price{
-		ProductID:   product.ID,
+	// Create the price in the local database
+	price := store.Price{
+		ProductID:   productInDB.ID,
 		StripeID:    priceCreated.ID,
 		Description: priceCreated.Nickname,
-	})
-	if err != nil {
-		p.logger.Error(ctx, "failed to create prices", err)
+	}
+
+	if err := p.store.CreatePrice(ctx, price); err != nil {
+		p.logger.Error(ctx, "failed to create price in local database", err)
 		return err
 	}
 

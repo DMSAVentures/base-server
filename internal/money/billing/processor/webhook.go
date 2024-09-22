@@ -188,7 +188,7 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 		if !ok {
 			err := errors.New("failed to retrieve previous subscription status")
 			p.logger.Error(ctx, "subscription updated event missing previous status", err)
-			return err
+			//return err
 		}
 
 		// Subscription status handling
