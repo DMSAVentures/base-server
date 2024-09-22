@@ -28,8 +28,8 @@ func (s *Store) CreateUserOnGoogleSignIn(ctx context.Context, googleUserId strin
 		return User{}, err
 	}
 	defer func() {
-		err := tx.Rollback()
 		if err != nil {
+			err := tx.Rollback()
 			s.logger.Error(ctx, "failed to rollback transaction", err)
 		}
 	}()

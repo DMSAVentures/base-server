@@ -4,7 +4,6 @@ import (
 	"base-server/internal/observability"
 	"context"
 	"encoding/json"
-	"time"
 
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/tax/transaction"
@@ -78,9 +77,19 @@ func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice str
 		p.logger.Error(ctx, "failed to cancel subscription", err)
 		return
 	}
-
-	time.RFC3339
 }
+
+//// Invoke this method in your webhook handler when `invoice.payment_succeeded` webhook is received
+//func (p *BillingProcessor) InvoicePaymentSucceeded(ctx context.Context, invoice stripe.Invoice) {
+//	// 1. Get the user by the customer ID
+//	// 2. Get the user's email
+//	// 3. Send an email to the user
+//	err := p.subscriptionService.UpdateSubscription(ctx, invoice.Subscription.ID)
+//	if err != nil {
+//		p.logger.Error(ctx, "failed to cancel subscription", err)
+//		return
+//	}
+//}
 
 func (p *BillingProcessor) ProductCreated(ctx context.Context, productCreated stripe.Product) {
 	err := p.productService.CreateProduct(ctx, productCreated)
@@ -174,6 +183,14 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 			return err
 		}
 		p.InvoicePaymentFailed(ctx, invoice)
+		//case "invoice.payment_succeeded":
+		//	var invoice stripe.Invoice
+		//	err := json.Unmarshal(event.Data.Raw, &invoice)
+		//	if err != nil {
+		//		p.logger.Error(ctx, "failed to unmarshal invoice", err)
+		//		return err
+		//	}
+		//	p.InvoicePaymentSucceeded(ctx, invoice)
 	}
 
 	return nil
