@@ -76,51 +76,6 @@ func (p *BillingProcessor) CreateStripePaymentIntent(ctx context.Context, items 
 	return pi.ClientSecret, nil
 }
 
-func (p *BillingProcessor) calculateTax(items []PaymentIntentItem, currency stripe.Currency,
-	customerAddress stripe.Address) (*stripe.TaxCalculation, error) {
-	var lineItems []*stripe.TaxCalculationLineItemParams
-	for _, item := range items {
-		lineItems = append(lineItems, p.buildLineItem(item))
-	}
-
-	taxCalculationParams := &stripe.TaxCalculationParams{
-		Currency: stripe.String(string(currency)),
-		CustomerDetails: &stripe.TaxCalculationCustomerDetailsParams{
-			Address: &stripe.AddressParams{
-				Line1:      stripe.String(customerAddress.Line1),
-				City:       stripe.String(customerAddress.City),
-				State:      stripe.String(customerAddress.State),
-				PostalCode: stripe.String(customerAddress.PostalCode),
-				Country:    stripe.String(customerAddress.Country),
-			},
-			AddressSource: stripe.String("shipping"),
-		},
-		LineItems: lineItems,
-	}
-
-	taxCalculation, err := calculation.New(taxCalculationParams)
-	if err != nil {
-		p.logger.Error(context.Background(), "failed to create tax calculation", err)
-		return nil, err
-	}
-
-	return taxCalculation, nil
-}
-
-func (p *BillingProcessor) buildLineItem(i PaymentIntentItem) *stripe.TaxCalculationLineItemParams {
-	return &stripe.TaxCalculationLineItemParams{
-		Amount:    stripe.Int64(i.Amount), // Amount in cents
-		Reference: stripe.String(i.Id),    // Unique reference for the PaymentIntentItem in the scope of the calculation
-	}
-}
-
-// Securely calculate the order amount, including tax
-func (p *BillingProcessor) calculateOrderAmount(taxCalculation *stripe.TaxCalculation) int64 {
-	// Calculate the order total with any exclusive taxes on the server to prevent
-	// people from directly manipulating the amount on the client
-	return taxCalculation.AmountTotal
-}
-
 func (p *BillingProcessor) CreateSubscription(ctx context.Context, userID uuid.UUID, priceID string) (string, error) {
 	ctx = observability.WithFields(ctx, observability.Field{"user_id", userID})
 	p.logger.Info(ctx, "Creating subscription for user")
@@ -245,4 +200,49 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 	}
 
 	return nil
+}
+
+func (p *BillingProcessor) calculateTax(items []PaymentIntentItem, currency stripe.Currency,
+	customerAddress stripe.Address) (*stripe.TaxCalculation, error) {
+	var lineItems []*stripe.TaxCalculationLineItemParams
+	for _, item := range items {
+		lineItems = append(lineItems, p.buildLineItem(item))
+	}
+
+	taxCalculationParams := &stripe.TaxCalculationParams{
+		Currency: stripe.String(string(currency)),
+		CustomerDetails: &stripe.TaxCalculationCustomerDetailsParams{
+			Address: &stripe.AddressParams{
+				Line1:      stripe.String(customerAddress.Line1),
+				City:       stripe.String(customerAddress.City),
+				State:      stripe.String(customerAddress.State),
+				PostalCode: stripe.String(customerAddress.PostalCode),
+				Country:    stripe.String(customerAddress.Country),
+			},
+			AddressSource: stripe.String("shipping"),
+		},
+		LineItems: lineItems,
+	}
+
+	taxCalculation, err := calculation.New(taxCalculationParams)
+	if err != nil {
+		p.logger.Error(context.Background(), "failed to create tax calculation", err)
+		return nil, err
+	}
+
+	return taxCalculation, nil
+}
+
+func (p *BillingProcessor) buildLineItem(i PaymentIntentItem) *stripe.TaxCalculationLineItemParams {
+	return &stripe.TaxCalculationLineItemParams{
+		Amount:    stripe.Int64(i.Amount), // Amount in cents
+		Reference: stripe.String(i.Id),    // Unique reference for the PaymentIntentItem in the scope of the calculation
+	}
+}
+
+// Securely calculate the order amount, including tax
+func (p *BillingProcessor) calculateOrderAmount(taxCalculation *stripe.TaxCalculation) int64 {
+	// Calculate the order total with any exclusive taxes on the server to prevent
+	// people from directly manipulating the amount on the client
+	return taxCalculation.AmountTotal
 }
