@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"base-server/internal/billing/processor"
+	"base-server/internal/money/billing/processor"
 	"base-server/internal/observability"
 	"io"
 	"net/http"

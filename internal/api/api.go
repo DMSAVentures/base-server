@@ -2,7 +2,7 @@ package api
 
 import (
 	authHandler "base-server/internal/auth/handler"
-	billingHandler "base-server/internal/billing/handler"
+	billingHandler "base-server/internal/money/billing/handler"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

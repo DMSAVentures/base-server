@@ -1,8 +1,8 @@
 package processor
 
 import (
+	"base-server/internal/money/products"
 	"base-server/internal/observability"
-	"base-server/internal/products"
 	"base-server/internal/store"
 	"context"
 
