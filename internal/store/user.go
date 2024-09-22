@@ -49,3 +49,20 @@ func (s *Store) GetStripeCustomerIDByUserExternalID(ctx context.Context, ID uuid
 	}
 	return stripeCustomerID, nil
 }
+
+const sqlSelectUserByStripeCustomerID = `
+SELECT 
+    id,
+    first_name,
+    last_name
+FROM users
+WHERE stripe_customer_id = $1`
+
+func (s *Store) GetUserByStripeCustomerID(ctx context.Context, stripeID string) (User, error) {
+	var user User
+	err := s.db.GetContext(ctx, &user, sqlSelectUserByStripeCustomerID, stripeID)
+	if err != nil {
+		return User{}, err
+	}
+	return user, nil
+}

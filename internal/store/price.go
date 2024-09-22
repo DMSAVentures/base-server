@@ -46,3 +46,18 @@ func (s *Store) DeletePriceByStripeID(ctx context.Context, stripeID string) erro
 	}
 	return nil
 }
+
+const sqlGetPriceByStripeID = `
+SELECT id, product_id, stripe_id, description, created_at, updated_at
+FROM prices
+WHERE stripe_id = $1
+`
+
+func (s *Store) GetPriceByStripeID(ctx context.Context, stripeID string) (Price, error) {
+	var price Price
+	err := s.db.GetContext(ctx, &price, sqlGetPriceByStripeID, stripeID)
+	if err != nil {
+		return Price{}, fmt.Errorf("failed to get price: %w", err)
+	}
+	return price, nil
+}
