@@ -13,7 +13,7 @@ func (p *AuthProcessor) generateJWTToken(user store.AuthenticatedUser) (string, 
 	expirationTime := time.Now().Add(24 * time.Hour) // Token valid for 24 hours
 	cl := jwt.New(jwt.SigningMethodHS256)
 	claims := cl.Claims.(jwt.MapClaims)
-	claims["sub"] = user.ExternalID
+	claims["sub"] = user.ID
 	claims["auth_type"] = user.AuthType
 	claims["iss"] = "base-server"
 	claims["aud"] = "base-server"

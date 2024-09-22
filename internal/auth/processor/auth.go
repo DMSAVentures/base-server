@@ -163,7 +163,7 @@ func (p *AuthProcessor) GetUserByExternalID(ctx context.Context, externalID uuid
 	return User{
 		FirstName:  user.FirstName,
 		LastName:   user.LastName,
-		ExternalID: user.ExternalID,
+		ExternalID: user.ID,
 	}, nil
 
 }

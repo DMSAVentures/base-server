@@ -6,18 +6,17 @@ import (
 	"github.com/google/uuid"
 )
 
-const sqlSelectUserByExternalID = `
+const sqlSelectUserByID = `
 SELECT 
     id,
     first_name,
-    last_name,
-    external_id
+    last_name
 FROM users
-WHERE external_id = $1`
+WHERE id = $1`
 
 func (s *Store) GetUserByExternalID(ctx context.Context, externalID uuid.UUID) (User, error) {
 	var user User
-	err := s.db.GetContext(ctx, &user, sqlSelectUserByExternalID, externalID)
+	err := s.db.GetContext(ctx, &user, sqlSelectUserByID, externalID)
 	if err != nil {
 		return User{}, err
 	}
@@ -37,14 +36,14 @@ func (s *Store) UpdateStripeCustomerIDByUserID(ctx context.Context, userID int, 
 	return nil
 }
 
-const sqlGetStripeCustomerIDByUserExternalID = `
+const sqlGetStripeCustomerIDByUserID = `
 SELECT stripe_customer_id
 FROM users
-WHERE external_id = $1`
+WHERE id = $1`
 
-func (s *Store) GetStripeCustomerIDByUserExternalID(ctx context.Context, externalID uuid.UUID) (string, error) {
+func (s *Store) GetStripeCustomerIDByUserExternalID(ctx context.Context, ID uuid.UUID) (string, error) {
 	var stripeCustomerID string
-	err := s.db.GetContext(ctx, &stripeCustomerID, sqlGetStripeCustomerIDByUserExternalID, externalID)
+	err := s.db.GetContext(ctx, &stripeCustomerID, sqlGetStripeCustomerIDByUserID, ID)
 	if err != nil {
 		return "", err
 	}

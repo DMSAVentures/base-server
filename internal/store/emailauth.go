@@ -7,14 +7,13 @@ import (
 )
 
 type User struct {
-	ID         int       `db:"id"`
-	ExternalID uuid.UUID `db:"external_id"`
-	FirstName  string    `db:"first_name"`
-	LastName   string    `db:"last_name"`
+	ID        uuid.UUID `db:"id"`
+	FirstName string    `db:"first_name"`
+	LastName  string    `db:"last_name"`
 }
 
 type UserAuth struct {
-	ID       int    `db:"auth_id"`
+	ID       int    `db:"id"`
 	UserID   int    `db:"user_id"`
 	AuthType string `db:"auth_type"`
 }
@@ -31,8 +30,11 @@ type UserWithEmail struct {
 }
 
 type AuthenticatedUser struct {
-	User
-	UserAuth
+	UserID    int    `db:"id"`
+	FirstName string `db:"first_name"`
+	LastName  string `db:"last_name"`
+	AuthID    int    `db:"auth_id"`
+	AuthType  string `db:"auth_type"`
 }
 
 const sqlCheckIfEmailExistsQuery = `
@@ -65,12 +67,12 @@ func (s *Store) CheckIfEmailExists(ctx context.Context, email string) (bool, err
 const sqlCreateUser = `
 INSERT INTO users (first_name, last_name) 
 VALUES ($1, $2) 
-RETURNING id, external_id, first_name, last_name`
+RETURNING id, first_name, last_name`
 
 const sqlCreateUserAuth = `
 INSERT INTO user_auth (user_id, auth_type) 
 VALUES ($1, $2)
-RETURNING auth_id, user_id, auth_type`
+RETURNING id, user_id, auth_type`
 
 const sqlCreateEmailAuth = `
 INSERT INTO email_auth (auth_id, email, hashed_password) 
@@ -136,16 +138,15 @@ func (s *Store) GetCredentialsByEmail(ctx context.Context, email string) (EmailA
 const sqlGetUserByAuthID = `
 SELECT
     loggedInUser.id,
-    loggedInUser.external_id,
     loggedInUser.first_name,
     loggedInUser.last_name,
-    auth.auth_id,
+    auth.id as auth_id,
     auth.auth_type
 FROM users AS loggedInUser
 LEFT JOIN user_auth auth
 ON
     loggedInUser.id = auth.user_id
-WHERE auth.auth_id = $1
+WHERE auth.id = $1
 `
 
 func (s *Store) GetUserByAuthID(ctx context.Context, authID int) (AuthenticatedUser, error) {

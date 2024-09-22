@@ -11,9 +11,9 @@ type OauthAuth struct {
 }
 
 const sqlCreateOAuth = `
-INSERT INTO oauth_auth (auth_id, user_id, email, full_name, auth_provider)
+INSERT INTO oauth_auth (auth_id, external_id, email, full_name, auth_provider)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING auth_id, user_id, email, full_name, auth_provider
+RETURNING auth_id, external_id, email, full_name, auth_provider
 `
 
 func (s *Store) CreateUserOnGoogleSignIn(ctx context.Context, googleUserId string, email string, firstName string,
@@ -63,8 +63,9 @@ SELECT
     auth_id,
     user_id,
     auth_provider,
+    full_name,
     email
-FROM oauth_auth
+FROM oauth_auth INNER JOIN user_auth ON oauth_auth.auth_id = user_auth.id
 WHERE email = $1
 `
 

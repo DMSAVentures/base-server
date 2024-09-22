@@ -57,6 +57,10 @@ func (p *BillingProcessor) PaymentIntentSucceeded(ctx context.Context, paymentIn
 	//p.logger.Info(ctx, "Order fulfilled", orderID)
 }
 
+func (p *BillingProcessor) HandleProductCreate(ctx context.Context, productCreated stripe.Product) {
+
+}
+
 func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event) error {
 
 	// Handle the event
@@ -69,6 +73,13 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 			return err
 		}
 		p.PaymentIntentSucceeded(ctx, paymentIntent)
+	case "product.created":
+		var product stripe.Product
+		err := json.Unmarshal(event.Data.Raw, &product)
+		if err != nil {
+			p.logger.Error(ctx, "failed to unmarshal product", err)
+			return err
+		}
 	}
 
 	return nil
