@@ -28,7 +28,7 @@ UPDATE users
 SET stripe_customer_id = $1
 WHERE id = $2`
 
-func (s *Store) UpdateStripeCustomerIDByUserID(ctx context.Context, userID int, stripeCustomerID string) error {
+func (s *Store) UpdateStripeCustomerIDByUserID(ctx context.Context, userID uuid.UUID, stripeCustomerID string) error {
 	_, err := s.db.ExecContext(ctx, sqlUpdateStripeCustomerIDByUserID, stripeCustomerID, userID)
 	if err != nil {
 		return err

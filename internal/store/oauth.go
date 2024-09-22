@@ -1,13 +1,17 @@
 package store
 
-import "context"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 type OauthAuth struct {
-	AuthID       int    `db:"auth_id"`
-	UserID       string `db:"user_id"`
-	Email        string `db:"email"`
-	FullName     string `db:"full_name"`
-	AuthProvider string `db:"auth_provider"`
+	AuthID       uuid.UUID `db:"auth_id"`
+	ExternalID   string    `db:"external_id"`
+	Email        string    `db:"email"`
+	FullName     string    `db:"full_name"`
+	AuthProvider string    `db:"auth_provider"`
 }
 
 const sqlCreateOAuth = `
@@ -61,11 +65,11 @@ func (s *Store) CreateUserOnGoogleSignIn(ctx context.Context, googleUserId strin
 const sqlSelectOauthUserByEmail = `
 SELECT 
     auth_id,
-    user_id,
+    external_id,
     auth_provider,
     full_name,
     email
-FROM oauth_auth INNER JOIN user_auth ON oauth_auth.auth_id = user_auth.id
+FROM oauth_auth
 WHERE email = $1
 `
 

@@ -13,15 +13,15 @@ type User struct {
 }
 
 type UserAuth struct {
-	ID       int    `db:"id"`
-	UserID   int    `db:"user_id"`
-	AuthType string `db:"auth_type"`
+	ID       uuid.UUID `db:"id"`
+	UserID   uuid.UUID `db:"user_id"`
+	AuthType string    `db:"auth_type"`
 }
 
 type EmailAuth struct {
-	Email          string `db:"email"`
-	HashedPassword string `db:"hashed_password"`
-	AuthID         int    `db:"auth_id"`
+	Email          string    `db:"email"`
+	HashedPassword string    `db:"hashed_password"`
+	AuthID         uuid.UUID `db:"auth_id"`
 }
 
 type UserWithEmail struct {
@@ -30,11 +30,11 @@ type UserWithEmail struct {
 }
 
 type AuthenticatedUser struct {
-	UserID    int    `db:"id"`
-	FirstName string `db:"first_name"`
-	LastName  string `db:"last_name"`
-	AuthID    int    `db:"auth_id"`
-	AuthType  string `db:"auth_type"`
+	UserID    uuid.UUID `db:"id"`
+	FirstName string    `db:"first_name"`
+	LastName  string    `db:"last_name"`
+	AuthID    uuid.UUID `db:"auth_id"`
+	AuthType  string    `db:"auth_type"`
 }
 
 const sqlCheckIfEmailExistsQuery = `
@@ -149,7 +149,7 @@ ON
 WHERE auth.id = $1
 `
 
-func (s *Store) GetUserByAuthID(ctx context.Context, authID int) (AuthenticatedUser, error) {
+func (s *Store) GetUserByAuthID(ctx context.Context, authID uuid.UUID) (AuthenticatedUser, error) {
 	var authenticatedUser AuthenticatedUser
 	err := s.db.GetContext(ctx, &authenticatedUser, sqlGetUserByAuthID, authID)
 	if err != nil {

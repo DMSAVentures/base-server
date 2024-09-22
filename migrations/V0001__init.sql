@@ -1,7 +1,8 @@
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Users Table
 CREATE TABLE Users
 (
-    id          UUID PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     first_name  VARCHAR(100),
     last_name   VARCHAR(100),
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -12,7 +13,7 @@ CREATE TABLE Users
 -- User Authentication Table with BIGINT
 CREATE TABLE User_Auth
 (
-    id          UUID PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id     UUID REFERENCES Users (id), -- Reference to Users.id
     auth_type  VARCHAR(50), -- Types: 'email', 'google', 'saml'
     last_login TIMESTAMP,
@@ -35,7 +36,7 @@ CREATE TABLE Email_Auth
 -- Google Authentication Table with BIGINT
 CREATE TABLE Oauth_Auth
 (
-    auth_id         UUID PRIMARY KEY REFERENCES User_Auth(id),
+    auth_id       UUID PRIMARY KEY REFERENCES User_Auth(id),
     external_id   VARCHAR(255),
     email         VARCHAR(255),
     full_name     VARCHAR(255),       -- Added field for Google OAuth

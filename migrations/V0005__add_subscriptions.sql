@@ -1,6 +1,6 @@
 CREATE TABLE subscriptions
 (
-    id                UUID PRIMARY KEY,
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id           UUID REFERENCES Users (id),
     price_id          UUID REFERENCES prices (id),
     stripe_id         VARCHAR(255) NOT NULL,

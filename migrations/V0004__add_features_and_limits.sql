@@ -1,7 +1,7 @@
 -- Migration: Create features table (represents different features available in the system)
 CREATE TABLE features
 (
-    id          UUID PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name        VARCHAR(255) NOT NULL,
     description TEXT,
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -13,7 +13,7 @@ CREATE TABLE features
 -- Migration: Create limits table (represents limits associated with specific features)
 CREATE TABLE limits
 (
-    id          UUID PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     feature_id  UUID REFERENCES features (id),
     limit_name  VARCHAR(255) NOT NULL,
     limit_value INTEGER      NOT NULL, -- Example: 10 API calls or 5GB storage

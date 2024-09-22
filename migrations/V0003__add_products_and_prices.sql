@@ -1,7 +1,7 @@
 -- Migration: Create products table
 CREATE TABLE products
 (
-    id          UUID PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name        VARCHAR(255) NOT NULL,
     description TEXT,
     stripe_id   VARCHAR(255) NOT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE products
 -- Migration: Create prices table (represents recurring, one-time, or lifetime price plans for products)
 CREATE TABLE prices
 (
-    id          UUID PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     product_id  UUID REFERENCES products (id),
     stripe_id   VARCHAR(255) NOT NULL,
     description TEXT,
