@@ -27,9 +27,12 @@ WHERE stripe_id = $3
 `
 
 func (s *Store) UpdatePriceByStripeID(ctx context.Context, productID uuid.UUID, description, stripeID string) error {
-	_, err := s.db.ExecContext(ctx, sqlUpdatePriceByStripeID, productID, description, stripeID)
+	result, err := s.db.ExecContext(ctx, sqlUpdatePriceByStripeID, productID, description, stripeID)
 	if err != nil {
 		return fmt.Errorf("failed to update price: %w", err)
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
+		return fmt.Errorf("price not found")
 	}
 	return nil
 }

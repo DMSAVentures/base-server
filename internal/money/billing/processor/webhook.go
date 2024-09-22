@@ -4,6 +4,8 @@ import (
 	"base-server/internal/observability"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/tax/transaction"
@@ -67,6 +69,17 @@ func (p *BillingProcessor) SubscriptionUpdated(ctx context.Context, subscription
 	p.logger.Info(ctx, "Subscription updated")
 }
 
+// Invoke this method in your webhook handler when `customer.subscription.updated` webhook is received
+func (p *BillingProcessor) SubscriptionCreated(ctx context.Context, subscription stripe.Subscription) {
+	err := p.subscriptionService.CreateSubscription(ctx, subscription)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create subscription", err)
+		return
+	} else {
+		p.logger.Info(ctx, "Subscription created")
+	}
+}
+
 // Invoke this method in your webhook handler when `invoice.payment_failed` webhook is received
 func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice stripe.Invoice) {
 	// 1. Get the user by the customer ID
@@ -77,6 +90,17 @@ func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice str
 		p.logger.Error(ctx, "failed to cancel subscription", err)
 		return
 	}
+}
+
+func (p *BillingProcessor) InvoicePaymentPaid(ctx context.Context, invoice stripe.Invoice) {
+	// 1. Get the user by the customer ID
+	// 2. Get the user's email
+	// 3. Send an email to the user
+	//err := p.subscriptionService.UpdateSubscription(ctx, invoice.Subscription.ID)
+	//if err != nil {
+	//	p.logger.Error(ctx, "failed to cancel subscription", err)
+	//	return
+	//}
 }
 
 //// Invoke this method in your webhook handler when `invoice.payment_succeeded` webhook is received
@@ -124,17 +148,8 @@ func (p *BillingProcessor) PriceDeleted(ctx context.Context, priceDeleted stripe
 }
 
 func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event) error {
-
 	// Handle the event
 	switch event.Type {
-	case "payment_intent.succeeded":
-		var paymentIntent stripe.PaymentIntent
-		err := json.Unmarshal(event.Data.Raw, &paymentIntent)
-		if err != nil {
-			p.logger.Error(ctx, "failed to unmarshal payment intent", err)
-			return err
-		}
-		p.PaymentIntentSucceeded(ctx, paymentIntent)
 	case "product.created":
 		var product stripe.Product
 		err := json.Unmarshal(event.Data.Raw, &product)
@@ -143,54 +158,68 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 			return err
 		}
 		p.ProductCreated(ctx, product)
-	case "price.created":
+
+	case "price.created", "price.updated", "price.deleted":
 		var price stripe.Price
 		err := json.Unmarshal(event.Data.Raw, &price)
 		if err != nil {
-			p.logger.Error(ctx, "failed to unmarshal plan", err)
+			p.logger.Error(ctx, "failed to unmarshal price", err)
 			return err
 		}
-		p.PriceCreated(ctx, price)
-	case "price.updated":
-		var price stripe.Price
-		err := json.Unmarshal(event.Data.Raw, &price)
-		if err != nil {
-			p.logger.Error(ctx, "failed to unmarshal plan", err)
-			return err
+		switch event.Type {
+		case "price.created":
+			p.PriceCreated(ctx, price)
+		case "price.updated":
+			p.PriceUpdated(ctx, price)
+		case "price.deleted":
+			p.PriceDeleted(ctx, price)
 		}
-		p.PriceUpdated(ctx, price)
-	case "price.deleted":
-		var price stripe.Price
-		err := json.Unmarshal(event.Data.Raw, &price)
-		if err != nil {
-			p.logger.Error(ctx, "failed to unmarshal plan", err)
-			return err
-		}
-		p.PriceDeleted(ctx, price)
+
 	case "customer.subscription.updated":
 		var subscription stripe.Subscription
 		err := json.Unmarshal(event.Data.Raw, &subscription)
 		if err != nil {
-			p.logger.Error(ctx, "failed to unmarshal subscription", err)
+			p.logger.Error(ctx, "failed to unmarshal price", err)
 			return err
 		}
-		p.SubscriptionUpdated(ctx, subscription)
+
+		// Check for previous subscription status
+		previousStatus, ok := event.Data.PreviousAttributes["status"].(string)
+		if !ok {
+			err := errors.New("failed to retrieve previous subscription status")
+			p.logger.Error(ctx, "subscription updated event missing previous status", err)
+			return err
+		}
+
+		// Subscription status handling
+		if previousStatus == "incomplete" {
+			p.logger.Info(ctx, "Subscription moved from incomplete to active")
+			p.SubscriptionCreated(ctx, subscription)
+		} else {
+			p.logger.Info(ctx, "Subscription updated")
+			p.SubscriptionUpdated(ctx, subscription)
+		}
+
 	case "invoice.payment_failed":
 		var invoice stripe.Invoice
 		err := json.Unmarshal(event.Data.Raw, &invoice)
 		if err != nil {
-			p.logger.Error(ctx, "failed to unmarshal invoice", err)
+			p.logger.Error(ctx, "failed to unmarshal price", err)
 			return err
 		}
 		p.InvoicePaymentFailed(ctx, invoice)
-		//case "invoice.payment_succeeded":
-		//	var invoice stripe.Invoice
-		//	err := json.Unmarshal(event.Data.Raw, &invoice)
-		//	if err != nil {
-		//		p.logger.Error(ctx, "failed to unmarshal invoice", err)
-		//		return err
-		//	}
-		//	p.InvoicePaymentSucceeded(ctx, invoice)
+
+	case "invoice.paid":
+		var invoice stripe.Invoice
+		err := json.Unmarshal(event.Data.Raw, &invoice)
+		if err != nil {
+			p.logger.Error(ctx, "failed to unmarshal price", err)
+			return err
+		}
+		p.InvoicePaymentPaid(ctx, invoice)
+
+	default:
+		p.logger.Warn(ctx, fmt.Sprintf("Unhandled event type: %s", event.Type))
 	}
 
 	return nil
