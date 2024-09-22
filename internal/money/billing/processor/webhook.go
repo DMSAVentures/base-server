@@ -96,6 +96,7 @@ func (p *BillingProcessor) InvoicePaymentPaid(ctx context.Context, invoice strip
 	// 1. Get the user by the customer ID
 	// 2. Get the user's email
 	// 3. Send an email to the user
+	// 4. Update next billing date on subscription row
 	//err := p.subscriptionService.UpdateSubscription(ctx, invoice.Subscription.ID)
 	//if err != nil {
 	//	p.logger.Error(ctx, "failed to cancel subscription", err)

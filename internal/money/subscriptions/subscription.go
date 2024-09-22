@@ -40,8 +40,9 @@ func (p *SubscriptionService) CreateSubscription(ctx context.Context, subscripti
 
 func (p *SubscriptionService) UpdateSubscription(ctx context.Context, subscriptionUpdated stripe.Subscription) error {
 	params := store.UpdateSubscriptionParams{
-		Status:          string(subscriptionUpdated.Status),
-		EndDate:         time.Unix(subscriptionUpdated.CurrentPeriodEnd, 0),
+		Status:  string(subscriptionUpdated.Status),
+		EndDate: time.Unix(subscriptionUpdated.CurrentPeriodEnd, 0),
+		// This we should only update when invoice is paid
 		NextBillingDate: time.Unix(subscriptionUpdated.CurrentPeriodEnd, 0),
 		StripeID:        subscriptionUpdated.ID,
 	}
