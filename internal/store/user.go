@@ -36,3 +36,17 @@ func (s *Store) UpdateStripeCustomerIDByUserID(ctx context.Context, userID int, 
 	}
 	return nil
 }
+
+const sqlGetStripeCustomerIDByUserExternalID = `
+SELECT stripe_customer_id
+FROM users
+WHERE external_id = $1`
+
+func (s *Store) GetStripeCustomerIDByUserExternalID(ctx context.Context, externalID uuid.UUID) (string, error) {
+	var stripeCustomerID string
+	err := s.db.GetContext(ctx, &stripeCustomerID, sqlGetStripeCustomerIDByUserExternalID, externalID)
+	if err != nil {
+		return "", err
+	}
+	return stripeCustomerID, nil
+}

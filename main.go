@@ -145,6 +145,9 @@ func main() {
 	r.Use(observability.Middleware(logger))
 	rootRouter := r.Group("/")
 
+	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, store, logger)
+	billingHandler := billingHandler.New(billingProcessor, logger)
+
 	authConfig := processor.AuthConfig{
 		Email: processor.EmailConfig{
 			JWTSecret: jwtSecret,
@@ -156,11 +159,9 @@ func main() {
 			WebAppHost:        webAppURL,
 		},
 	}
-	authProcessor := processor.New(store, authConfig, googleOauthClient, logger)
+	authProcessor := processor.New(store, authConfig, googleOauthClient, billingProcessor, logger)
 	authHandler := handler.New(authProcessor, logger)
 
-	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, logger)
-	billingHandler := billingHandler.New(billingProcessor, logger)
 	api := api.New(rootRouter, authHandler, billingHandler)
 	api.RegisterRoutes()
 

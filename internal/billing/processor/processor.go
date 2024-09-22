@@ -2,6 +2,7 @@ package processor
 
 import (
 	"base-server/internal/observability"
+	"base-server/internal/store"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ type BillingProcessor struct {
 	stripKey      string
 	WebhookSecret string
 	logger        *observability.Logger
+	store         store.Store
 }
 
 type PaymentIntentItem struct {
@@ -26,11 +28,12 @@ type PaymentIntentItem struct {
 	Amount int64  `json:"amount" binding:"required"`
 }
 
-func New(stripKey string, webhookSecret string, logger *observability.Logger) BillingProcessor {
+func New(stripKey string, webhookSecret string, store store.Store, logger *observability.Logger) BillingProcessor {
 	stripe.Key = stripKey
 	return BillingProcessor{
 		stripKey:      stripKey,
 		WebhookSecret: webhookSecret,
+		store:         store,
 		logger:        logger,
 	}
 
@@ -120,11 +123,17 @@ func (p *BillingProcessor) calculateOrderAmount(taxCalculation *stripe.TaxCalcul
 
 func (p *BillingProcessor) CreateSubscription(ctx context.Context, userID uuid.UUID, priceID string) (string, error) {
 	ctx = observability.WithFields(ctx, observability.Field{"user_id", userID})
-
 	p.logger.Info(ctx, "Creating subscription for user")
+
+	stripeCustomerID, err := p.store.GetStripeCustomerIDByUserExternalID(ctx, userID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get stripe customer id from db", err)
+		return "", err
+	}
+
 	// Create the subscription
 	params := &stripe.SubscriptionParams{
-		Customer: stripe.String("cus_QqQonyC9psLVAl"),
+		Customer: stripe.String(stripeCustomerID), // The customer ID
 		Items: []*stripe.SubscriptionItemsParams{
 			{
 				Price: stripe.String(priceID), // The recurring price ID
