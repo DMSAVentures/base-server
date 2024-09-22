@@ -8,11 +8,11 @@ import (
 type SubscriptionService struct {
 	logger    *observability.Logger
 	stripeKey string
-	store     *store.Store
+	store     store.Store
 }
 
-func New(logger *observability.Logger, stripeKey string, store *store.Store) *SubscriptionService {
-	return &SubscriptionService{
+func New(logger *observability.Logger, stripeKey string, store store.Store) SubscriptionService {
+	return SubscriptionService{
 		logger:    logger,
 		stripeKey: stripeKey,
 		store:     store,

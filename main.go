@@ -8,6 +8,7 @@ import (
 	billingHandler "base-server/internal/money/billing/handler"
 	billingProcessor "base-server/internal/money/billing/processor"
 	"base-server/internal/money/products"
+	"base-server/internal/money/subscriptions"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
@@ -147,8 +148,10 @@ func main() {
 	rootRouter := r.Group("/")
 
 	productService := products.New(stripeSecretKey, store, logger)
+	subscriptionService := subscriptions.New(logger, stripeSecretKey, store)
 
-	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, store, productService, logger)
+	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, store, productService,
+		subscriptionService, logger)
 	billingHandler := billingHandler.New(billingProcessor, logger)
 
 	authConfig := processor.AuthConfig{

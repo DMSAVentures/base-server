@@ -2,6 +2,7 @@ package processor
 
 import (
 	"base-server/internal/money/products"
+	"base-server/internal/money/subscriptions"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
@@ -11,11 +12,12 @@ import (
 )
 
 type BillingProcessor struct {
-	stripKey       string
-	WebhookSecret  string
-	logger         *observability.Logger
-	store          store.Store
-	productService products.ProductService
+	stripKey            string
+	WebhookSecret       string
+	logger              *observability.Logger
+	store               store.Store
+	productService      products.ProductService
+	subscriptionService subscriptions.SubscriptionService
 }
 
 type PaymentIntentItem struct {
@@ -24,14 +26,15 @@ type PaymentIntentItem struct {
 }
 
 func New(stripKey string, webhookSecret string, store store.Store,
-	productService products.ProductService, logger *observability.Logger) BillingProcessor {
+	productService products.ProductService, subService subscriptions.SubscriptionService, logger *observability.Logger) BillingProcessor {
 	stripe.Key = stripKey
 	return BillingProcessor{
-		stripKey:       stripKey,
-		WebhookSecret:  webhookSecret,
-		store:          store,
-		productService: productService,
-		logger:         logger,
+		stripKey:            stripKey,
+		WebhookSecret:       webhookSecret,
+		store:               store,
+		productService:      productService,
+		subscriptionService: subService,
+		logger:              logger,
 	}
 
 }

@@ -4,6 +4,7 @@ import (
 	"base-server/internal/observability"
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/tax/transaction"
@@ -55,6 +56,30 @@ func (p *BillingProcessor) PaymentIntentSucceeded(ctx context.Context, paymentIn
 	//}
 
 	//p.logger.Info(ctx, "Order fulfilled", orderID)
+}
+
+// Invoke this method in your webhook handler when `customer.subscription.updated` webhook is received
+func (p *BillingProcessor) SubscriptionUpdated(ctx context.Context, subscription stripe.Subscription) {
+	err := p.subscriptionService.UpdateSubscription(ctx, subscription)
+	if err != nil {
+		p.logger.Error(ctx, "failed to update subscription", err)
+		return
+	}
+	p.logger.Info(ctx, "Subscription updated")
+}
+
+// Invoke this method in your webhook handler when `invoice.payment_failed` webhook is received
+func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice stripe.Invoice) {
+	// 1. Get the user by the customer ID
+	// 2. Get the user's email
+	// 3. Send an email to the user
+	err := p.subscriptionService.CancelSubscription(ctx, invoice.Subscription.ID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to cancel subscription", err)
+		return
+	}
+
+	time.RFC3339
 }
 
 func (p *BillingProcessor) ProductCreated(ctx context.Context, productCreated stripe.Product) {
@@ -133,6 +158,22 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 			return err
 		}
 		p.PriceDeleted(ctx, price)
+	case "customer.subscription.updated":
+		var subscription stripe.Subscription
+		err := json.Unmarshal(event.Data.Raw, &subscription)
+		if err != nil {
+			p.logger.Error(ctx, "failed to unmarshal subscription", err)
+			return err
+		}
+		p.SubscriptionUpdated(ctx, subscription)
+	case "invoice.payment_failed":
+		var invoice stripe.Invoice
+		err := json.Unmarshal(event.Data.Raw, &invoice)
+		if err != nil {
+			p.logger.Error(ctx, "failed to unmarshal invoice", err)
+			return err
+		}
+		p.InvoicePaymentFailed(ctx, invoice)
 	}
 
 	return nil
