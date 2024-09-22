@@ -5,9 +5,9 @@ CREATE TABLE products
     name        VARCHAR(255) NOT NULL,
     description TEXT,
     stripe_id   VARCHAR(255) NOT NULL,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at  TIMESTAMP DEFAULT NULL
+    created_at  TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at  TIMESTAMPZ DEFAULT NULL
 );
 
 -- Migration: Create prices table (represents recurring, one-time, or lifetime price plans for products)
@@ -17,7 +17,7 @@ CREATE TABLE prices
     product_id  UUID REFERENCES products (id),
     stripe_id   VARCHAR(255) NOT NULL,
     description TEXT,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at  TIMESTAMP DEFAULT NULL
+    created_at  TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at  TIMESTAMPZ DEFAULT NULL
 );

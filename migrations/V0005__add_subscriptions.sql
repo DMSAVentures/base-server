@@ -8,7 +8,7 @@ CREATE TABLE subscriptions
     start_date        TIMESTAMP,
     end_date          TIMESTAMP,
     next_billing_date TIMESTAMP,
-    created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at        TIMESTAMP DEFAULT NULL
+    created_at        TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at        TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at        TIMESTAMPZ DEFAULT NULL
 );

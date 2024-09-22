@@ -4,9 +4,9 @@ CREATE TABLE features
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name        VARCHAR(255) NOT NULL,
     description TEXT,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at  TIMESTAMP DEFAULT NULL,
+    created_at  TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at  TIMESTAMPZ DEFAULT NULL,
     UNIQUE (name) -- Ensure feature names are unique
 );
 
@@ -17,9 +17,9 @@ CREATE TABLE limits
     feature_id  UUID REFERENCES features (id),
     limit_name  VARCHAR(255) NOT NULL,
     limit_value INTEGER      NOT NULL, -- Example: 10 API calls or 5GB storage
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at  TIMESTAMP DEFAULT NULL,
+    created_at  TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at  TIMESTAMPZ DEFAULT NULL,
     UNIQUE (feature_id, limit_name)    -- Ensure limit names are unique per feature
 );
 
@@ -31,9 +31,9 @@ CREATE TABLE plan_feature_limits
     feature_id UUID REFERENCES features (id),
     limit_id   UUID REFERENCES limits (id),
     enabled    BOOLEAN   DEFAULT TRUE, -- Whether the feature is available in this plan
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP DEFAULT NULL,
+    created_at TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPZ DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPZ DEFAULT NULL,
     PRIMARY KEY (plan_id, feature_id)
 
 );
