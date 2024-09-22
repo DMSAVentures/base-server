@@ -71,6 +71,32 @@ func (p *BillingProcessor) CancelSubscription(ctx context.Context, userID uuid.U
 	return nil
 }
 
+func (p *BillingProcessor) UpdateSubscription(ctx context.Context, userID uuid.UUID, priceID string) error {
+	activeSub, err := p.GetActiveSubscription(ctx, userID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get active stripe subscription", err)
+		return err
+	}
+
+	params := &stripe.SubscriptionParams{
+		Items: []*stripe.SubscriptionItemsParams{
+			{
+				ID:    stripe.String(activeSub.Items.Data[0].ID),
+				Price: stripe.String(priceID),
+			},
+		},
+		ProrationBehavior: stripe.String("create_prorations"),
+	}
+
+	_, err = subscription.Update(activeSub.ID, params)
+	if err != nil {
+		p.logger.Error(ctx, "failed to update subscription", err)
+		return err
+	}
+
+	return nil
+}
+
 func (p *BillingProcessor) GetActiveSubscription(ctx context.Context, userID uuid.UUID) (*stripe.Subscription, error) {
 	stripeCustomerID, err := p.store.GetStripeCustomerIDByUserExternalID(ctx, userID)
 	if err != nil {
