@@ -46,44 +46,6 @@ SELECT EXISTS(SELECT 1
               FROM oauth_auth 
               WHERE email  = $1)`
 
-const sqlCreateUser = `
-INSERT INTO users (first_name, last_name) 
-VALUES ($1, $2) 
-RETURNING id, external_id, first_name, last_name`
-
-const sqlCreateUserAuth = `
-INSERT INTO user_auth (user_id, auth_type) 
-VALUES ($1, $2)
-RETURNING auth_id, user_id, auth_type`
-
-const sqlCreateEmailAuth = `
-INSERT INTO email_auth (auth_id, email, hashed_password) 
-VALUES ($1, $2, $3) 
-RETURNING email, hashed_password, auth_id`
-
-const sqlGetUserByEmail = `
-SELECT 
-    email,
-    hashed_password,
-    auth_id 
-FROM email_auth 
-WHERE email = $1`
-
-const sqlGetUserByAuthID = `
-SELECT
-    loggedInUser.id,
-    loggedInUser.external_id,
-    loggedInUser.first_name,
-    loggedInUser.last_name,
-    auth.auth_id,
-    auth.auth_type
-FROM users AS loggedInUser
-LEFT JOIN user_auth auth
-ON
-    loggedInUser.id = auth.user_id
-WHERE auth.auth_id = $1
-`
-
 func (s *Store) CheckIfEmailExists(ctx context.Context, email string) (bool, error) {
 	var existsOnEmailAuth bool
 	err := s.db.GetContext(ctx, &existsOnEmailAuth, sqlCheckIfEmailExistsQuery, email)
@@ -99,6 +61,21 @@ func (s *Store) CheckIfEmailExists(ctx context.Context, email string) (bool, err
 	}
 	return existsOnEmailAuth || existsOnOauthAuth, nil
 }
+
+const sqlCreateUser = `
+INSERT INTO users (first_name, last_name) 
+VALUES ($1, $2) 
+RETURNING id, external_id, first_name, last_name`
+
+const sqlCreateUserAuth = `
+INSERT INTO user_auth (user_id, auth_type) 
+VALUES ($1, $2)
+RETURNING auth_id, user_id, auth_type`
+
+const sqlCreateEmailAuth = `
+INSERT INTO email_auth (auth_id, email, hashed_password) 
+VALUES ($1, $2, $3) 
+RETURNING email, hashed_password, auth_id`
 
 func (s *Store) CreateUserOnEmailSignup(
 	ctx context.Context, firstName string, lastName string, email string, hashedPassword string) (User, error) {
@@ -138,6 +115,14 @@ func (s *Store) CreateUserOnEmailSignup(
 	return user, nil
 }
 
+const sqlGetUserByEmail = `
+SELECT 
+    email,
+    hashed_password,
+    auth_id 
+FROM email_auth 
+WHERE email = $1`
+
 func (s *Store) GetCredentialsByEmail(ctx context.Context, email string) (EmailAuth, error) {
 	var userAuthByEmail EmailAuth
 	err := s.db.GetContext(ctx, &userAuthByEmail, sqlGetUserByEmail, email)
@@ -147,6 +132,21 @@ func (s *Store) GetCredentialsByEmail(ctx context.Context, email string) (EmailA
 	}
 	return userAuthByEmail, nil
 }
+
+const sqlGetUserByAuthID = `
+SELECT
+    loggedInUser.id,
+    loggedInUser.external_id,
+    loggedInUser.first_name,
+    loggedInUser.last_name,
+    auth.auth_id,
+    auth.auth_type
+FROM users AS loggedInUser
+LEFT JOIN user_auth auth
+ON
+    loggedInUser.id = auth.user_id
+WHERE auth.auth_id = $1
+`
 
 func (s *Store) GetUserByAuthID(ctx context.Context, authID int) (AuthenticatedUser, error) {
 	var authenticatedUser AuthenticatedUser

@@ -16,16 +16,6 @@ VALUES ($1, $2, $3, $4, $5)
 RETURNING auth_id, user_id, email, full_name, auth_provider
 `
 
-const sqlSelectOauthUserByEmail = `
-SELECT 
-    auth_id,
-    user_id,
-    auth_provider,
-    email
-FROM oauth_auth
-WHERE email = $1
-`
-
 func (s *Store) CreateUserOnGoogleSignIn(ctx context.Context, googleUserId string, email string, firstName string,
 	lastName string) (User, error) {
 	tx, err := s.db.BeginTxx(ctx, nil)
@@ -67,6 +57,16 @@ func (s *Store) CreateUserOnGoogleSignIn(ctx context.Context, googleUserId strin
 	}
 	return user, nil
 }
+
+const sqlSelectOauthUserByEmail = `
+SELECT 
+    auth_id,
+    user_id,
+    auth_provider,
+    email
+FROM oauth_auth
+WHERE email = $1
+`
 
 func (s *Store) GetOauthUserByEmail(ctx context.Context, email string) (OauthAuth, error) {
 	var userAuthByOauth OauthAuth

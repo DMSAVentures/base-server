@@ -37,17 +37,6 @@ type AuthConfig struct {
 	Google GoogleOauthConfig
 }
 
-func New(store store.Store, authConfig AuthConfig, googleOauthClient *googleoauth.Client, billingProcessor billingProcessor.BillingProcessor,
-	logger *observability.Logger) AuthProcessor {
-	return AuthProcessor{
-		store:             store,
-		logger:            logger,
-		authConfig:        authConfig,
-		googleOauthClient: googleOauthClient,
-		billingProcessor:  billingProcessor,
-	}
-}
-
 var ErrEmailAlreadyExists = errors.New("email already exists")
 var ErrEmailDoesNotExist = errors.New("email does not exist")
 
@@ -81,6 +70,17 @@ type BaseClaims struct {
 	Subject        string           `json:"sub"`
 	Audience       jwt.ClaimStrings `json:"aud"`
 	AuthType       string           `json:"auth_type"`
+}
+
+func New(store store.Store, authConfig AuthConfig, googleOauthClient *googleoauth.Client, billingProcessor billingProcessor.BillingProcessor,
+	logger *observability.Logger) AuthProcessor {
+	return AuthProcessor{
+		store:             store,
+		logger:            logger,
+		authConfig:        authConfig,
+		googleOauthClient: googleOauthClient,
+		billingProcessor:  billingProcessor,
+	}
 }
 
 func (p *AuthProcessor) Signup(ctx context.Context, firstName string, lastName string, email string, password string) (SignedUpUser, error) {
