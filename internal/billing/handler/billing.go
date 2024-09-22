@@ -16,12 +16,16 @@ type Handler struct {
 	logger    *observability.Logger
 }
 
-func New(processor processor.BillingProcessor, logger *observability.Logger) Handler {
-	return Handler{processor: processor, logger: logger}
-}
-
 type CreatePaymentIntentRequest struct {
 	Items []processor.PaymentIntentItem `json:"items" binding:"required"`
+}
+
+type CreateSubscriptionRequest struct {
+	PriceID string `json:"price_id" binding:"required"`
+}
+
+func New(processor processor.BillingProcessor, logger *observability.Logger) Handler {
+	return Handler{processor: processor, logger: logger}
 }
 
 // Create Stripe payment intent
@@ -41,10 +45,6 @@ func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"client_secret": clientSecret})
 	return
-}
-
-type CreateSubscriptionRequest struct {
-	PriceID string `json:"price_id" binding:"required"`
 }
 
 func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
