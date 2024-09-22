@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
+	"github.com/stripe/stripe-go/v79/customer"
 	"github.com/stripe/stripe-go/v79/paymentintent"
 	"github.com/stripe/stripe-go/v79/subscription"
 	"github.com/stripe/stripe-go/v79/tax/calculation"
@@ -154,6 +155,22 @@ func (p *BillingProcessor) CreateSubscription(ctx context.Context, userID uuid.U
 	}
 
 	return clientSecret, nil
+}
+
+func (p *BillingProcessor) CreateStripeCustomer(ctx context.Context, email string) (string, error) {
+	ctx = observability.WithFields(ctx, observability.Field{"email", email})
+	params := &stripe.CustomerParams{
+		Email: stripe.String(email),
+	}
+
+	customer, err := customer.New(params)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create customer", err)
+		return "", err
+	}
+
+	return customer.ID, nil
+
 }
 
 // Invoke this method in your webhook handler when `payment_intent.succeeded` webhook is received

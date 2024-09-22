@@ -101,11 +101,11 @@ func (s *Store) CheckIfEmailExists(ctx context.Context, email string) (bool, err
 }
 
 func (s *Store) CreateUserOnEmailSignup(
-	ctx context.Context, firstName string, lastName string, email string, hashedPassword string) (User, string, error) {
+	ctx context.Context, firstName string, lastName string, email string, hashedPassword string) (User, error) {
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {
 		s.logger.Error(ctx, "failed to begin transaction", err)
-		return User{}, "", err
+		return User{}, err
 	}
 	defer func() {
 		tx.Rollback()
@@ -115,27 +115,27 @@ func (s *Store) CreateUserOnEmailSignup(
 	err = tx.GetContext(ctx, &user, sqlCreateUser, firstName, lastName)
 	if err != nil {
 		s.logger.Error(ctx, "failed to create user", err)
-		return User{}, "", err
+		return User{}, err
 	}
 	var userAuth UserAuth
 	err = tx.GetContext(ctx, &userAuth, sqlCreateUserAuth, user.ID, "email")
 	if err != nil {
 		s.logger.Error(ctx, "failed to create user auth entry", err)
-		return User{}, "", err
+		return User{}, err
 	}
 
 	var emailAuth EmailAuth
 	err = tx.GetContext(ctx, &emailAuth, sqlCreateEmailAuth, userAuth.ID, email, hashedPassword)
 	if err != nil {
 		s.logger.Error(ctx, "failed to create email auth entry", err)
-		return User{}, "", err
+		return User{}, err
 	}
 	err = tx.Commit()
 	if err != nil {
 		s.logger.Error(ctx, "failed to commit transaction", err)
-		return User{}, "", err
+		return User{}, err
 	}
-	return user, email, nil
+	return user, nil
 }
 
 func (s *Store) GetCredentialsByEmail(ctx context.Context, email string) (EmailAuth, error) {

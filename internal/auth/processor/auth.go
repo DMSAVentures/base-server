@@ -1,6 +1,7 @@
 package processor
 
 import (
+	billingProcessor "base-server/internal/billing/processor"
 	"base-server/internal/clients/googleoauth"
 	"base-server/internal/observability"
 	"base-server/internal/store"
@@ -17,6 +18,7 @@ type AuthProcessor struct {
 	authConfig        AuthConfig
 	logger            *observability.Logger
 	googleOauthClient *googleoauth.Client
+	billingProcessor  billingProcessor.BillingProcessor
 }
 
 type EmailConfig struct {
@@ -35,13 +37,14 @@ type AuthConfig struct {
 	Google GoogleOauthConfig
 }
 
-func New(store store.Store, authConfig AuthConfig, googleOauthClient *googleoauth.Client,
+func New(store store.Store, authConfig AuthConfig, googleOauthClient *googleoauth.Client, billingProcessor billingProcessor.BillingProcessor,
 	logger *observability.Logger) AuthProcessor {
 	return AuthProcessor{
 		store:             store,
 		logger:            logger,
 		authConfig:        authConfig,
 		googleOauthClient: googleOauthClient,
+		billingProcessor:  billingProcessor,
 	}
 }
 
@@ -80,14 +83,14 @@ type BaseClaims struct {
 	AuthType       string           `json:"auth_type"`
 }
 
-func (p *AuthProcessor) Signup(
-	ctx context.Context, firstName string, lastName string, email string, password string) (SignedUpUser, error) {
+func (p *AuthProcessor) Signup(ctx context.Context, firstName string, lastName string, email string, password string) (SignedUpUser, error) {
 	ctx = observability.WithFields(ctx, observability.Field{Key: "email", Value: email})
 	exists, err := p.store.CheckIfEmailExists(ctx, email)
 	if err != nil {
 		p.logger.Error(ctx, "failed to check if email exists", err)
 		return SignedUpUser{}, err
 	}
+
 	if exists {
 		return SignedUpUser{}, ErrEmailAlreadyExists
 	}
@@ -96,11 +99,25 @@ func (p *AuthProcessor) Signup(
 		p.logger.Error(ctx, "failed to hash password", err)
 		return SignedUpUser{}, err
 	}
-	user, email, err := p.store.CreateUserOnEmailSignup(ctx, firstName, lastName, email, string(hashedPassword))
+
+	user, err := p.store.CreateUserOnEmailSignup(ctx, firstName, lastName, email, string(hashedPassword))
 	if err != nil {
 		p.logger.Error(ctx, "failed to create user", err)
 		return SignedUpUser{}, err
 	}
+
+	stripeCustomerId, err := p.billingProcessor.CreateStripeCustomer(ctx, email)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create stripe customer", err)
+		return SignedUpUser{}, err
+	}
+
+	err = p.store.UpdateStripeCustomerIDByUserID(ctx, user.ID, stripeCustomerId)
+	if err != nil {
+		p.logger.Error(ctx, "failed to update stripe customer id", err)
+		return SignedUpUser{}, err
+	}
+
 	return SignedUpUser{
 		FirstName: user.FirstName,
 		LastName:  user.LastName,

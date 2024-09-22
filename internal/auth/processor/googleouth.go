@@ -28,10 +28,23 @@ func (p *AuthProcessor) SignInGoogleUserWithCode(ctx context.Context, code strin
 
 	// If the userAuth does not exist, create a new userAuth
 	if !exists {
-		_, err = p.store.CreateUserOnGoogleSignIn(ctx, userInfo.ID, userInfo.Email, userInfo.FirstName,
+		user, err := p.store.CreateUserOnGoogleSignIn(ctx, userInfo.ID, userInfo.Email, userInfo.FirstName,
 			userInfo.LastName)
+
 		if err != nil {
 			p.logger.InfoWithError(ctx, "failed to create userAuth on google sign in", err)
+			return "", err
+		}
+
+		stripeCustomerId, err := p.billingProcessor.CreateStripeCustomer(ctx, userInfo.Email)
+		if err != nil {
+			p.logger.Error(ctx, "failed to create stripe customer", err)
+			return "", err
+		}
+
+		err = p.store.UpdateStripeCustomerIDByUserID(ctx, user.ID, stripeCustomerId)
+		if err != nil {
+			p.logger.Error(ctx, "failed to update stripe customer id", err)
 			return "", err
 		}
 	}
