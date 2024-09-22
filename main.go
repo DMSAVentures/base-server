@@ -8,6 +8,7 @@ import (
 	billingProcessor "base-server/internal/billing/processor"
 	"base-server/internal/clients/googleoauth"
 	"base-server/internal/observability"
+	"base-server/internal/products"
 	"base-server/internal/store"
 	"context"
 	"errors"
@@ -145,7 +146,9 @@ func main() {
 	r.Use(observability.Middleware(logger))
 	rootRouter := r.Group("/")
 
-	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, store, logger)
+	productService := products.New(stripeSecretKey, store, logger)
+
+	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, store, productService, logger)
 	billingHandler := billingHandler.New(billingProcessor, logger)
 
 	authConfig := processor.AuthConfig{

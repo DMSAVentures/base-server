@@ -57,8 +57,36 @@ func (p *BillingProcessor) PaymentIntentSucceeded(ctx context.Context, paymentIn
 	//p.logger.Info(ctx, "Order fulfilled", orderID)
 }
 
-func (p *BillingProcessor) HandleProductCreate(ctx context.Context, productCreated stripe.Product) {
+func (p *BillingProcessor) ProductCreated(ctx context.Context, productCreated stripe.Product) {
+	err := p.productService.CreateProduct(ctx, productCreated)
+	if err != nil {
+		p.logger.Error(ctx, "failed to handle product creation webhook event", err)
+		return
+	}
+}
 
+func (p *BillingProcessor) PriceCreated(ctx context.Context, priceCreated stripe.Price) {
+	err := p.productService.CreatePrice(ctx, priceCreated)
+	if err != nil {
+		p.logger.Error(ctx, "failed to handle plan creation webhook event", err)
+		return
+	}
+}
+
+func (p *BillingProcessor) PriceUpdated(ctx context.Context, priceUpdated stripe.Price) {
+	err := p.productService.UpdatePrice(ctx, priceUpdated)
+	if err != nil {
+		p.logger.Error(ctx, "failed to handle plan update webhook event", err)
+		return
+	}
+}
+
+func (p *BillingProcessor) PriceDeleted(ctx context.Context, priceDeleted stripe.Price) {
+	err := p.productService.DeletePrice(ctx, priceDeleted)
+	if err != nil {
+		p.logger.Error(ctx, "failed to handle plan deletion webhook event", err)
+		return
+	}
 }
 
 func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event) error {
@@ -80,6 +108,31 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 			p.logger.Error(ctx, "failed to unmarshal product", err)
 			return err
 		}
+		p.ProductCreated(ctx, product)
+	case "price.created":
+		var price stripe.Price
+		err := json.Unmarshal(event.Data.Raw, &price)
+		if err != nil {
+			p.logger.Error(ctx, "failed to unmarshal plan", err)
+			return err
+		}
+		p.PriceCreated(ctx, price)
+	case "price.updated":
+		var price stripe.Price
+		err := json.Unmarshal(event.Data.Raw, &price)
+		if err != nil {
+			p.logger.Error(ctx, "failed to unmarshal plan", err)
+			return err
+		}
+		p.PriceUpdated(ctx, price)
+	case "price.deleted":
+		var price stripe.Price
+		err := json.Unmarshal(event.Data.Raw, &price)
+		if err != nil {
+			p.logger.Error(ctx, "failed to unmarshal plan", err)
+			return err
+		}
+		p.PriceDeleted(ctx, price)
 	}
 
 	return nil
