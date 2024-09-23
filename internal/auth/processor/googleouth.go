@@ -67,7 +67,7 @@ func (p *AuthProcessor) SignInGoogleUserWithCode(ctx context.Context, code strin
 	}
 
 	// Generate a JWT token
-	jwtToken, err := p.generateJWTToken(authenticatedUser)
+	jwtToken, err := p.generateJWTToken(ctx, authenticatedUser)
 	if err != nil {
 		p.logger.InfoWithError(ctx, "failed to generate jwt token", err)
 		return "", ErrFailedSignIn

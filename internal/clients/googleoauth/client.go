@@ -4,7 +4,8 @@ import (
 	"base-server/internal/observability"
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -45,8 +46,9 @@ func (c *Client) GetAccessToken(ctx context.Context, code string) (GoogleOauthTo
 	req, err := http.NewRequestWithContext(ctx, "POST", googleOauthTokenURL, nil)
 	if err != nil {
 		c.logger.InfoWithError(ctx, "failed to create request", err)
-		return GoogleOauthTokenResponse{}, err
+		return GoogleOauthTokenResponse{}, fmt.Errorf("failed to create request: %w", err)
 	}
+
 	q := req.URL.Query()
 	q.Add("code", code)
 	q.Add("client_id", c.clientID)
@@ -55,23 +57,26 @@ func (c *Client) GetAccessToken(ctx context.Context, code string) (GoogleOauthTo
 	q.Add("grant_type", "authorization_code")
 	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return GoogleOauthTokenResponse{}, err
+		c.logger.Error(ctx, "failed to make request", err)
+		return GoogleOauthTokenResponse{}, fmt.Errorf("failed to make request: %w", err)
 	}
+
 	defer resp.Body.Close()
 
 	// Parse the response
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.logger.InfoWithError(ctx, "failed to read response body", err)
-		return GoogleOauthTokenResponse{}, err
+		return GoogleOauthTokenResponse{}, fmt.Errorf("failed to read response body: %w", err)
 	}
 	var tokenResponse GoogleOauthTokenResponse
 	err = json.Unmarshal(body, &tokenResponse)
 	if err != nil {
 		c.logger.InfoWithError(ctx, "failed to marshal response body", err)
-		return GoogleOauthTokenResponse{}, err
+		return GoogleOauthTokenResponse{}, fmt.Errorf("failed to marshal response body: %w", err)
 	}
 
 	return tokenResponse, nil
@@ -81,27 +86,29 @@ func (c *Client) GetUserInfo(ctx context.Context, token string) (UserInfo, error
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://www.googleapis.com/oauth2/v3/userinfo", nil)
 	if err != nil {
 		c.logger.InfoWithError(ctx, "failed to create request", err)
-		return UserInfo{}, err
+		return UserInfo{}, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		c.logger.InfoWithError(ctx, "failed to make request", err)
-		return UserInfo{}, err
+		return UserInfo{}, fmt.Errorf("failed to make request: %w", err)
 	}
+
 	defer resp.Body.Close()
 
 	// Parse the response
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.logger.InfoWithError(ctx, "failed to read response body", err)
-		return UserInfo{}, err
+		return UserInfo{}, fmt.Errorf("failed to read response body: %w", err)
 	}
+
 	var userInfo UserInfo
 	err = json.Unmarshal(body, &userInfo)
 	if err != nil {
 		c.logger.InfoWithError(ctx, "failed to marshal response body", err)
-		return UserInfo{}, err
+		return UserInfo{}, fmt.Errorf("failed to marshal response body: %w", err)
 	}
 
 	return userInfo, nil

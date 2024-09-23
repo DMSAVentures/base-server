@@ -162,7 +162,7 @@ func (p *AuthProcessor) Login(ctx context.Context, email string, password string
 		return "", ErrFailedLogin
 	}
 
-	token, err := p.generateJWTToken(user)
+	token, err := p.generateJWTToken(ctx, user)
 	if err != nil {
 		p.logger.Error(ctx, "failed to generate jwt token", err)
 		return "", ErrFailedLogin

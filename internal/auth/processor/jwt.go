@@ -81,6 +81,6 @@ func (p *AuthProcessor) ValidateJWTToken(ctx context.Context, token string) (Bas
 		p.logger.Error(ctx, "failed to extract claims", err)
 		return BaseClaims{}, ErrParseJWTToken
 	}
-	
+
 	return *claims, nil
 }
