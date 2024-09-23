@@ -71,6 +71,6 @@ func (s *Store) GetUserByStripeCustomerID(ctx context.Context, stripeID string) 
 		s.logger.Error(ctx, "failed to get user by stripe customer ID", err)
 		return User{}, fmt.Errorf("failed to get user by stripe customer ID: %w", err)
 	}
-	
+
 	return user, nil
 }
