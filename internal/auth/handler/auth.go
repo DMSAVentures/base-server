@@ -147,9 +147,17 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 		return
 	}
 
+	parsedUrl, err := url.Parse(h.authProcessor.GetWebAppHost())
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse url", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to redirect url"})
+		return
+	}
+
 	redirectUrl := url.URL{
-		Host: h.authProcessor.GetWebAppHost(),
-		Path: "oauth/signedin",
+		Scheme: parsedUrl.Scheme,
+		Host:   parsedUrl.Host,
+		Path:   "oauth/signedin",
 	}
 	query := redirectUrl.Query()
 	query.Add("token", JWTToken)
