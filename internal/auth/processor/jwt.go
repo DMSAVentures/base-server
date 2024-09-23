@@ -9,11 +9,11 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-func (p *AuthProcessor) generateJWTToken(user store.AuthenticatedUser) (string, error) {
+func (p *AuthProcessor) generateJWTToken(ctx context.Context, user store.AuthenticatedUser) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour) // Token valid for 24 hours
 	cl := jwt.New(jwt.SigningMethodHS256)
 	claims := cl.Claims.(jwt.MapClaims)
-	claims["sub"] = user.ExternalID
+	claims["sub"] = user.UserID
 	claims["auth_type"] = user.AuthType
 	claims["iss"] = "base-server"
 	claims["aud"] = "base-server"
@@ -26,7 +26,8 @@ func (p *AuthProcessor) generateJWTToken(user store.AuthenticatedUser) (string, 
 	// Sign the token with the secret key
 	tokenString, err := token.SignedString([]byte(p.authConfig.Email.JWTSecret))
 	if err != nil {
-		return "", err
+		p.logger.Error(ctx, "failed to sign token", err)
+		return "", ErrFailedSignIn
 	}
 
 	return tokenString, nil
@@ -67,6 +68,7 @@ func (p *AuthProcessor) ValidateJWTToken(ctx context.Context, token string) (Bas
 		return []byte(p.authConfig.Email.JWTSecret), nil
 	})
 	if err != nil {
+		p.logger.Error(ctx, "failed to parse token", err)
 		return BaseClaims{}, ErrParseJWTToken
 	}
 	if !t.Valid {
@@ -76,7 +78,9 @@ func (p *AuthProcessor) ValidateJWTToken(ctx context.Context, token string) (Bas
 	// Extract claims from the parsed token
 	claims, ok := t.Claims.(*BaseClaims)
 	if !ok {
+		p.logger.Error(ctx, "failed to extract claims", err)
 		return BaseClaims{}, ErrParseJWTToken
 	}
+
 	return *claims, nil
 }

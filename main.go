@@ -5,6 +5,10 @@ import (
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
 	"base-server/internal/clients/googleoauth"
+	billingHandler "base-server/internal/money/billing/handler"
+	billingProcessor "base-server/internal/money/billing/processor"
+	"base-server/internal/money/products"
+	"base-server/internal/money/subscriptions"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
@@ -106,6 +110,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	stripeSecretKey := os.Getenv("STRIPE_SECRET_KEY")
+	if stripeSecretKey == "" {
+		logger.Error(ctx, "STRIPE_SECRET_KEY is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
+	// Get your Stripe webhook signing secret from environment or config
+	webhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	if webhookSecret == "" {
+		logger.Error(ctx, "STRIPE_WEBHOOK_SECRET is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
 	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
 
 	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + "/" + dbName
@@ -130,6 +147,13 @@ func main() {
 	r.Use(observability.Middleware(logger))
 	rootRouter := r.Group("/")
 
+	productService := products.New(stripeSecretKey, store, logger)
+	subscriptionService := subscriptions.New(logger, stripeSecretKey, store)
+
+	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, store, productService,
+		subscriptionService, logger)
+	billingHandler := billingHandler.New(billingProcessor, logger)
+
 	authConfig := processor.AuthConfig{
 		Email: processor.EmailConfig{
 			JWTSecret: jwtSecret,
@@ -141,9 +165,10 @@ func main() {
 			WebAppHost:        webAppURL,
 		},
 	}
-	authProcessor := processor.New(store, authConfig, googleOauthClient, logger)
+	authProcessor := processor.New(store, authConfig, googleOauthClient, billingProcessor, logger)
 	authHandler := handler.New(authProcessor, logger)
-	api := api.New(rootRouter, authHandler)
+
+	api := api.New(rootRouter, authHandler, billingHandler)
 	api.RegisterRoutes()
 
 	server := &http.Server{

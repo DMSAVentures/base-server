@@ -2,6 +2,7 @@ package processor
 
 import (
 	"base-server/internal/clients/googleoauth"
+	billingProcessor "base-server/internal/money/billing/processor"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
@@ -12,11 +13,22 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var (
+	ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrEmailDoesNotExist  = errors.New("email does not exist")
+	ErrFailedSignup       = errors.New("failed to sign up")
+	ErrFailedLogin        = errors.New("failed to login")
+	ErrIncorrectPassword  = errors.New("incorrect password")
+	ErrFailedGetUser      = errors.New("failed to get user")
+	ErrUserNotFound       = errors.New("user not found")
+)
+
 type AuthProcessor struct {
 	store             store.Store
 	authConfig        AuthConfig
 	logger            *observability.Logger
 	googleOauthClient *googleoauth.Client
+	billingProcessor  billingProcessor.BillingProcessor
 }
 
 type EmailConfig struct {
@@ -34,19 +46,6 @@ type AuthConfig struct {
 	Email  EmailConfig
 	Google GoogleOauthConfig
 }
-
-func New(store store.Store, authConfig AuthConfig, googleOauthClient *googleoauth.Client,
-	logger *observability.Logger) AuthProcessor {
-	return AuthProcessor{
-		store:             store,
-		logger:            logger,
-		authConfig:        authConfig,
-		googleOauthClient: googleOauthClient,
-	}
-}
-
-var ErrEmailAlreadyExists = errors.New("email already exists")
-var ErrEmailDoesNotExist = errors.New("email does not exist")
 
 type SignedUpUser struct {
 	FirstName string `json:"first_name"`
@@ -80,27 +79,52 @@ type BaseClaims struct {
 	AuthType       string           `json:"auth_type"`
 }
 
-func (p *AuthProcessor) Signup(
-	ctx context.Context, firstName string, lastName string, email string, password string) (SignedUpUser, error) {
+func New(store store.Store, authConfig AuthConfig, googleOauthClient *googleoauth.Client, billingProcessor billingProcessor.BillingProcessor,
+	logger *observability.Logger) AuthProcessor {
+	return AuthProcessor{
+		store:             store,
+		logger:            logger,
+		authConfig:        authConfig,
+		googleOauthClient: googleOauthClient,
+		billingProcessor:  billingProcessor,
+	}
+}
+
+func (p *AuthProcessor) Signup(ctx context.Context, firstName string, lastName string, email string, password string) (SignedUpUser, error) {
 	ctx = observability.WithFields(ctx, observability.Field{Key: "email", Value: email})
 	exists, err := p.store.CheckIfEmailExists(ctx, email)
 	if err != nil {
 		p.logger.Error(ctx, "failed to check if email exists", err)
-		return SignedUpUser{}, err
+		return SignedUpUser{}, ErrFailedSignup
 	}
+
 	if exists {
 		return SignedUpUser{}, ErrEmailAlreadyExists
 	}
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		p.logger.Error(ctx, "failed to hash password", err)
-		return SignedUpUser{}, err
+		return SignedUpUser{}, ErrFailedSignup
 	}
-	user, email, err := p.store.CreateUserOnEmailSignup(ctx, firstName, lastName, email, string(hashedPassword))
+
+	user, err := p.store.CreateUserOnEmailSignup(ctx, firstName, lastName, email, string(hashedPassword))
 	if err != nil {
 		p.logger.Error(ctx, "failed to create user", err)
-		return SignedUpUser{}, err
+		return SignedUpUser{}, ErrFailedSignup
 	}
+
+	stripeCustomerId, err := p.billingProcessor.CreateStripeCustomer(ctx, email)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create stripe customer", err)
+		return SignedUpUser{}, ErrFailedSignup
+	}
+
+	err = p.store.UpdateStripeCustomerIDByUserID(ctx, user.ID, stripeCustomerId)
+	if err != nil {
+		p.logger.Error(ctx, "failed to update stripe customer id", err)
+		return SignedUpUser{}, ErrFailedSignup
+	}
+
 	return SignedUpUser{
 		FirstName: user.FirstName,
 		LastName:  user.LastName,
@@ -113,27 +137,37 @@ func (p *AuthProcessor) Login(ctx context.Context, email string, password string
 	exists, err := p.store.CheckIfEmailExists(ctx, email)
 	if err != nil {
 		p.logger.Error(ctx, "failed to check if email exists", err)
-		return "", err
+		return "", ErrFailedLogin
 	}
+
 	if !exists {
 		return "", ErrEmailDoesNotExist
 	}
+
 	credentialsByEmail, err := p.store.GetCredentialsByEmail(ctx, email)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get user by email", err)
-		return "", err
+		return "", ErrFailedLogin
 	}
+
 	err = bcrypt.CompareHashAndPassword([]byte(credentialsByEmail.HashedPassword), []byte(password))
 	if err != nil {
 		p.logger.Error(ctx, "failed to compare hashed password", err)
-		return "", err
+		return "", ErrIncorrectPassword
 	}
+
 	user, err := p.store.GetUserByAuthID(ctx, credentialsByEmail.AuthID)
-	token, err := p.generateJWTToken(user)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get user by auth id", err)
+		return "", ErrFailedLogin
+	}
+
+	token, err := p.generateJWTToken(ctx, user)
 	if err != nil {
 		p.logger.Error(ctx, "failed to generate jwt token", err)
-		return "", err
+		return "", ErrFailedLogin
 	}
+
 	return token, nil
 }
 
@@ -141,12 +175,16 @@ func (p *AuthProcessor) GetUserByExternalID(ctx context.Context, externalID uuid
 	user, err := p.store.GetUserByExternalID(ctx, externalID)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get user by external id", err)
-		return User{}, err
+		if errors.Is(err, store.ErrNotFound) {
+			return User{}, ErrUserNotFound
+		}
+
+		return User{}, ErrFailedGetUser
 	}
 	return User{
 		FirstName:  user.FirstName,
 		LastName:   user.LastName,
-		ExternalID: user.ExternalID,
+		ExternalID: user.ID,
 	}, nil
 
 }

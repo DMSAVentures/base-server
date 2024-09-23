@@ -37,15 +37,17 @@ func (h *Handler) HandleEmailLogin(c *gin.Context) {
 	ctx := c.Request.Context()
 	if err := c.ShouldBindJSON(&emailLoginRequest); err != nil {
 		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+
 	token, err := h.authProcessor.Login(ctx, emailLoginRequest.Email, emailLoginRequest.Password)
 	if err != nil {
 		h.logger.Error(ctx, "failed to login", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{"token": token})
 	return
 }
@@ -53,9 +55,10 @@ func (h *Handler) HandleEmailLogin(c *gin.Context) {
 func (h *Handler) HandleEmailSignup(c *gin.Context) {
 	var req EmailSignupRequest
 	ctx := c.Request.Context()
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 	signedUpUser, err := h.authProcessor.Signup(ctx, req.FirstName, req.LastName, req.Email, req.Password)
@@ -102,20 +105,29 @@ func (h *Handler) HandleJWTMiddleware(c *gin.Context) {
 
 func (h *Handler) GetUserInfo(context *gin.Context) {
 	ctx := context.Request.Context()
-	user, ok := context.Get("User-ID")
+	userID, ok := context.Get("User-ID")
 	if !ok {
-		h.logger.Error(ctx, "failed to get user from context", nil)
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get user from context"})
+		h.logger.Error(ctx, "failed to get userID from context", nil)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
 		return
 	}
-	userID, err := uuid.Parse(user.(string))
+
+	parsedUserID, err := uuid.Parse(userID.(string))
 	if err != nil {
-		h.logger.Error(ctx, "failed to parse user id", err)
-		context.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse user id"})
+		h.logger.Error(ctx, "failed to parse userID id", err)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
 		return
 	}
-	user, err = h.authProcessor.GetUserByExternalID(ctx, userID)
-	context.JSON(http.StatusOK, gin.H{"user": user})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID.String()})
+
+	user, err := h.authProcessor.GetUserByExternalID(ctx, parsedUserID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to get userID by external id", err)
+		context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	context.JSON(http.StatusOK, user)
 	return
 }
 
@@ -124,6 +136,7 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 	// Extract the authorization code from the query parameters
 	code := c.Request.URL.Query().Get("code")
 	if code == "" {
+		h.logger.Error(ctx, "authorization code is missing", nil)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Authorization code is missing"})
 		return
 	}
@@ -133,6 +146,7 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	redirectUrl := url.URL{
 		Host: h.authProcessor.GetWebAppHost(),
 		Path: "oauth/signedin",
