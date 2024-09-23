@@ -38,6 +38,8 @@ func (a *API) RegisterRoutes() {
 		protectedGroup.POST("billing/create-subscription-intent", a.billingHandler.HandleCreateSubscriptionIntent)
 		protectedGroup.POST("billing/update-subscription", a.billingHandler.HandleUpdateSubscription)
 		protectedGroup.POST("billing/cancel-subscription", a.billingHandler.HandleCancelSubscription)
+		protectedGroup.POST("billing/update-payment-method", a.billingHandler.HandleUpdatePaymentMethod)
+		protectedGroup.POST("billing/get-payment-method", a.billingHandler.HandleGetPaymentMethod)
 	}
 	a.router.POST("billing/webhook", a.billingHandler.HandleWebhook)
 }

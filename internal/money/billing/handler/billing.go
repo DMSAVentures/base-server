@@ -24,6 +24,10 @@ type CreateSubscriptionRequest struct {
 	PriceID string `json:"price_id" binding:"required"`
 }
 
+type UpdatePaymentMethodRequest struct {
+	PaymentMethodID string `json:"payment_method_id" binding:"required"`
+}
+
 func New(processor processor.BillingProcessor, logger *observability.Logger) Handler {
 	return Handler{processor: processor, logger: logger}
 }
@@ -136,6 +140,66 @@ func (h *Handler) HandleUpdateSubscription(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
+	return
+}
+
+func (h *Handler) HandleUpdatePaymentMethod(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID, exists := c.Get("User-ID")
+	if !exists {
+		h.logger.Error(ctx, "User-ID does not exist on context", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	parsedUserID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse userID", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var paymentMethodReq UpdatePaymentMethodRequest
+	if err := c.ShouldBindJSON(&paymentMethodReq); err != nil {
+		h.logger.Error(ctx, "failed to bind request", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err = h.processor.UpdatePaymentMethodForUser(ctx, paymentMethodReq.PaymentMethodID, parsedUserID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to update payment method", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+	return
+
+}
+
+func (h *Handler) HandleGetPaymentMethod(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID, exists := c.Get("User-ID")
+	if !exists {
+		h.logger.Error(ctx, "User-ID does not exist on context", nil)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	parsedUserID, err := uuid.Parse(userID.(string))
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse userID", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	paymentMethod, err := h.processor.GetPaymentMethodForUser(ctx, parsedUserID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to get payment method", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, paymentMethod)
 	return
 }
 

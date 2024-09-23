@@ -46,16 +46,16 @@ func (s *Store) CreatePaymentMethod(ctx context.Context, params CreatePaymentMet
 	return &paymentMethod, nil
 }
 
-const sqlGetPaymentMethodByID = `
+const sqlGetPaymentMethodByUserID = `
 	SELECT id, user_id, stripe_id, card_brand, card_last4, card_exp_month, card_exp_year, created_at, updated_at
 	FROM payment_method
-	WHERE id = $1;
+	WHERE user_id = $1;
 `
 
-// GetPaymentMethodByID returns a payment method by ID.
-func (s *Store) GetPaymentMethodByID(ctx context.Context, id uuid.UUID) (*PaymentMethod, error) {
+// GetPaymentMethodByUserID returns a payment method by User ID.
+func (s *Store) GetPaymentMethodByUserID(ctx context.Context, userID uuid.UUID) (*PaymentMethod, error) {
 	var paymentMethod PaymentMethod
-	err := s.db.GetContext(ctx, &paymentMethod, sqlGetPaymentMethodByID, id)
+	err := s.db.GetContext(ctx, &paymentMethod, sqlGetPaymentMethodByUserID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ const sqlUpdatePaymentMethodByUserID = `
 // UpdatePaymentMethodByStripeID updates a payment method by Stripe ID.
 func (s *Store) UpdatePaymentMethodByUserID(ctx context.Context, userID uuid.UUID, stripeID string, cardBrand,
 	cardLast4 string,
-	cardExpMonth, cardExpYear int) error {
+	cardExpMonth, cardExpYear int64) error {
 	_, err := s.db.ExecContext(ctx, sqlUpdatePaymentMethodByUserID, stripeID, cardBrand, cardLast4, cardExpMonth,
 		cardExpYear,
 		userID)

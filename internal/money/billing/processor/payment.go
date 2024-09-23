@@ -3,10 +3,54 @@ package processor
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/paymentintent"
+	"github.com/stripe/stripe-go/v79/paymentmethod"
 	"github.com/stripe/stripe-go/v79/tax/calculation"
 )
+
+type PaymentMethod struct {
+	ID           uuid.UUID `json:"id"`
+	CardBrand    string    `json:"card_brand"`
+	CardLast4    string    `json:"card_last4"`
+	CardExpMonth int       `json:"card_exp_month"`
+	CardExpYear  int       `json:"card_exp_year"`
+}
+
+func (p *BillingProcessor) UpdatePaymentMethodForUser(ctx context.Context, paymentMethodID string,
+	userID uuid.UUID) error {
+	paymentMethod, err := paymentmethod.Get(paymentMethodID, nil)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get payment method", err)
+		return err
+	}
+
+	err = p.store.UpdatePaymentMethodByUserID(ctx, userID, paymentMethod.ID, string(paymentMethod.Card.Brand),
+		paymentMethod.Card.Last4,
+		paymentMethod.Card.ExpMonth, paymentMethod.Card.ExpYear)
+	if err != nil {
+		p.logger.Error(ctx, "failed to update payment method", err)
+		return err
+	}
+	return nil
+}
+
+func (p *BillingProcessor) GetPaymentMethodForUser(ctx context.Context, userID uuid.UUID) (PaymentMethod,
+	error) {
+	paymentMethod, err := p.store.GetPaymentMethodByUserID(ctx, userID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get payment method", err)
+		return PaymentMethod{}, err
+	}
+	return PaymentMethod{
+		ID:           paymentMethod.ID,
+		CardBrand:    paymentMethod.CardBrand,
+		CardLast4:    paymentMethod.CardLast4,
+		CardExpMonth: paymentMethod.CardExpMonth,
+		CardExpYear:  paymentMethod.CardExpYear,
+	}, nil
+}
 
 func (p *BillingProcessor) CreateStripePaymentIntent(ctx context.Context, items []PaymentIntentItem) (string, error) {
 	// Create a Tax Calculation for the items being sold
