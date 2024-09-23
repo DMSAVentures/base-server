@@ -72,6 +72,20 @@ func (c *Client) GetAccessToken(ctx context.Context, code string) (GoogleOauthTo
 		c.logger.InfoWithError(ctx, "failed to read response body", err)
 		return GoogleOauthTokenResponse{}, fmt.Errorf("failed to read response body: %w", err)
 	}
+	if resp.StatusCode != http.StatusOK {
+		var errorResponse struct {
+			Error            string `json:"error"`
+			ErrorDescription string `json:"error_description"`
+		}
+		err = json.Unmarshal(body, &errorResponse)
+		if err != nil {
+			c.logger.InfoWithError(ctx, "failed to marshal response body", err)
+			return GoogleOauthTokenResponse{}, fmt.Errorf("failed to marshal response body: %w", err)
+		}
+		c.logger.Error(ctx, "failed to get access token", fmt.Errorf("error: %s, description: %s", errorResponse.Error, errorResponse.ErrorDescription))
+		return GoogleOauthTokenResponse{}, fmt.Errorf("failed to get access token: %s", errorResponse.ErrorDescription)
+	}
+
 	var tokenResponse GoogleOauthTokenResponse
 	err = json.Unmarshal(body, &tokenResponse)
 	if err != nil {
