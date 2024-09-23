@@ -1,13 +1,21 @@
 package processor
 
 import (
+	"base-server/internal/observability"
 	"context"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/paymentintent"
 	"github.com/stripe/stripe-go/v79/paymentmethod"
 	"github.com/stripe/stripe-go/v79/tax/calculation"
+)
+
+var (
+	ErrFailedToGetPaymentMethod    = errors.New("failed to get payment method")
+	ErrFailedToUpdatePaymentMethod = errors.New("failed to update payment method")
+	ErrFailedToCreatePaymentIntent = errors.New("failed to create payment intent")
 )
 
 type PaymentMethod struct {
@@ -20,10 +28,12 @@ type PaymentMethod struct {
 
 func (p *BillingProcessor) UpdatePaymentMethodForUser(ctx context.Context, paymentMethodID string,
 	userID uuid.UUID) error {
+	ctx = observability.WithFields(ctx, observability.Field{"payment_method_id", paymentMethodID})
+
 	paymentMethod, err := paymentmethod.Get(paymentMethodID, nil)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get payment method", err)
-		return err
+		return ErrFailedToGetPaymentMethod
 	}
 
 	err = p.store.UpdatePaymentMethodByUserID(ctx, userID, paymentMethod.ID, string(paymentMethod.Card.Brand),
@@ -31,7 +41,7 @@ func (p *BillingProcessor) UpdatePaymentMethodForUser(ctx context.Context, payme
 		paymentMethod.Card.ExpMonth, paymentMethod.Card.ExpYear)
 	if err != nil {
 		p.logger.Error(ctx, "failed to update payment method", err)
-		return err
+		return ErrFailedToUpdatePaymentMethod
 	}
 	return nil
 }
@@ -41,7 +51,7 @@ func (p *BillingProcessor) GetPaymentMethodForUser(ctx context.Context, userID u
 	paymentMethod, err := p.store.GetPaymentMethodByUserID(ctx, userID)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get payment method", err)
-		return PaymentMethod{}, err
+		return PaymentMethod{}, ErrFailedToGetPaymentMethod
 	}
 	return PaymentMethod{
 		ID:           paymentMethod.ID,
@@ -54,6 +64,7 @@ func (p *BillingProcessor) GetPaymentMethodForUser(ctx context.Context, userID u
 
 func (p *BillingProcessor) CreateStripePaymentIntent(ctx context.Context, items []PaymentIntentItem) (string, error) {
 	// Create a Tax Calculation for the items being sold
+	// TODO: Replace the hard-coded address with the customer's address
 	taxCalculation, err := p.calculateTax(ctx, items, stripe.CurrencyCAD, stripe.Address{
 		Line1:      "147 Scout St",
 		City:       "Ottawa",
@@ -63,7 +74,7 @@ func (p *BillingProcessor) CreateStripePaymentIntent(ctx context.Context, items 
 	})
 	if err != nil {
 		p.logger.Error(ctx, "failed to calculate tax", err)
-		return "", err
+		return "", ErrFailedToCreatePaymentIntent
 	}
 
 	totalAmount := p.calculateOrderAmount(taxCalculation)
@@ -84,7 +95,7 @@ func (p *BillingProcessor) CreateStripePaymentIntent(ctx context.Context, items 
 	pi, err := paymentintent.New(params)
 	if err != nil {
 		p.logger.Error(ctx, "failed to create payment intent", err)
-		return "", err
+		return "", ErrFailedToCreatePaymentIntent
 	}
 	return pi.ClientSecret, nil
 }

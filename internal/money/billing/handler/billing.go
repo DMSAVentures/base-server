@@ -38,15 +38,21 @@ func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
 	var req CreatePaymentIntentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+
 	clientSecret, err := h.processor.CreateStripePaymentIntent(ctx, req.Items)
 	if err != nil {
 		h.logger.Error(ctx, "failed to create payment intent", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{"client_secret": clientSecret})
 	return
 }
@@ -56,23 +62,13 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 	var req CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
-	userID, exists := c.Get("User-ID")
-	if !exists {
-		h.logger.Error(ctx, "User-ID does not exist on context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	parsedUserID, err := uuid.Parse(userID.(string))
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse userID", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
 
 	clientSecret, err := h.processor.CreateSubscriptionIntent(ctx, parsedUserID, req.PriceID)
 	if err != nil {
@@ -80,98 +76,74 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{"client_secret": clientSecret})
 	return
 }
 
 func (h *Handler) HandleCancelSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
-	userID, exists := c.Get("User-ID")
-	if !exists {
-		h.logger.Error(ctx, "User-ID does not exist on context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
 
-	parsedUserID, err := uuid.Parse(userID.(string))
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse userID", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
 
-	err = h.processor.CancelSubscription(ctx, parsedUserID)
+	err := h.processor.CancelSubscription(ctx, parsedUserID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to cancel subscription", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
 	return
 }
 
 func (h *Handler) HandleUpdateSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
-	userID, exists := c.Get("User-ID")
-	if !exists {
-		h.logger.Error(ctx, "User-ID does not exist on context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
 
-	parsedUserID, err := uuid.Parse(userID.(string))
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse userID", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
 
 	var req CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
-	err = h.processor.UpdateSubscription(ctx, parsedUserID, req.PriceID)
+	err := h.processor.UpdateSubscription(ctx, parsedUserID, req.PriceID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to update subscription", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
 	return
 }
 
 func (h *Handler) HandleUpdatePaymentMethod(c *gin.Context) {
 	ctx := c.Request.Context()
-	userID, exists := c.Get("User-ID")
-	if !exists {
-		h.logger.Error(ctx, "User-ID does not exist on context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	parsedUserID, err := uuid.Parse(userID.(string))
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse userID", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
 
 	var paymentMethodReq UpdatePaymentMethodRequest
 	if err := c.ShouldBindJSON(&paymentMethodReq); err != nil {
 		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
-	err = h.processor.UpdatePaymentMethodForUser(ctx, paymentMethodReq.PaymentMethodID, parsedUserID)
+	err := h.processor.UpdatePaymentMethodForUser(ctx, paymentMethodReq.PaymentMethodID, parsedUserID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to update payment method", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
 	return
 
@@ -179,19 +151,9 @@ func (h *Handler) HandleUpdatePaymentMethod(c *gin.Context) {
 
 func (h *Handler) HandleGetPaymentMethod(c *gin.Context) {
 	ctx := c.Request.Context()
-	userID, exists := c.Get("User-ID")
-	if !exists {
-		h.logger.Error(ctx, "User-ID does not exist on context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	parsedUserID, err := uuid.Parse(userID.(string))
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse userID", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
 
 	paymentMethod, err := h.processor.GetPaymentMethodForUser(ctx, parsedUserID)
 	if err != nil {
@@ -199,6 +161,7 @@ func (h *Handler) HandleGetPaymentMethod(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, paymentMethod)
 	return
 }
