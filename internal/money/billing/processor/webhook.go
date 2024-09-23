@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	"github.com/stripe/stripe-go/v79"
+	"github.com/stripe/stripe-go/v79/subscription"
 	"github.com/stripe/stripe-go/v79/tax/transaction"
 )
 
@@ -118,7 +119,13 @@ func (p *BillingProcessor) InvoicePaymentPaid(ctx context.Context, invoice strip
 	//	p.logger.Error(ctx, "failed to cancel subscription", err)
 	//	return
 	//}
-	return nil
+	sub, err := subscription.Get(invoice.Subscription.ID, nil)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get subscription", err)
+		return fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	return p.SubscriptionUpdated(ctx, *sub)
 }
 
 //// Invoke this method in your webhook handler when `invoice.payment_succeeded` webhook is received
@@ -233,8 +240,6 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 		// Subscription status handling
 		if previousStatus == "incomplete" {
 			return p.SubscriptionCreated(ctx, subscription)
-		} else {
-			return p.SubscriptionUpdated(ctx, subscription)
 		}
 
 	case "invoice.payment_failed":
