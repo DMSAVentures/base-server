@@ -72,9 +72,6 @@ func (c *Client) GetAccessToken(ctx context.Context, code string) (GoogleOauthTo
 		c.logger.InfoWithError(ctx, "failed to read response body", err)
 		return GoogleOauthTokenResponse{}, fmt.Errorf("failed to read response body: %w", err)
 	}
-	c.logger.Info(ctx, fmt.Sprintf("Request URL was: %s\n StatusCode: %d, Response was: %s",
-		resp.Request.URL.String(), resp.StatusCode,
-		string(body)))
 
 	if resp.StatusCode != http.StatusOK {
 		var errorResponse struct {
