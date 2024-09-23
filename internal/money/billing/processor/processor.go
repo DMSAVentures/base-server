@@ -6,10 +6,13 @@ import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
+	"errors"
 
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/customer"
 )
+
+var ErrFailedToCreateCustomer = errors.New("failed to create customer")
 
 type BillingProcessor struct {
 	stripKey            string
@@ -41,6 +44,7 @@ func New(stripKey string, webhookSecret string, store store.Store,
 
 func (p *BillingProcessor) CreateStripeCustomer(ctx context.Context, email string) (string, error) {
 	ctx = observability.WithFields(ctx, observability.Field{"email", email})
+
 	params := &stripe.CustomerParams{
 		Email: stripe.String(email),
 	}
@@ -48,7 +52,7 @@ func (p *BillingProcessor) CreateStripeCustomer(ctx context.Context, email strin
 	customer, err := customer.New(params)
 	if err != nil {
 		p.logger.Error(ctx, "failed to create customer", err)
-		return "", err
+		return "", ErrFailedToCreateCustomer
 	}
 
 	return customer.ID, nil

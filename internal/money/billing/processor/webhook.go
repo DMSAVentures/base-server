@@ -60,39 +60,55 @@ func (p *BillingProcessor) PaymentIntentSucceeded(ctx context.Context, paymentIn
 }
 
 // Invoke this method in your webhook handler when `customer.subscription.updated` webhook is received
-func (p *BillingProcessor) SubscriptionUpdated(ctx context.Context, subscription stripe.Subscription) {
+func (p *BillingProcessor) SubscriptionUpdated(ctx context.Context, subscription stripe.Subscription) error {
+	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscription.ID})
+
 	err := p.subscriptionService.UpdateSubscription(ctx, subscription)
 	if err != nil {
 		p.logger.Error(ctx, "failed to update subscription", err)
-		return
+		return fmt.Errorf("failed to update subscription: %w", err)
 	}
+
 	p.logger.Info(ctx, "Subscription updated")
+	return nil
 }
 
 // Invoke this method in your webhook handler when `customer.subscription.updated` webhook is received
-func (p *BillingProcessor) SubscriptionCreated(ctx context.Context, subscription stripe.Subscription) {
+func (p *BillingProcessor) SubscriptionCreated(ctx context.Context, subscription stripe.Subscription) error {
+	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscription.ID})
+
 	err := p.subscriptionService.CreateSubscription(ctx, subscription)
 	if err != nil {
 		p.logger.Error(ctx, "failed to create subscription", err)
-		return
-	} else {
-		p.logger.Info(ctx, "Subscription created")
+		return fmt.Errorf("failed to create subscription: %w", err)
 	}
+
+	p.logger.Info(ctx, "Subscription created")
+	return nil
 }
 
 // Invoke this method in your webhook handler when `invoice.payment_failed` webhook is received
-func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice stripe.Invoice) {
+func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice stripe.Invoice) error {
+	ctx = observability.WithFields(ctx,
+		observability.Field{"invoice_id", invoice.ID},
+		observability.Field{"subscription_id", invoice.Subscription.ID})
 	// 1. Get the user by the customer ID
 	// 2. Get the user's email
 	// 3. Send an email to the user
 	err := p.subscriptionService.CancelSubscription(ctx, invoice.Subscription.ID)
 	if err != nil {
 		p.logger.Error(ctx, "failed to cancel subscription", err)
-		return
+		return fmt.Errorf("failed to cancel subscription: %w", err)
 	}
+
+	p.logger.Info(ctx, "Subscription cancelled")
+	return nil
 }
 
-func (p *BillingProcessor) InvoicePaymentPaid(ctx context.Context, invoice stripe.Invoice) {
+func (p *BillingProcessor) InvoicePaymentPaid(ctx context.Context, invoice stripe.Invoice) error {
+	ctx = observability.WithFields(ctx,
+		observability.Field{"invoice_id", invoice.ID},
+		observability.Field{"subscription_id", invoice.Subscription.ID})
 	// 1. Get the user by the customer ID
 	// 2. Get the user's email
 	// 3. Send an email to the user
@@ -102,6 +118,7 @@ func (p *BillingProcessor) InvoicePaymentPaid(ctx context.Context, invoice strip
 	//	p.logger.Error(ctx, "failed to cancel subscription", err)
 	//	return
 	//}
+	return nil
 }
 
 //// Invoke this method in your webhook handler when `invoice.payment_succeeded` webhook is received
@@ -116,39 +133,60 @@ func (p *BillingProcessor) InvoicePaymentPaid(ctx context.Context, invoice strip
 //	}
 //}
 
-func (p *BillingProcessor) ProductCreated(ctx context.Context, productCreated stripe.Product) {
+func (p *BillingProcessor) ProductCreated(ctx context.Context, productCreated stripe.Product) error {
+	ctx = observability.WithFields(ctx, observability.Field{"product_id", productCreated.ID})
+
 	err := p.productService.CreateProduct(ctx, productCreated)
 	if err != nil {
 		p.logger.Error(ctx, "failed to handle product creation webhook event", err)
-		return
+		return fmt.Errorf("failed to handle product creation webhook event: %w", err)
 	}
+
+	p.logger.Info(ctx, "Product created")
+	return nil
 }
 
-func (p *BillingProcessor) PriceCreated(ctx context.Context, priceCreated stripe.Price) {
+func (p *BillingProcessor) PriceCreated(ctx context.Context, priceCreated stripe.Price) error {
+	ctx = observability.WithFields(ctx, observability.Field{"price_id", priceCreated.ID})
+
 	err := p.productService.CreatePrice(ctx, priceCreated)
 	if err != nil {
 		p.logger.Error(ctx, "failed to handle plan creation webhook event", err)
-		return
+		return fmt.Errorf("failed to handle plan creation webhook event: %w", err)
 	}
+
+	p.logger.Info(ctx, "Price created")
+	return nil
 }
 
-func (p *BillingProcessor) PriceUpdated(ctx context.Context, priceUpdated stripe.Price) {
+func (p *BillingProcessor) PriceUpdated(ctx context.Context, priceUpdated stripe.Price) error {
+	ctx = observability.WithFields(ctx, observability.Field{"price_id", priceUpdated.ID})
+
 	err := p.productService.UpdatePrice(ctx, priceUpdated)
 	if err != nil {
 		p.logger.Error(ctx, "failed to handle plan update webhook event", err)
-		return
+		return fmt.Errorf("failed to handle plan update webhook event: %w", err)
 	}
+
+	p.logger.Info(ctx, "Price updated")
+	return nil
 }
 
-func (p *BillingProcessor) PriceDeleted(ctx context.Context, priceDeleted stripe.Price) {
+func (p *BillingProcessor) PriceDeleted(ctx context.Context, priceDeleted stripe.Price) error {
+	ctx = observability.WithFields(ctx, observability.Field{"price_id", priceDeleted.ID})
+
 	err := p.productService.DeletePrice(ctx, priceDeleted)
 	if err != nil {
 		p.logger.Error(ctx, "failed to handle plan deletion webhook event", err)
-		return
+		return fmt.Errorf("failed to handle plan deletion webhook event: %w", err)
 	}
+
+	p.logger.Info(ctx, "Price deleted")
+	return nil
 }
 
 func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event) error {
+	ctx = observability.WithFields(ctx, observability.Field{"event_id", event.ID})
 	// Handle the event
 	switch event.Type {
 	case "product.created":
@@ -156,24 +194,24 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 		err := json.Unmarshal(event.Data.Raw, &product)
 		if err != nil {
 			p.logger.Error(ctx, "failed to unmarshal product", err)
-			return err
+			return fmt.Errorf("failed to parse product from event: %w", err)
 		}
-		p.ProductCreated(ctx, product)
+		return p.ProductCreated(ctx, product)
 
 	case "price.created", "price.updated", "price.deleted":
 		var price stripe.Price
 		err := json.Unmarshal(event.Data.Raw, &price)
 		if err != nil {
 			p.logger.Error(ctx, "failed to unmarshal price", err)
-			return err
+			return fmt.Errorf("failed to parse price from event: %w", err)
 		}
 		switch event.Type {
 		case "price.created":
-			p.PriceCreated(ctx, price)
+			return p.PriceCreated(ctx, price)
 		case "price.updated":
-			p.PriceUpdated(ctx, price)
+			return p.PriceUpdated(ctx, price)
 		case "price.deleted":
-			p.PriceDeleted(ctx, price)
+			return p.PriceDeleted(ctx, price)
 		}
 
 	case "customer.subscription.updated":
@@ -181,7 +219,7 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 		err := json.Unmarshal(event.Data.Raw, &subscription)
 		if err != nil {
 			p.logger.Error(ctx, "failed to unmarshal price", err)
-			return err
+			return fmt.Errorf("failed to parse subscription from event: %w", err)
 		}
 
 		// Check for previous subscription status
@@ -194,11 +232,9 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 
 		// Subscription status handling
 		if previousStatus == "incomplete" {
-			p.logger.Info(ctx, "Subscription moved from incomplete to active")
-			p.SubscriptionCreated(ctx, subscription)
+			return p.SubscriptionCreated(ctx, subscription)
 		} else {
-			p.logger.Info(ctx, "Subscription updated")
-			p.SubscriptionUpdated(ctx, subscription)
+			return p.SubscriptionUpdated(ctx, subscription)
 		}
 
 	case "invoice.payment_failed":
@@ -206,18 +242,18 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 		err := json.Unmarshal(event.Data.Raw, &invoice)
 		if err != nil {
 			p.logger.Error(ctx, "failed to unmarshal price", err)
-			return err
+			return fmt.Errorf("failed to parse invoice from event: %w", err)
 		}
-		p.InvoicePaymentFailed(ctx, invoice)
+		return p.InvoicePaymentFailed(ctx, invoice)
 
 	case "invoice.paid":
 		var invoice stripe.Invoice
 		err := json.Unmarshal(event.Data.Raw, &invoice)
 		if err != nil {
 			p.logger.Error(ctx, "failed to unmarshal price", err)
-			return err
+			return fmt.Errorf("failed to parse invoice from event: %w", err)
 		}
-		p.InvoicePaymentPaid(ctx, invoice)
+		return p.InvoicePaymentPaid(ctx, invoice)
 
 	default:
 		p.logger.Warn(ctx, fmt.Sprintf("Unhandled event type: %s", event.Type))
