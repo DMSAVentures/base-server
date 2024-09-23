@@ -1,25 +1,43 @@
 package subscriptions
 
 import (
+	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
 )
 
+type Subscription struct {
+	ID              uuid.UUID `json:"id"`
+	UserID          uuid.UUID `json:"user_id"`
+	PriceID         uuid.UUID `json:"price_id"`
+	StripeID        string    `json:"stripe_id"`
+	Status          string    `json:"status"`
+	StartDate       time.Time `json:"start_date"`
+	EndDate         time.Time `json:"end_date"`
+	NextBillingDate time.Time `json:"next_billing_date"`
+}
+
 func (p *SubscriptionService) CreateSubscription(ctx context.Context, subscriptionCreated stripe.Subscription) error {
+	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionCreated.ID})
+
 	user, err := p.store.GetUserByStripeCustomerID(ctx, subscriptionCreated.Customer.ID)
 	if err != nil {
 		p.logger.Error(ctx, "error getting user by stripe id", err)
-		return err
+		return fmt.Errorf("error getting user by stripe id: %w", err)
 	}
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", user.ID})
 
 	price, err := p.store.GetPriceByStripeID(ctx, subscriptionCreated.Items.Data[0].Price.ID)
 	if err != nil {
 		p.logger.Error(ctx, "error getting price by stripe id", err)
-		return err
+		return fmt.Errorf("error getting price by stripe id: %w", err)
 	}
+	ctx = observability.WithFields(ctx, observability.Field{"price_id", price.ID})
 
 	params := store.CreateSubscriptionsParams{
 		UserID:          user.ID,
@@ -33,12 +51,15 @@ func (p *SubscriptionService) CreateSubscription(ctx context.Context, subscripti
 	err = p.store.CreateSubscription(ctx, params)
 	if err != nil {
 		p.logger.Error(ctx, "error creating subscription", err)
-		return err
+		return fmt.Errorf("error creating subscription: %w", err)
 	}
+
 	return nil
 }
 
 func (p *SubscriptionService) UpdateSubscription(ctx context.Context, subscriptionUpdated stripe.Subscription) error {
+	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionUpdated.ID})
+
 	params := store.UpdateSubscriptionParams{
 		Status:  string(subscriptionUpdated.Status),
 		EndDate: time.Unix(subscriptionUpdated.CurrentPeriodEnd, 0),
@@ -49,17 +70,32 @@ func (p *SubscriptionService) UpdateSubscription(ctx context.Context, subscripti
 	err := p.store.UpdateSubscription(ctx, params)
 	if err != nil {
 		p.logger.Error(ctx, "error updating subscription", err)
-		return err
+		return fmt.Errorf("error updating subscription: %w", err)
 	}
 
 	return nil
 }
 
 func (p *SubscriptionService) CancelSubscription(ctx context.Context, subscriptionID string) error {
-	return p.store.CancelSubscription(ctx, subscriptionID)
+	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionID})
+
+	err := p.store.CancelSubscription(ctx, subscriptionID)
+	if err != nil {
+		p.logger.Error(ctx, "error cancelling subscription", err)
+		return fmt.Errorf("error cancelling subscription: %w", err)
+	}
+
+	return nil
 }
 
-func (p *SubscriptionService) GetSubscription(ctx context.Context, subscriptionID string) (store.Subscription,
+func (p *SubscriptionService) GetSubscription(ctx context.Context, subscriptionID string) (Subscription,
 	error) {
-	return p.store.GetSubscription(ctx, subscriptionID)
+	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionID})
+	sub, err := p.store.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		p.logger.Error(ctx, "error getting subscription", err)
+		return Subscription{}, fmt.Errorf("error getting subscription: %w", err)
+	}
+
+	return Subscription(sub), nil
 }
