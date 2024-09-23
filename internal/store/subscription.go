@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -51,7 +52,11 @@ func (s *Store) CreateSubscription(ctx context.Context, subscriptionCreated Crea
 		subscriptionCreated.StartDate,
 		subscriptionCreated.EndDate,
 		subscriptionCreated.NextBillingDate)
-	return err
+	if err != nil {
+		s.logger.Error(ctx, "failed to insert subscription", err)
+		return fmt.Errorf("failed to insert subscription: %w", err)
+	}
+	return nil
 }
 
 const sqlUpdateSubscription = `
@@ -63,12 +68,22 @@ RETURNING id, user_id, price_id, stripe_id, status, start_date, end_date, next_b
 
 // UpdateSubscription updates a subscription in the database.
 func (s *Store) UpdateSubscription(ctx context.Context, subscriptionUpdated UpdateSubscriptionParams) error {
-	_, err := s.db.ExecContext(ctx, sqlUpdateSubscription,
+	res, err := s.db.ExecContext(ctx, sqlUpdateSubscription,
 		subscriptionUpdated.Status,
 		subscriptionUpdated.EndDate,
 		subscriptionUpdated.NextBillingDate,
 		subscriptionUpdated.StripeID)
-	return err
+	if err != nil {
+		s.logger.Error(ctx, "failed to update subscription", err)
+		return fmt.Errorf("failed to update subscription: %w", err)
+	}
+
+	if rows, _ := res.RowsAffected(); rows == 0 {
+		s.logger.Error(ctx, "subscription not found", nil)
+		return fmt.Errorf("subscription not found")
+	}
+
+	return nil
 }
 
 const sqlCancelSubscription = `
@@ -79,7 +94,12 @@ WHERE stripe_id = $1`
 // CancelSubscription cancels a subscription in the database.
 func (s *Store) CancelSubscription(ctx context.Context, subscriptionID string) error {
 	_, err := s.db.ExecContext(ctx, sqlCancelSubscription, subscriptionID)
-	return err
+	if err != nil {
+		s.logger.Error(ctx, "failed to cancel subscription", err)
+		return fmt.Errorf("failed to cancel subscription: %w", err)
+	}
+
+	return nil
 }
 
 const sqlGetSubscriptionByStripeID = `
@@ -93,7 +113,9 @@ func (s *Store) GetSubscription(ctx context.Context, subscriptionID string) (Sub
 	var subscription Subscription
 	err := s.db.QueryRowxContext(ctx, sqlGetSubscriptionByStripeID, subscriptionID).StructScan(&subscription)
 	if err != nil {
-		return Subscription{}, err
+		s.logger.Error(ctx, "failed to get subscription", err)
+		return Subscription{}, fmt.Errorf("failed to get subscription: %w", err)
 	}
+
 	return subscription, nil
 }

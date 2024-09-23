@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -25,12 +26,16 @@ func (s *Store) CreateUserOnGoogleSignIn(ctx context.Context, googleUserId strin
 	tx, err := s.db.BeginTxx(ctx, nil)
 	if err != nil {
 		s.logger.Error(ctx, "failed to begin transaction", err)
-		return User{}, err
+		return User{}, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
 		if err != nil {
+			s.logger.Error(ctx, "rolling back transaction", err)
 			err := tx.Rollback()
-			s.logger.Error(ctx, "failed to rollback transaction", err)
+			if err != nil {
+				s.logger.Error(ctx, "failed to rollback transaction", err)
+			}
+			return
 		}
 	}()
 
@@ -38,13 +43,13 @@ func (s *Store) CreateUserOnGoogleSignIn(ctx context.Context, googleUserId strin
 	err = tx.GetContext(ctx, &user, sqlCreateUser, firstName, lastName)
 	if err != nil {
 		s.logger.Error(ctx, "failed to create user", err)
-		return User{}, err
+		return User{}, fmt.Errorf("failed to create user: %w", err)
 	}
 	var userAuth UserAuth
 	err = tx.GetContext(ctx, &userAuth, sqlCreateUserAuth, user.ID, "oauth")
 	if err != nil {
 		s.logger.Error(ctx, "failed to create user auth entry", err)
-		return User{}, err
+		return User{}, fmt.Errorf("failed to create user auth entry: %w", err)
 	}
 
 	var oauthAuth OauthAuth
@@ -52,12 +57,12 @@ func (s *Store) CreateUserOnGoogleSignIn(ctx context.Context, googleUserId strin
 		firstName+" "+lastName, "google")
 	if err != nil {
 		s.logger.Error(ctx, "failed to create google oauth entry", err)
-		return User{}, err
+		return User{}, fmt.Errorf("failed to create google oauth entry: %w", err)
 	}
 	err = tx.Commit()
 	if err != nil {
 		s.logger.Error(ctx, "failed to commit transaction", err)
-		return User{}, err
+		return User{}, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 	return user, nil
 }
@@ -78,7 +83,7 @@ func (s *Store) GetOauthUserByEmail(ctx context.Context, email string) (OauthAut
 	err := s.db.GetContext(ctx, &userAuthByOauth, sqlSelectOauthUserByEmail, email)
 	if err != nil {
 		s.logger.Error(ctx, "failed to get user by email", err)
-		return OauthAuth{}, err
+		return OauthAuth{}, fmt.Errorf("failed to get user by email: %w", err)
 	}
 	return userAuthByOauth, err
 }
