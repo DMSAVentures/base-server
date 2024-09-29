@@ -66,6 +66,7 @@ type User struct {
 }
 
 var ErrInvalidJWTToken = errors.New("invalid jwt token")
+var ErrExpiredToken = errors.New("expired jwt token")
 
 var ErrParseJWTToken = errors.New("failed to parse jwt token")
 

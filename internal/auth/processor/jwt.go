@@ -3,6 +3,7 @@ package processor
 import (
 	"base-server/internal/store"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -68,6 +69,11 @@ func (p *AuthProcessor) ValidateJWTToken(ctx context.Context, token string) (Bas
 		return []byte(p.authConfig.Email.JWTSecret), nil
 	})
 	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			p.logger.Error(ctx, "token expired", err)
+			return BaseClaims{}, ErrExpiredToken
+		}
+
 		p.logger.Error(ctx, "failed to parse token", err)
 		return BaseClaims{}, ErrParseJWTToken
 	}

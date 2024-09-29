@@ -41,6 +41,7 @@ func (a *API) RegisterRoutes() {
 		protectedGroup.POST("billing/update-payment-method", a.billingHandler.HandleUpdatePaymentMethod)
 		protectedGroup.POST("billing/get-payment-method", a.billingHandler.HandleGetPaymentMethod)
 	}
+	apiGroup.GET("billing/plans", a.billingHandler.ListPrices)
 	apiGroup.POST("billing/webhook", a.billingHandler.HandleWebhook)
 }
 

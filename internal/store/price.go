@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -68,4 +70,24 @@ func (s *Store) GetPriceByStripeID(ctx context.Context, stripeID string) (Price,
 		return Price{}, fmt.Errorf("failed to get price: %w", err)
 	}
 	return price, nil
+}
+
+const sqlGetAllPrices = `
+SELECT id, product_id, stripe_id, description, created_at, updated_at
+FROM prices
+`
+
+func (s *Store) ListPrices(ctx context.Context) ([]Price, error) {
+	var prices []Price
+	err := s.db.SelectContext(ctx, &prices, sqlGetAllPrices)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+
+		s.logger.Error(ctx, "failed to list prices", err)
+		return nil, fmt.Errorf("failed to list prices: %w", err)
+	}
+
+	return prices, nil
 }

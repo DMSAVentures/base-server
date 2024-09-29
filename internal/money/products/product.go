@@ -6,9 +6,16 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/product"
 )
+
+type Price struct {
+	ProductID   uuid.UUID
+	PriceID     uuid.UUID
+	Description string
+}
 
 func (p *ProductService) CreateProduct(ctx context.Context, productCreated stripe.Product) error {
 	ctx = observability.WithFields(ctx, observability.Field{"product_id", productCreated.ID})
@@ -102,4 +109,21 @@ func (p *ProductService) DeletePrice(ctx context.Context, priceDeleted stripe.Pr
 	}
 
 	return nil
+}
+
+func (p *ProductService) ListPrices(ctx context.Context) ([]Price, error) {
+	prices, err := p.store.ListPrices(ctx)
+	if err != nil {
+		p.logger.Error(ctx, "failed to list prices", err)
+		return nil, fmt.Errorf("failed to list prices: %w", err)
+	}
+	pricesTransformed := make([]Price, len(prices))
+	for _, price := range prices {
+		pricesTransformed = append(pricesTransformed, Price{
+			ProductID:   price.ProductID,
+			PriceID:     price.ID,
+			Description: price.Description,
+		})
+	}
+	return pricesTransformed, nil
 }
