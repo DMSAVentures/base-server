@@ -12,9 +12,9 @@ import (
 )
 
 type Price struct {
-	ProductID   uuid.UUID
-	PriceID     uuid.UUID
-	Description string
+	ProductID   uuid.UUID `json:"product_id"`
+	PriceID     uuid.UUID `json:"price_id"`
+	Description string    `json:"description"`
 }
 
 func (p *ProductService) CreateProduct(ctx context.Context, productCreated stripe.Product) error {
@@ -118,12 +118,12 @@ func (p *ProductService) ListPrices(ctx context.Context) ([]Price, error) {
 		return nil, fmt.Errorf("failed to list prices: %w", err)
 	}
 	pricesTransformed := make([]Price, len(prices))
-	for _, price := range prices {
-		pricesTransformed = append(pricesTransformed, Price{
+	for i, price := range prices {
+		pricesTransformed[i] = Price{
 			ProductID:   price.ProductID,
 			PriceID:     price.ID,
 			Description: price.Description,
-		})
+		}
 	}
 	return pricesTransformed, nil
 }
