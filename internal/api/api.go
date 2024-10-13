@@ -40,6 +40,8 @@ func (a *API) RegisterRoutes() {
 		protectedGroup.POST("billing/cancel-subscription", a.billingHandler.HandleCancelSubscription)
 		protectedGroup.POST("billing/update-payment-method", a.billingHandler.HandleUpdatePaymentMethod)
 		protectedGroup.POST("billing/get-payment-method", a.billingHandler.HandleGetPaymentMethod)
+		protectedGroup.POST("billing/create-checkout-session", a.billingHandler.HandleCreateCheckoutSession)
+		protectedGroup.GET("billing/checkout-session", a.billingHandler.GetCheckoutSession)
 	}
 	apiGroup.GET("billing/plans", a.billingHandler.ListPrices)
 	apiGroup.POST("billing/webhook", a.billingHandler.HandleWebhook)

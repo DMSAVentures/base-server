@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
+	"github.com/stripe/stripe-go/v79/checkout/session"
 	"github.com/stripe/stripe-go/v79/subscription"
 )
 
@@ -145,4 +146,63 @@ func (p *BillingProcessor) GetActiveSubscription(ctx context.Context, userID uui
 	}
 
 	return nil, errors.New("no active subscription found")
+}
+
+func (p *BillingProcessor) CreateCheckoutSession(ctx context.Context, userID uuid.UUID, priceID string) (*stripe.CheckoutSession, error) {
+	ctx = observability.WithFields(ctx,
+		observability.Field{"user_id", userID},
+		observability.Field{"price_id", priceID})
+
+	stripeCustomerID, err := p.store.GetStripeCustomerIDByUserExternalID(ctx, userID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get stripe customer id from db", err)
+		return nil, errors.New("failed to get stripe customer id")
+	}
+
+	price, err := p.store.GetPriceByID(ctx, priceID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get price by stripe id", err)
+		return nil, errors.New("failed to get price by stripe id")
+	}
+
+	params := &stripe.CheckoutSessionParams{
+		Customer: stripe.String(stripeCustomerID),
+		PaymentMethodTypes: []*string{
+			stripe.String("card"),
+		},
+		UIMode: stripe.String("embedded"),
+		Mode:   stripe.String("subscription"),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				Price:    stripe.String(price.StripeID),
+				Quantity: stripe.Int64(1),
+			},
+		},
+		CustomerUpdate: &stripe.CheckoutSessionCustomerUpdateParams{
+			Address: stripe.String("auto"),
+		},
+		ReturnURL:    stripe.String("http://localhost:3000/payment?session_id={CHECKOUT_SESSION_ID}"),
+		AutomaticTax: &stripe.CheckoutSessionAutomaticTaxParams{Enabled: stripe.Bool(true)},
+	}
+
+	session, err := session.New(params)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create checkout session", err)
+		return nil, errors.New("failed to create checkout session")
+	}
+
+	return session, nil
+
+}
+
+func (p *BillingProcessor) GetCheckoutSession(ctx context.Context, sessionID string) (*stripe.CheckoutSession, error) {
+	ctx = observability.WithFields(ctx, observability.Field{"session_id", sessionID})
+
+	session, err := session.Get(sessionID, nil)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get checkout session", err)
+		return nil, errors.New("failed to get checkout session")
+	}
+
+	return session, nil
 }

@@ -21,6 +21,10 @@ type UpdatePaymentMethodRequest struct {
 	PaymentMethodID string `json:"payment_method_id" binding:"required"`
 }
 
+type CreateCheckoutSessionRequest struct {
+	PriceID string `json:"price_id" binding:"required"`
+}
+
 // Create Stripe payment intent
 func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -67,5 +71,54 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"client_secret": clientSecret})
+	return
+}
+
+func (h *Handler) HandleCreateCheckoutSession(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+
+	var req CreateCheckoutSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error(ctx, "failed to bind request", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	session, err := h.processor.CreateCheckoutSession(ctx, parsedUserID, req.PriceID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to create checkout session", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"client_secret": session.ClientSecret})
+	return
+}
+
+func (h *Handler) GetCheckoutSession(c *gin.Context) {
+	ctx := c.Request.Context()
+	sessionID := c.Query("session_id")
+	if sessionID == "" {
+		h.logger.Error(ctx, "session_id is required", nil)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "session_id is required"})
+		return
+	}
+
+	session, err := h.processor.GetCheckoutSession(ctx, sessionID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to get checkout session", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":         session.Status,
+		"payment_status": session.PaymentStatus,
+		"payment_intent": session.PaymentIntent,
+		"email":          session.CustomerEmail,
+	})
 	return
 }
