@@ -4,6 +4,7 @@ import (
 	"base-server/internal/observability"
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
@@ -181,7 +182,7 @@ func (p *BillingProcessor) CreateCheckoutSession(ctx context.Context, userID uui
 		CustomerUpdate: &stripe.CheckoutSessionCustomerUpdateParams{
 			Address: stripe.String("auto"),
 		},
-		ReturnURL:    stripe.String("http://localhost:3000/payment_attempt?session_id={CHECKOUT_SESSION_ID}"),
+		ReturnURL:    stripe.String(fmt.Sprintf("%s/payment_attempt?session_id={CHECKOUT_SESSION_ID}", p.webhostURL)),
 		AutomaticTax: &stripe.CheckoutSessionAutomaticTaxParams{Enabled: stripe.Bool(true)},
 	}
 

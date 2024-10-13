@@ -150,7 +150,7 @@ func main() {
 	productService := products.New(stripeSecretKey, store, logger)
 	subscriptionService := subscriptions.New(logger, stripeSecretKey, store)
 
-	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, store, productService,
+	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, webAppURL, store, productService,
 		subscriptionService, logger)
 	billingHandler := billingHandler.New(billingProcessor, logger)
 

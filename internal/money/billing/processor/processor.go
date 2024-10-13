@@ -17,6 +17,7 @@ var ErrFailedToCreateCustomer = errors.New("failed to create customer")
 type BillingProcessor struct {
 	stripKey            string
 	WebhookSecret       string
+	webhostURL          string
 	logger              *observability.Logger
 	store               store.Store
 	productService      products.ProductService
@@ -28,12 +29,13 @@ type PaymentIntentItem struct {
 	Amount int64  `json:"amount" binding:"required"`
 }
 
-func New(stripKey string, webhookSecret string, store store.Store,
+func New(stripKey string, webhookSecret string, webhostURL string, store store.Store,
 	productService products.ProductService, subService subscriptions.SubscriptionService, logger *observability.Logger) BillingProcessor {
 	stripe.Key = stripKey
 	return BillingProcessor{
 		stripKey:            stripKey,
 		WebhookSecret:       webhookSecret,
+		webhostURL:          webhostURL,
 		store:               store,
 		productService:      productService,
 		subscriptionService: subService,
