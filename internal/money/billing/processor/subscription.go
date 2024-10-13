@@ -31,12 +31,18 @@ func (p *BillingProcessor) CreateSubscriptionIntent(ctx context.Context, userID 
 		return "", ErrFailedToCreateSubscriptionIntent
 	}
 
+	price, err := p.store.GetPriceByID(ctx, priceID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get price by stripe id", err)
+		return "", ErrFailedToCreateSubscriptionIntent
+	}
+
 	// Create the subscription
 	params := &stripe.SubscriptionParams{
 		Customer: stripe.String(stripeCustomerID), // The customer ID
 		Items: []*stripe.SubscriptionItemsParams{
 			{
-				Price: stripe.String(priceID), // The recurring price ID
+				Price: stripe.String(price.StripeID), // The recurring price ID
 			},
 		},
 		PaymentBehavior: stripe.String("default_incomplete"), // Handle payment confirmation manually

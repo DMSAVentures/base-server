@@ -91,3 +91,19 @@ func (s *Store) ListPrices(ctx context.Context) ([]Price, error) {
 
 	return prices, nil
 }
+
+const sqlGetPriceByID = `
+SELECT id, product_id, stripe_id, description, created_at, updated_at
+FROM prices
+WHERE id = $1
+`
+
+func (s *Store) GetPriceByID(ctx context.Context, priceID string) (Price, error) {
+	var price Price
+	err := s.db.GetContext(ctx, &price, sqlGetPriceByID, priceID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get price", err)
+		return Price{}, fmt.Errorf("failed to get price: %w", err)
+	}
+	return price, nil
+}
