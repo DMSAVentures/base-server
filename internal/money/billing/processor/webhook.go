@@ -251,6 +251,13 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 			//return err
 		}
 
+		//wasCancelled, ok := event.Data.PreviousAttributes["cancel_at"].(int64)
+		//if !ok {
+		//	err := errors.New("failed to retrieve previous cancellation schedule")
+		//	p.logger.Error(ctx, "subscription updated event missing previous cancellation schedule", err)
+		//	//return err
+		//}
+
 		// Subscription status handling
 		if previousStatus == "incomplete" {
 			return p.SubscriptionCreated(ctx, subscription)

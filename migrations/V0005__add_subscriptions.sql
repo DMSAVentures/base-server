@@ -5,9 +5,9 @@ CREATE TABLE subscriptions
     price_id          UUID REFERENCES prices (id),
     stripe_id         VARCHAR(255) NOT NULL,
     status            VARCHAR(50) CHECK (status IN ('active', 'inactive', 'canceled', 'past_due', 'trialing')),
-    start_date        TIMESTAMP,
-    end_date          TIMESTAMP,
-    next_billing_date TIMESTAMP,
+    start_date        TIMESTAMPTZ DEFAULT NULL,
+    end_date          TIMESTAMPTZ DEFAULT NULL,
+    next_billing_date TIMESTAMPTZ DEFAULT NULL,
     created_at        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     deleted_at        TIMESTAMPTZ DEFAULT NULL

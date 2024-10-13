@@ -79,8 +79,8 @@ func (s *Store) UpdateSubscription(ctx context.Context, subscriptionUpdated Upda
 		subscriptionUpdated.Status,
 		subscriptionUpdated.EndDate,
 		subscriptionUpdated.NextBillingDate,
-		subscriptionUpdated.StripePriceID,
-		price.ID)
+		price.ID,
+		subscriptionUpdated.StripeID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to update subscription", err)
 		return fmt.Errorf("failed to update subscription: %w", err)
@@ -97,7 +97,7 @@ func (s *Store) UpdateSubscription(ctx context.Context, subscriptionUpdated Upda
 const sqlCancelSubscription = `
 UPDATE subscriptions
 SET end_date = $1, next_billing_date = NULL
-WHERE stripe_id = $1`
+WHERE stripe_id = $2`
 
 // CancelSubscription cancels a subscription in the database.
 func (s *Store) CancelSubscription(ctx context.Context, subscriptionID string, cancelAt time.Time) error {
