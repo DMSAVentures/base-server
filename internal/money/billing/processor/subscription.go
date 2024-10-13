@@ -181,7 +181,7 @@ func (p *BillingProcessor) CreateCheckoutSession(ctx context.Context, userID uui
 		CustomerUpdate: &stripe.CheckoutSessionCustomerUpdateParams{
 			Address: stripe.String("auto"),
 		},
-		ReturnURL:    stripe.String("http://localhost:3000/payment?session_id={CHECKOUT_SESSION_ID}"),
+		ReturnURL:    stripe.String("http://localhost:3000/payment_attempt?session_id={CHECKOUT_SESSION_ID}"),
 		AutomaticTax: &stripe.CheckoutSessionAutomaticTaxParams{Enabled: stripe.Bool(true)},
 	}
 
@@ -195,14 +195,24 @@ func (p *BillingProcessor) CreateCheckoutSession(ctx context.Context, userID uui
 
 }
 
-func (p *BillingProcessor) GetCheckoutSession(ctx context.Context, sessionID string) (*stripe.CheckoutSession, error) {
+type CheckoutSessionInfo struct {
+	SessionID     string `json:"session_id"`
+	Status        string `json:"status"`
+	PaymentStatus string `json:"payment_status"`
+}
+
+func (p *BillingProcessor) GetCheckoutSession(ctx context.Context, sessionID string) (CheckoutSessionInfo, error) {
 	ctx = observability.WithFields(ctx, observability.Field{"session_id", sessionID})
 
 	session, err := session.Get(sessionID, nil)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get checkout session", err)
-		return nil, errors.New("failed to get checkout session")
+		return CheckoutSessionInfo{}, errors.New("failed to get checkout session")
 	}
 
-	return session, nil
+	return CheckoutSessionInfo{
+		SessionID:     session.ID,
+		Status:        string(session.Status),
+		PaymentStatus: string(session.PaymentStatus),
+	}, nil
 }

@@ -66,6 +66,7 @@ func (p *SubscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		// This we should only update when invoice is paid
 		NextBillingDate: time.Unix(subscriptionUpdated.CurrentPeriodEnd, 0),
 		StripeID:        subscriptionUpdated.ID,
+		StripePriceID:   subscriptionUpdated.Items.Data[0].Price.ID,
 	}
 	err := p.store.UpdateSubscription(ctx, params)
 	if err != nil {
@@ -76,10 +77,10 @@ func (p *SubscriptionService) UpdateSubscription(ctx context.Context, subscripti
 	return nil
 }
 
-func (p *SubscriptionService) CancelSubscription(ctx context.Context, subscriptionID string) error {
+func (p *SubscriptionService) CancelSubscription(ctx context.Context, subscriptionID string, cancelAt time.Time) error {
 	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionID})
 
-	err := p.store.CancelSubscription(ctx, subscriptionID)
+	err := p.store.CancelSubscription(ctx, subscriptionID, cancelAt)
 	if err != nil {
 		p.logger.Error(ctx, "error cancelling subscription", err)
 		return fmt.Errorf("error cancelling subscription: %w", err)

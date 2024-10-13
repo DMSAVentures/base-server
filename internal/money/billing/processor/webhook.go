@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/stripe/stripe-go/v79"
 	"github.com/stripe/stripe-go/v79/subscription"
@@ -64,6 +65,19 @@ func (p *BillingProcessor) PaymentIntentSucceeded(ctx context.Context, paymentIn
 func (p *BillingProcessor) SubscriptionUpdated(ctx context.Context, subscription stripe.Subscription) error {
 	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscription.ID})
 
+	if subscription.CancelAt > 0 {
+		cancelAt := time.Unix(subscription.CancelAt, 0)
+
+		err := p.subscriptionService.CancelSubscription(ctx, subscription.ID, cancelAt)
+		if err != nil {
+			p.logger.Error(ctx, "failed to cancel subscription", err)
+			return fmt.Errorf("failed to cancel subscription: %w", err)
+		}
+
+		p.logger.Info(ctx, "Subscription cancelled")
+		return nil
+	}
+
 	err := p.subscriptionService.UpdateSubscription(ctx, subscription)
 	if err != nil {
 		p.logger.Error(ctx, "failed to update subscription", err)
@@ -96,7 +110,7 @@ func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice str
 	// 1. Get the user by the customer ID
 	// 2. Get the user's email
 	// 3. Send an email to the user
-	err := p.subscriptionService.CancelSubscription(ctx, invoice.Subscription.ID)
+	err := p.subscriptionService.CancelSubscription(ctx, invoice.Subscription.ID, time.Now())
 	if err != nil {
 		p.logger.Error(ctx, "failed to cancel subscription", err)
 		return fmt.Errorf("failed to cancel subscription: %w", err)
@@ -240,6 +254,8 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 		// Subscription status handling
 		if previousStatus == "incomplete" {
 			return p.SubscriptionCreated(ctx, subscription)
+		} else {
+			return p.SubscriptionUpdated(ctx, subscription)
 		}
 
 	case "invoice.payment_failed":

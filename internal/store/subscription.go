@@ -34,6 +34,7 @@ type UpdateSubscriptionParams struct {
 	EndDate         time.Time
 	NextBillingDate time.Time
 	StripeID        string
+	StripePriceID   string
 }
 
 const sqlCreateSubscription = `
@@ -61,18 +62,25 @@ func (s *Store) CreateSubscription(ctx context.Context, subscriptionCreated Crea
 
 const sqlUpdateSubscription = `
 UPDATE subscriptions
-SET status = $1, end_date = $2, next_billing_date = $3
-WHERE stripe_id = $4
+SET status = $1, end_date = $2, next_billing_date = $3, price_id = $4
+WHERE stripe_id = $5
 RETURNING id, user_id, price_id, stripe_id, status, start_date, end_date, next_billing_date
 `
 
 // UpdateSubscription updates a subscription in the database.
 func (s *Store) UpdateSubscription(ctx context.Context, subscriptionUpdated UpdateSubscriptionParams) error {
+	price, err := s.GetPriceByStripeID(ctx, subscriptionUpdated.StripePriceID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get price by stripe id", err)
+		return fmt.Errorf("failed to get price by stripe id: %w", err)
+	}
+
 	res, err := s.db.ExecContext(ctx, sqlUpdateSubscription,
 		subscriptionUpdated.Status,
 		subscriptionUpdated.EndDate,
 		subscriptionUpdated.NextBillingDate,
-		subscriptionUpdated.StripeID)
+		subscriptionUpdated.StripePriceID,
+		price.ID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to update subscription", err)
 		return fmt.Errorf("failed to update subscription: %w", err)
@@ -88,12 +96,12 @@ func (s *Store) UpdateSubscription(ctx context.Context, subscriptionUpdated Upda
 
 const sqlCancelSubscription = `
 UPDATE subscriptions
-SET status = 'canceled'
+SET end_date = $1, next_billing_date = NULL
 WHERE stripe_id = $1`
 
 // CancelSubscription cancels a subscription in the database.
-func (s *Store) CancelSubscription(ctx context.Context, subscriptionID string) error {
-	_, err := s.db.ExecContext(ctx, sqlCancelSubscription, subscriptionID)
+func (s *Store) CancelSubscription(ctx context.Context, subscriptionID string, cancelAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, sqlCancelSubscription, cancelAt, subscriptionID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to cancel subscription", err)
 		return fmt.Errorf("failed to cancel subscription: %w", err)

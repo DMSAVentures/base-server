@@ -114,11 +114,6 @@ func (h *Handler) GetCheckoutSession(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":         session.Status,
-		"payment_status": session.PaymentStatus,
-		"payment_intent": session.PaymentIntent,
-		"email":          session.CustomerEmail,
-	})
+	c.JSON(http.StatusOK, session)
 	return
 }
