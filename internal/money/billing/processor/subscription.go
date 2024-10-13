@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"base-server/internal/money/subscriptions"
 	"base-server/internal/observability"
 	"context"
 	"errors"
@@ -84,7 +85,7 @@ func (p *BillingProcessor) CancelSubscription(ctx context.Context, userID uuid.U
 		return ErrNoActiveSubscription
 	}
 
-	_, err = subscription.Cancel(activeSub.ID, nil)
+	_, err = subscription.Cancel(activeSub.StripeID, nil)
 	if err != nil {
 		p.logger.Error(ctx, "failed to cancel subscription", err)
 		return ErrFailedToCancelSubscription
@@ -107,14 +108,14 @@ func (p *BillingProcessor) UpdateSubscription(ctx context.Context, userID uuid.U
 	params := &stripe.SubscriptionParams{
 		Items: []*stripe.SubscriptionItemsParams{
 			{
-				ID:    stripe.String(activeSub.Items.Data[0].ID),
+				ID:    stripe.String(activeSub.StripeID),
 				Price: stripe.String(priceID),
 			},
 		},
 		ProrationBehavior: stripe.String("create_prorations"),
 	}
 
-	_, err = subscription.Update(activeSub.ID, params)
+	_, err = subscription.Update(activeSub.StripeID, params)
 	if err != nil {
 		p.logger.Error(ctx, "failed to update subscription", err)
 		return ErrFailedToUpdateSubscription
@@ -123,30 +124,17 @@ func (p *BillingProcessor) UpdateSubscription(ctx context.Context, userID uuid.U
 	return nil
 }
 
-func (p *BillingProcessor) GetActiveSubscription(ctx context.Context, userID uuid.UUID) (*stripe.Subscription, error) {
-	stripeCustomerID, err := p.store.GetStripeCustomerIDByUserExternalID(ctx, userID)
+func (p *BillingProcessor) GetActiveSubscription(ctx context.Context, userID uuid.UUID) (subscriptions.Subscription,
+	error) {
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", userID})
+
+	sub, err := p.subscriptionService.GetSubscriptionByUserID(ctx, userID)
 	if err != nil {
-		p.logger.Error(ctx, "failed to get stripe customer id from db", err)
-		return nil, errors.New("failed to get stripe customer id")
+		p.logger.Error(ctx, "failed to get subscription by user id", err)
+		return subscriptions.Subscription{}, errors.New("failed to get subscription by user id")
 	}
 
-	params := &stripe.SubscriptionListParams{
-		Customer: stripe.String(stripeCustomerID),
-		Status:   stripe.String("active"),
-	}
-	i := subscription.List(params)
-
-	for i.Next() {
-		s := i.Subscription()
-		return s, nil
-	}
-
-	if err := i.Err(); err != nil {
-		p.logger.Error(ctx, "failed to list subscriptions", err)
-		return nil, errors.New("failed to list subscriptions: %w")
-	}
-
-	return nil, errors.New("no active subscription found")
+	return sub, nil
 }
 
 func (p *BillingProcessor) CreateCheckoutSession(ctx context.Context, userID uuid.UUID, priceID string) (*stripe.CheckoutSession, error) {

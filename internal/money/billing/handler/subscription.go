@@ -117,3 +117,21 @@ func (h *Handler) GetCheckoutSession(c *gin.Context) {
 	c.JSON(http.StatusOK, session)
 	return
 }
+
+func (h *Handler) HandleGetSubscription(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+
+	sub, err := h.processor.GetActiveSubscription(ctx, parsedUserID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to cancel subscription", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, sub)
+	return
+}

@@ -127,3 +127,20 @@ func (s *Store) GetSubscription(ctx context.Context, subscriptionID string) (Sub
 
 	return subscription, nil
 }
+
+const sqlGetSubscriptionByUserID = `
+SELECT id, user_id, price_id, stripe_id, status, start_date, end_date, next_billing_date
+FROM subscriptions
+WHERE user_id = $1
+`
+
+func (s *Store) GetSubscriptionByUserID(ctx context.Context, userID uuid.UUID) (Subscription, error) {
+	var subscription Subscription
+	err := s.db.QueryRowxContext(ctx, sqlGetSubscriptionByUserID, userID).StructScan(&subscription)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get subscription", err)
+		return Subscription{}, fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	return subscription, nil
+}

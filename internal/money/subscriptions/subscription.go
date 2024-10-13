@@ -89,10 +89,21 @@ func (p *SubscriptionService) CancelSubscription(ctx context.Context, subscripti
 	return nil
 }
 
-func (p *SubscriptionService) GetSubscription(ctx context.Context, subscriptionID string) (Subscription,
+func (p *SubscriptionService) GetSubscriptionByID(ctx context.Context, subscriptionID string) (Subscription,
 	error) {
 	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionID})
 	sub, err := p.store.GetSubscription(ctx, subscriptionID)
+	if err != nil {
+		p.logger.Error(ctx, "error getting subscription", err)
+		return Subscription{}, fmt.Errorf("error getting subscription: %w", err)
+	}
+
+	return Subscription(sub), nil
+}
+
+func (p *SubscriptionService) GetSubscriptionByUserID(ctx context.Context, userID uuid.UUID) (Subscription,
+	error) {
+	sub, err := p.store.GetSubscriptionByUserID(ctx, userID)
 	if err != nil {
 		p.logger.Error(ctx, "error getting subscription", err)
 		return Subscription{}, fmt.Errorf("error getting subscription: %w", err)

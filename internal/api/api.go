@@ -36,6 +36,7 @@ func (a *API) RegisterRoutes() {
 		protectedGroup.GET("/user", a.authHandler.GetUserInfo)
 		protectedGroup.POST("billing/create-payment-intent", a.billingHandler.HandleCreatePaymentIntent)
 		protectedGroup.POST("billing/create-subscription-intent", a.billingHandler.HandleCreateSubscriptionIntent)
+		protectedGroup.GET("billing/subscription", a.billingHandler.HandleGetSubscription)
 		protectedGroup.POST("billing/update-subscription", a.billingHandler.HandleUpdateSubscription)
 		protectedGroup.POST("billing/cancel-subscription", a.billingHandler.HandleCancelSubscription)
 		protectedGroup.POST("billing/update-payment-method", a.billingHandler.HandleUpdatePaymentMethod)
