@@ -135,9 +135,12 @@ func main() {
 
 	if os.Getenv("GO_ENV") != "production" {
 		config := cors.DefaultConfig()
-		config.AllowAllOrigins = true // For development, allows all origins
+		// Allow both localhost for the frontend and Google's OAuth callback
+		config.AllowOrigins = []string{"http://localhost:3000", "https://accounts.google.com"}
+
 		// For production, specify allowed origins instead of AllowAllOrigins
 		// config.AllowOrigins = []string{"https://example.com"}
+		config.AllowCredentials = true
 
 		config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
 		config.AllowHeaders = []string{"Origin", "Content-Type", "Access-Control-Allowed-Headers", "Authorization"}

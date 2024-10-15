@@ -5,7 +5,6 @@ import (
 	"base-server/internal/observability"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -74,18 +73,14 @@ func (h *Handler) HandleEmailSignup(c *gin.Context) {
 
 func (h *Handler) HandleJWTMiddleware(c *gin.Context) {
 	ctx := c.Request.Context()
-	tokeHeader := c.GetHeader("Authorization")
-
-	if tokeHeader == "" || !strings.HasPrefix(tokeHeader, "Bearer ") {
+	token, err := c.Cookie("token")
+	if token == "" || err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token is missing or invalid"})
 		c.Abort() // Stop further processing
 		return
 	}
 
-	// Extract the JWT token from the header
-	tokenString := strings.TrimPrefix(tokeHeader, "Bearer ")
-
-	claims, err := h.authProcessor.ValidateJWTToken(ctx, tokenString)
+	claims, err := h.authProcessor.ValidateJWTToken(ctx, token)
 
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
@@ -147,6 +142,8 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 		return
 	}
 
+	c.SetCookie("token", JWTToken, 3600, "/", h.authProcessor.GetWebAppHost(), true, true)
+
 	parsedUrl, err := url.Parse(h.authProcessor.GetWebAppHost())
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse url", err)
@@ -157,11 +154,8 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 	redirectUrl := url.URL{
 		Scheme: parsedUrl.Scheme,
 		Host:   parsedUrl.Host,
-		Path:   "oauth/signedin",
+		Path:   "/",
 	}
-	query := redirectUrl.Query()
-	query.Add("token", JWTToken)
-	redirectUrl.RawQuery = query.Encode()
 
 	c.Redirect(http.StatusFound, redirectUrl.String())
 	return
