@@ -132,21 +132,19 @@ func main() {
 	}
 
 	r := gin.New()
+	config := cors.DefaultConfig()
+	config.AllowCredentials = true
+	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type"}
+	// For production, specify allowed origins instead of AllowAllOrigins
+	config.AllowOrigins = []string{webAppURL}
 
 	if os.Getenv("GO_ENV") != "production" {
-		config := cors.DefaultConfig()
 		// Allow both localhost for the frontend and Google's OAuth callback
 		config.AllowOrigins = []string{"http://localhost:3000", "https://accounts.google.com"}
-
-		// For production, specify allowed origins instead of AllowAllOrigins
-		// config.AllowOrigins = []string{"https://example.com"}
-		config.AllowCredentials = true
-
-		config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
-		config.AllowHeaders = []string{"Origin", "Content-Type", "Access-Control-Allowed-Headers", "Authorization"}
-		r.Use(cors.New(config))
 	}
 
+	r.Use(cors.New(config))
 	r.Use(observability.Middleware(logger))
 	rootRouter := r.Group("/")
 

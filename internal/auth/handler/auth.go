@@ -5,6 +5,7 @@ import (
 	"base-server/internal/observability"
 	"net/http"
 	"net/url"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -142,7 +143,11 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("token", JWTToken, 3600, "/", h.authProcessor.GetWebAppHost(), true, true)
+	if os.Getenv("GO_ENV") != "production" {
+		c.SetCookie("token", JWTToken, 86400, "/", h.authProcessor.GetWebAppHost(), false, true)
+	} else {
+		c.SetCookie("token", JWTToken, 86400, "/", h.authProcessor.GetWebAppHost(), true, true)
+	}
 
 	parsedUrl, err := url.Parse(h.authProcessor.GetWebAppHost())
 	if err != nil {
