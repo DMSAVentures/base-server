@@ -2,14 +2,14 @@ package store
 
 import (
 	"base-server/internal/observability"
-	"database/sql"
+	"errors"
 	"log"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // Import the pgx stdlib for sqlx
 	"github.com/jmoiron/sqlx"
 )
 
-var ErrNotFound = sql.ErrNoRows
+var ErrNotFound = errors.New("not found")
 
 type Store struct {
 	db     *sqlx.DB

@@ -134,7 +134,7 @@ func main() {
 	r := gin.New()
 	config := cors.DefaultConfig()
 	config.AllowCredentials = true
-	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
+	config.AllowMethods = []string{"GET", "POST", "OPTIONS", "DELETE"}
 	config.AllowHeaders = []string{"Origin", "Content-Type"}
 	// For production, specify allowed origins instead of AllowAllOrigins
 	config.AllowOrigins = []string{webAppURL}

@@ -3,6 +3,7 @@ package handler
 import (
 	"base-server/internal/money/billing/processor"
 	"base-server/internal/observability"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -74,6 +75,29 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 	return
 }
 
+func (h *Handler) HandleCancelSubscription(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+
+	err := h.processor.CancelSubscription(ctx, parsedUserID)
+	if err != nil {
+		if errors.Is(err, processor.ErrNoActiveSubscription) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no active subscription found"})
+			return
+		}
+
+		h.logger.Error(ctx, "failed to cancel subscription", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "subscription cancelled"})
+	return
+}
+
 func (h *Handler) HandleCreateCheckoutSession(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID := c.MustGet("User-ID")
@@ -127,7 +151,12 @@ func (h *Handler) HandleGetSubscription(c *gin.Context) {
 
 	sub, err := h.processor.GetActiveSubscription(ctx, parsedUserID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to cancel subscription", err)
+		if errors.Is(err, processor.ErrNoActiveSubscription) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no active subscription found"})
+			return
+		}
+
+		h.logger.Error(ctx, "failed to get subscription", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

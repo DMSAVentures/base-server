@@ -38,7 +38,7 @@ func (a *API) RegisterRoutes() {
 		protectedGroup.POST("billing/create-subscription-intent", a.billingHandler.HandleCreateSubscriptionIntent)
 		protectedGroup.GET("billing/subscription", a.billingHandler.HandleGetSubscription)
 		protectedGroup.POST("billing/update-subscription", a.billingHandler.HandleUpdateSubscription)
-		protectedGroup.POST("billing/cancel-subscription", a.billingHandler.HandleCancelSubscription)
+		protectedGroup.DELETE("billing/cancel-subscription", a.billingHandler.HandleCancelSubscription)
 		protectedGroup.POST("billing/update-payment-method", a.billingHandler.HandleUpdatePaymentMethod)
 		protectedGroup.POST("billing/get-payment-method", a.billingHandler.HandleGetPaymentMethod)
 		protectedGroup.POST("billing/create-checkout-session", a.billingHandler.HandleCreateCheckoutSession)

@@ -193,6 +193,19 @@ func (p *BillingProcessor) PriceUpdated(ctx context.Context, priceUpdated stripe
 	return nil
 }
 
+func (p *BillingProcessor) SubscriptionDeleted(ctx context.Context, subscriptionDeleted stripe.Subscription) error {
+	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionDeleted.ID})
+
+	err := p.subscriptionService.CancelSubscription(ctx, subscriptionDeleted.ID, time.Now())
+	if err != nil {
+		p.logger.Error(ctx, "failed to handle subscription deletion webhook event", err)
+		return fmt.Errorf("failed to handle subscription deletion webhook event: %w", err)
+	}
+
+	p.logger.Info(ctx, "Subscription deleted")
+	return nil
+}
+
 func (p *BillingProcessor) PriceDeleted(ctx context.Context, priceDeleted stripe.Price) error {
 	ctx = observability.WithFields(ctx, observability.Field{"price_id", priceDeleted.ID})
 
@@ -264,6 +277,15 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 		} else {
 			return p.SubscriptionUpdated(ctx, subscription)
 		}
+
+	case "customer.subscription.deleted":
+		var subscription stripe.Subscription
+		err := json.Unmarshal(event.Data.Raw, &subscription)
+		if err != nil {
+			p.logger.Error(ctx, "failed to unmarshal price", err)
+			return fmt.Errorf("failed to parse subscription from event: %w", err)
+		}
+		return p.SubscriptionDeleted(ctx, subscription)
 
 	case "invoice.payment_failed":
 		var invoice stripe.Invoice

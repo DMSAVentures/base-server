@@ -130,6 +130,10 @@ func (p *BillingProcessor) GetActiveSubscription(ctx context.Context, userID uui
 
 	sub, err := p.subscriptionService.GetSubscriptionByUserID(ctx, userID)
 	if err != nil {
+		if errors.Is(err, subscriptions.ErrNoSubscription) {
+			return subscriptions.Subscription{}, ErrNoActiveSubscription
+		}
+
 		p.logger.Error(ctx, "failed to get subscription by user id", err)
 		return subscriptions.Subscription{}, errors.New("failed to get subscription by user id")
 	}
@@ -170,7 +174,8 @@ func (p *BillingProcessor) CreateCheckoutSession(ctx context.Context, userID uui
 		CustomerUpdate: &stripe.CheckoutSessionCustomerUpdateParams{
 			Address: stripe.String("auto"),
 		},
-		ReturnURL:    stripe.String(fmt.Sprintf("%s/payment_attempt?session_id={CHECKOUT_SESSION_ID}", p.webhostURL)),
+		ReturnURL: stripe.String(fmt.Sprintf("%s/billing/payment_attempt?session_id={CHECKOUT_SESSION_ID}",
+			p.webhostURL)),
 		AutomaticTax: &stripe.CheckoutSessionAutomaticTaxParams{Enabled: stripe.Bool(true)},
 	}
 

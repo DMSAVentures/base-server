@@ -4,6 +4,7 @@ import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -21,6 +22,8 @@ type Subscription struct {
 	EndDate         time.Time `json:"end_date"`
 	NextBillingDate time.Time `json:"next_billing_date"`
 }
+
+var ErrNoSubscription = errors.New("no active subscription found")
 
 func (p *SubscriptionService) CreateSubscription(ctx context.Context, subscriptionCreated stripe.Subscription) error {
 	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionCreated.ID})
@@ -105,6 +108,10 @@ func (p *SubscriptionService) GetSubscriptionByUserID(ctx context.Context, userI
 	error) {
 	sub, err := p.store.GetSubscriptionByUserID(ctx, userID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return Subscription{}, ErrNoSubscription
+		}
+
 		p.logger.Error(ctx, "error getting subscription", err)
 		return Subscription{}, fmt.Errorf("error getting subscription: %w", err)
 	}

@@ -10,24 +10,6 @@ import (
 	"github.com/stripe/stripe-go/v79/webhook"
 )
 
-func (h *Handler) HandleCancelSubscription(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	userID := c.MustGet("User-ID")
-	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
-
-	err := h.processor.CancelSubscription(ctx, parsedUserID)
-	if err != nil {
-		h.logger.Error(ctx, "failed to cancel subscription", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "success"})
-	return
-}
-
 func (h *Handler) HandleUpdateSubscription(c *gin.Context) {
 	ctx := c.Request.Context()
 

@@ -2,6 +2,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -96,7 +98,7 @@ func (s *Store) UpdateSubscription(ctx context.Context, subscriptionUpdated Upda
 
 const sqlCancelSubscription = `
 UPDATE subscriptions
-SET end_date = $1, next_billing_date = NULL
+SET end_date = $1, status = 'canceled'
 WHERE stripe_id = $2`
 
 // CancelSubscription cancels a subscription in the database.
@@ -138,6 +140,11 @@ func (s *Store) GetSubscriptionByUserID(ctx context.Context, userID uuid.UUID) (
 	var subscription Subscription
 	err := s.db.QueryRowxContext(ctx, sqlGetSubscriptionByUserID, userID).StructScan(&subscription)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			s.logger.Error(ctx, "subscription not found", err)
+			return Subscription{}, ErrNotFound
+		}
+
 		s.logger.Error(ctx, "failed to get subscription", err)
 		return Subscription{}, fmt.Errorf("failed to get subscription: %w", err)
 	}
