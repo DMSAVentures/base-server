@@ -94,6 +94,18 @@ func (p *BillingProcessor) CancelSubscription(ctx context.Context, userID uuid.U
 	return nil
 }
 
+func (p *BillingProcessor) CancelSubscriptionBySubscriptionExternalID(ctx context.Context, stripSubID string) error {
+	ctx = observability.WithFields(ctx, observability.Field{"stripe_subscription_id", stripSubID})
+
+	_, err := subscription.Cancel(stripSubID, nil)
+	if err != nil {
+		p.logger.Error(ctx, "failed to cancel subscription", err)
+		return ErrFailedToCancelSubscription
+	}
+
+	return nil
+}
+
 func (p *BillingProcessor) UpdateSubscription(ctx context.Context, userID uuid.UUID, priceID string) error {
 	ctx = observability.WithFields(ctx,
 		observability.Field{"user_id", userID},

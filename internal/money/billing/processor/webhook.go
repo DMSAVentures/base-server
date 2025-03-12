@@ -107,10 +107,10 @@ func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice str
 	ctx = observability.WithFields(ctx,
 		observability.Field{"invoice_id", invoice.ID},
 		observability.Field{"subscription_id", invoice.Subscription.ID})
-	// 1. Get the user by the customer ID
-	// 2. Get the user's email
-	// 3. Send an email to the user
-	err := p.subscriptionService.CancelSubscription(ctx, invoice.Subscription.ID, time.Now())
+	//1. Get the user by the customer ID
+	//2. Get the user's email
+	//3. Send an email to the user
+	err := p.CancelSubscriptionBySubscriptionExternalID(ctx, invoice.Subscription.ID)
 	if err != nil {
 		p.logger.Error(ctx, "failed to cancel subscription", err)
 		return fmt.Errorf("failed to cancel subscription: %w", err)
