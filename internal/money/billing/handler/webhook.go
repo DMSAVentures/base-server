@@ -35,31 +35,6 @@ func (h *Handler) HandleUpdateSubscription(c *gin.Context) {
 	return
 }
 
-func (h *Handler) HandleUpdatePaymentMethod(c *gin.Context) {
-	ctx := c.Request.Context()
-	userID := c.MustGet("User-ID")
-	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
-
-	var paymentMethodReq UpdatePaymentMethodRequest
-	if err := c.ShouldBindJSON(&paymentMethodReq); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
-	}
-
-	err := h.processor.UpdatePaymentMethodForUser(ctx, paymentMethodReq.PaymentMethodID, parsedUserID)
-	if err != nil {
-		h.logger.Error(ctx, "failed to update payment method", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "success"})
-	return
-
-}
-
 func (h *Handler) HandleGetPaymentMethod(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID := c.MustGet("User-ID")

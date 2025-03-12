@@ -1,14 +1,15 @@
 package processor
 
 import (
-	"base-server/internal/observability"
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
+	"github.com/stripe/stripe-go/v79/billingportal/session"
 	"github.com/stripe/stripe-go/v79/paymentintent"
-	"github.com/stripe/stripe-go/v79/paymentmethod"
+	"github.com/stripe/stripe-go/v79/setupintent"
 	"github.com/stripe/stripe-go/v79/tax/calculation"
 )
 
@@ -26,24 +27,24 @@ type PaymentMethod struct {
 	CardExpYear  int       `json:"card_exp_year"`
 }
 
-func (p *BillingProcessor) UpdatePaymentMethodForUser(ctx context.Context, paymentMethodID string,
-	userID uuid.UUID) error {
-	ctx = observability.WithFields(ctx, observability.Field{"payment_method_id", paymentMethodID})
+func (p *BillingProcessor) SetupPaymentMethodUpdateIntent(ctx context.Context, userID uuid.UUID) (string, error) {
 
-	paymentMethod, err := paymentmethod.Get(paymentMethodID, nil)
+	stripeCustomerID, err := p.store.GetStripeCustomerIDByUserExternalID(ctx, userID)
 	if err != nil {
-		p.logger.Error(ctx, "failed to get payment method", err)
-		return ErrFailedToGetPaymentMethod
+		p.logger.Error(ctx, "failed to get user", err)
+		return "", ErrFailedToUpdatePaymentMethod
 	}
 
-	err = p.store.UpdatePaymentMethodByUserID(ctx, userID, paymentMethod.ID, string(paymentMethod.Card.Brand),
-		paymentMethod.Card.Last4,
-		paymentMethod.Card.ExpMonth, paymentMethod.Card.ExpYear)
-	if err != nil {
-		p.logger.Error(ctx, "failed to update payment method", err)
-		return ErrFailedToUpdatePaymentMethod
+	params := &stripe.SetupIntentParams{
+		Customer: stripe.String(stripeCustomerID),
 	}
-	return nil
+	intent, err := setupintent.New(params)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create setup intent", err)
+		return "", ErrFailedToUpdatePaymentMethod
+	}
+
+	return intent.ClientSecret, nil
 }
 
 func (p *BillingProcessor) GetPaymentMethodForUser(ctx context.Context, userID uuid.UUID) (PaymentMethod,
@@ -144,4 +145,27 @@ func (p *BillingProcessor) calculateOrderAmount(taxCalculation *stripe.TaxCalcul
 	// Calculate the order total with any exclusive taxes on the server to prevent
 	// people from directly manipulating the amount on the client
 	return taxCalculation.AmountTotal
+}
+
+func (p *BillingProcessor) CreateCustomerPortal(ctx context.Context, user uuid.UUID) (string, error) {
+	stripeCustomerID, err := p.store.GetStripeCustomerIDByUserExternalID(ctx, user)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get stripe customer ID by user ID", err)
+		return "", err
+	}
+
+	params := &stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(stripeCustomerID),
+		ReturnURL: stripe.String(fmt.Sprintf("%s/account", p.webhostURL)),
+	}
+
+	result, err := session.New(params)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create billing portal session", err)
+		return "", err
+	}
+
+	// Redirect the user to the portal
+	return result.URL, nil
+
 }

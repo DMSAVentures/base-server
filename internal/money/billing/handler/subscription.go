@@ -164,3 +164,21 @@ func (h *Handler) HandleGetSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, sub)
 	return
 }
+
+func (h *Handler) HandleCreateCustomerPortal(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	userID := c.MustGet("User-ID")
+	parsedUserID := uuid.MustParse(userID.(string))
+	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+
+	sessionURL, err := h.processor.CreateCustomerPortal(ctx, parsedUserID)
+	if err != nil {
+		h.logger.Error(ctx, "failed to create customer portal", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"url": sessionURL})
+	return
+}
