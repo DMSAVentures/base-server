@@ -5,6 +5,8 @@ import (
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
 	"base-server/internal/clients/googleoauth"
+	"base-server/internal/clients/mail"
+	"base-server/internal/email"
 	billingHandler "base-server/internal/money/billing/handler"
 	billingProcessor "base-server/internal/money/billing/processor"
 	"base-server/internal/money/products"
@@ -123,6 +125,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Get Resend API key for sending emails
+	resendAPIKey := os.Getenv("RESEND_API_KEY")
+	if resendAPIKey == "" {
+		logger.Error(ctx, "RESEND_API_KEY is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
+	// Get default email sender
+	defaultEmailSender := os.Getenv("DEFAULT_EMAIL_SENDER")
+	if defaultEmailSender == "" {
+		logger.Error(ctx, "DEFAULT_EMAIL_SENDER is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
 	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
 
 	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + "/" + dbName
@@ -130,6 +146,16 @@ func main() {
 	if err != nil {
 		logger.Error(ctx, "failed to connect to database", err)
 	}
+
+	// Initialize the Resend email client
+	mailClient, err := mail.NewResendClient(resendAPIKey, logger)
+	if err != nil {
+		logger.Error(ctx, "failed to create resend client", err)
+		os.Exit(1)
+	}
+
+	// Initialize the email service
+	emailService := email.New(mailClient, defaultEmailSender, logger)
 
 	r := gin.New()
 	config := cors.DefaultConfig()
@@ -152,7 +178,7 @@ func main() {
 	subscriptionService := subscriptions.New(logger, stripeSecretKey, store)
 
 	billingProcessor := billingProcessor.New(stripeSecretKey, webhookSecret, webAppURL, store, productService,
-		subscriptionService, logger)
+		subscriptionService, emailService, logger)
 	billingHandler := billingHandler.New(billingProcessor, logger)
 
 	authConfig := processor.AuthConfig{

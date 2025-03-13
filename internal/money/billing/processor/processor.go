@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"base-server/internal/email"
 	"base-server/internal/money/products"
 	"base-server/internal/money/subscriptions"
 	"base-server/internal/observability"
@@ -22,6 +23,7 @@ type BillingProcessor struct {
 	store               store.Store
 	productService      products.ProductService
 	subscriptionService subscriptions.SubscriptionService
+	emailService        *email.EmailService
 }
 
 type PaymentIntentItem struct {
@@ -30,7 +32,8 @@ type PaymentIntentItem struct {
 }
 
 func New(stripKey string, webhookSecret string, webhostURL string, store store.Store,
-	productService products.ProductService, subService subscriptions.SubscriptionService, logger *observability.Logger) BillingProcessor {
+	productService products.ProductService, subService subscriptions.SubscriptionService,
+	emailService *email.EmailService, logger *observability.Logger) BillingProcessor {
 	stripe.Key = stripKey
 	return BillingProcessor{
 		stripKey:            stripKey,
@@ -39,9 +42,9 @@ func New(stripKey string, webhookSecret string, webhostURL string, store store.S
 		store:               store,
 		productService:      productService,
 		subscriptionService: subService,
+		emailService:        emailService,
 		logger:              logger,
 	}
-
 }
 
 func (p *BillingProcessor) CreateStripeCustomer(ctx context.Context, email string) (string, error) {
