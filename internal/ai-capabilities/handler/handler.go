@@ -23,13 +23,35 @@ func (h *Handler) HandleRequest(c *gin.Context) {
 	// Implement the logic to handle the request using aiCapabilities
 	ctx := c.Request.Context()
 
-	ctx = observability.WithFields(ctx, observability.Field{Key: "request", Value: "example request"})
+	// Set SSE headers
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Header("Transfer-Encoding", "chunked")
 
-	h.logger.Info(ctx, "Handling request")
+	// Get the response channel from AI capabilities
+	responseChan := h.aiCapabilities.DoSomething(ctx)
 
-	// Example of calling a method on aiCapabilities
-	h.aiCapabilities.DoSomething(ctx)
-
-	// Return a response (this is just an example)
-	c.JSON(200, gin.H{"message": "Request handled successfully"})
+	// Stream responses to client
+	c.Stream(func(w io.Writer) bool {
+        select {
+        case response, ok := <-responseChan:
+            if !ok {
+                return false
+            }
+            
+            if response.Error != nil {
+                c.SSEvent("error", gin.H{
+                    "error": response.Error.Error(),
+                })
+                return false
+            }
+            
+            c.SSEvent("message", response.Content)
+            return true
+            
+        case <-ctx.Done():
+            return false
+        }
+    })
 }
