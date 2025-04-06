@@ -1,6 +1,8 @@
 package main
 
 import (
+	googleAICapabilities "base-server/internal/ai-capabilities"
+	aiHandler "base-server/internal/ai-capabilities/handler"
 	"base-server/internal/api"
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
@@ -139,6 +141,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Get Gemini API Key from environment
+	geminiAPIKey := os.Getenv("GOOGLE_AI_API_KEY")
+	if geminiAPIKey == "" {
+		logger.Error(ctx, "GOOGLE_AI_API_KEY is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
+	geminiAI := googleAICapabilities.New(logger, geminiAPIKey)
+
 	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
 
 	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + "/" + dbName
@@ -195,7 +206,9 @@ func main() {
 	authProcessor := processor.New(store, authConfig, googleOauthClient, billingProcessor, *emailService, logger)
 	authHandler := handler.New(authProcessor, logger)
 
-	api := api.New(rootRouter, authHandler, billingHandler)
+	aiHandler := aiHandler.New(geminiAI, logger)
+
+	api := api.New(rootRouter, authHandler, billingHandler, aiHandler)
 	api.RegisterRoutes()
 
 	server := &http.Server{

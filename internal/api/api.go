@@ -1,6 +1,7 @@
 package api
 
 import (
+	aiHandler "base-server/internal/ai-capabilities/handler"
 	authHandler "base-server/internal/auth/handler"
 	billingHandler "base-server/internal/money/billing/handler"
 	"net/http"
@@ -12,13 +13,15 @@ type API struct {
 	router         *gin.RouterGroup
 	authHandler    authHandler.Handler
 	billingHandler billingHandler.Handler
+	aiHandler      aiHandler.Handler
 }
 
-func New(router *gin.RouterGroup, authHandler authHandler.Handler, handler billingHandler.Handler) API {
+func New(router *gin.RouterGroup, authHandler authHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler) API {
 	return API{
 		router:         router,
 		authHandler:    authHandler,
 		billingHandler: handler,
+		aiHandler:      aiHandler,
 	}
 }
 
@@ -47,6 +50,8 @@ func (a *API) RegisterRoutes() {
 	}
 	apiGroup.GET("billing/plans", a.billingHandler.ListPrices)
 	apiGroup.POST("billing/webhook", a.billingHandler.HandleWebhook)
+
+	apiGroup.GET("ai/gemini", a.aiHandler.HandleRequest)
 }
 
 func (a *API) Health() {
