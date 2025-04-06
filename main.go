@@ -192,7 +192,7 @@ func main() {
 			WebAppHost:        webAppURL,
 		},
 	}
-	authProcessor := processor.New(store, authConfig, googleOauthClient, billingProcessor, logger)
+	authProcessor := processor.New(store, authConfig, googleOauthClient, billingProcessor, *emailService, logger)
 	authHandler := handler.New(authProcessor, logger)
 
 	api := api.New(rootRouter, authHandler, billingHandler)
