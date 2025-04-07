@@ -51,7 +51,7 @@ func (a *API) RegisterRoutes() {
 	apiGroup.GET("billing/plans", a.billingHandler.ListPrices)
 	apiGroup.POST("billing/webhook", a.billingHandler.HandleWebhook)
 
-	apiGroup.GET("ai/gemini", a.aiHandler.HandleRequest)
+	apiGroup.POST("ai/gemini", a.aiHandler.HandleRequest)
 }
 
 func (a *API) Health() {

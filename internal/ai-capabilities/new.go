@@ -24,16 +24,17 @@ func New(logger *observability.Logger, apiKey string) *GeminiAI {
 }
 
 type StreamResponse struct {
-	Content string
-	Error   error
+	Content   string
+	Error     error
+	Completed bool
 }
 
 func (g *GeminiAI) DoSomething(ctx context.Context) <-chan StreamResponse {
 	responseChan := make(chan StreamResponse)
-	
+
 	go func() {
 		defer close(responseChan)
-		
+
 		g.logger.Info(ctx, "Starting AI stream")
 		c, err := genai.NewClient(ctx, option.WithAPIKey(g.apiKey))
 		if err != nil {
@@ -44,8 +45,8 @@ func (g *GeminiAI) DoSomething(ctx context.Context) <-chan StreamResponse {
 		defer c.Close()
 
 		model := c.GenerativeModel("gemini-2.5-pro-preview-03-25")
-		iter := model.GenerateContentStream(ctx, genai.Text("Describe what is transformer model"))
-		
+		iter := model.GenerateContentStream(ctx, genai.Text("Say hello to me and tell me about weather in Ottawa"))
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -55,6 +56,7 @@ func (g *GeminiAI) DoSomething(ctx context.Context) <-chan StreamResponse {
 				resp, err := iter.Next()
 				if err == iterator.Done {
 					g.logger.Info(ctx, "Stream completed")
+					responseChan <- StreamResponse{Completed: true}
 					return
 				}
 				if err != nil {
@@ -70,6 +72,7 @@ func (g *GeminiAI) DoSomething(ctx context.Context) <-chan StreamResponse {
 						responseChan <- StreamResponse{Error: fmt.Errorf("failed to marshal response: %w", err)}
 						continue
 					}
+
 					responseChan <- StreamResponse{Content: string(bs)}
 				}
 			}
