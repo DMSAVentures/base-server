@@ -87,7 +87,7 @@ VALUES ($1, $2, $3, $4)
 RETURNING id, conversation_id, role, content, token_count, created_at`
 
 func (s *Store) CreateMessage(ctx context.Context, conversationID uuid.UUID, role, content string,
-	tokenCount int) (*Message, error) {
+	tokenCount int32) (*Message, error) {
 	var message Message
 	err := s.db.GetContext(ctx, &message, sqlCreateMessageForConversationID, conversationID, role, content, tokenCount)
 	if err != nil {

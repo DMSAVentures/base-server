@@ -148,8 +148,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	geminiAI := googleAICapabilities.New(logger, geminiAPIKey)
-
 	googleOauthClient := googleoauth.NewClient(googleClientID, googleClientSecret, googleRedirectURL, logger)
 
 	connectionString := "postgres://" + dbUsername + ":" + dbPassword + "@" + dbHost + "/" + dbName
@@ -205,6 +203,8 @@ func main() {
 	}
 	authProcessor := processor.New(store, authConfig, googleOauthClient, billingProcessor, *emailService, logger)
 	authHandler := handler.New(authProcessor, logger)
+
+	geminiAI := googleAICapabilities.New(logger, geminiAPIKey, store)
 
 	aiHandler := aiHandler.New(geminiAI, logger)
 

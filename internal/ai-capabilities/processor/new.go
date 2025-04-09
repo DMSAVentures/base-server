@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
@@ -16,10 +17,10 @@ import (
 type AIProcessor struct {
 	logger *observability.Logger
 	apiKey string
-	store  *store.Store
+	store  store.Store
 }
 
-func New(logger *observability.Logger, apiKey string, store *store.Store) *AIProcessor {
+func New(logger *observability.Logger, apiKey string, store store.Store) *AIProcessor {
 	return &AIProcessor{
 		logger: logger,
 		apiKey: apiKey,
@@ -33,8 +34,9 @@ type StreamResponse struct {
 	Completed bool
 }
 
-type TokenConsumedCount struct {
+type ModelResponse struct {
 	TotalTokens int32
+	Message     string
 }
 
 func (a *AIProcessor) DoSomething(ctx context.Context) <-chan StreamResponse {
@@ -80,7 +82,6 @@ func (a *AIProcessor) DoSomething(ctx context.Context) <-chan StreamResponse {
 						responseChan <- StreamResponse{Error: fmt.Errorf("failed to marshal response: %w", err)}
 						continue
 					}
-
 					responseChan <- StreamResponse{Content: string(bs)}
 				}
 			}
@@ -91,9 +92,9 @@ func (a *AIProcessor) DoSomething(ctx context.Context) <-chan StreamResponse {
 }
 
 func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-chan StreamResponse,
-	<-chan TokenConsumedCount) {
-	responseChan := make(chan StreamResponse)
-	tokensConsumeChan := make(chan TokenConsumedCount)
+	<-chan ModelResponse) {
+	streamingResponseChan := make(chan StreamResponse)
+	fullResponseChan := make(chan ModelResponse, 1)
 	var geminiParts []genai.Part
 
 	for _, message := range messages {
@@ -102,14 +103,14 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-
 	}
 
 	go func() {
-		defer close(responseChan)
-		defer close(tokensConsumeChan)
+		defer close(streamingResponseChan)
+		defer close(fullResponseChan)
 
 		a.logger.Info(ctx, "Starting AI stream")
 		c, err := genai.NewClient(ctx, option.WithAPIKey(a.apiKey))
 		if err != nil {
 			a.logger.Error(ctx, "Failed to create client", err)
-			responseChan <- StreamResponse{Error: fmt.Errorf("failed to create AI client: %w", err)}
+			streamingResponseChan <- StreamResponse{Error: fmt.Errorf("failed to create AI client: %w", err)}
 			return
 		}
 		defer c.Close()
@@ -117,21 +118,26 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-
 		model := c.GenerativeModel("gemini-2.5-pro-preview-03-25")
 		iter := model.GenerateContentStream(ctx, geminiParts...)
 
+		var totalTokens int32 = 0
+		var fullAssistantMessage strings.Builder
+
 		for {
 			select {
 			case <-ctx.Done():
 				a.logger.Info(ctx, "Context cancelled, stopping stream")
+				fullResponseChan <- ModelResponse{TotalTokens: totalTokens, Message: fullAssistantMessage.String()}
 				return
 			default:
 				resp, err := iter.Next()
 				if err == iterator.Done {
 					a.logger.Info(ctx, "Stream completed")
-					responseChan <- StreamResponse{Completed: true}
+					streamingResponseChan <- StreamResponse{Completed: true}
+					fullResponseChan <- ModelResponse{TotalTokens: totalTokens, Message: fullAssistantMessage.String()}
 					return
 				}
 				if err != nil {
 					a.logger.Error(ctx, "Failed to get next response", err)
-					responseChan <- StreamResponse{Error: fmt.Errorf("failed to get AI response: %w", err)}
+					streamingResponseChan <- StreamResponse{Error: fmt.Errorf("failed to get AI response: %w", err)}
 					return
 				}
 
@@ -139,18 +145,23 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-
 					bs, err := json.Marshal(part)
 					if err != nil {
 						a.logger.Error(ctx, "Failed to marshal response part", err)
-						responseChan <- StreamResponse{Error: fmt.Errorf("failed to marshal response: %w", err)}
+						streamingResponseChan <- StreamResponse{Error: fmt.Errorf("failed to marshal response: %w", err)}
 						continue
 					}
 
-					responseChan <- StreamResponse{Content: string(bs)}
+					stringPart := string(bs)
+					streamingResponseChan <- StreamResponse{Content: stringPart}
+					fullAssistantMessage.WriteString(stringPart)
 				}
-				//tokensConsumeChan <- TokenConsumedCount{TotalTokens: resp.UsageMetadata.CandidatesTokenCount}
+
+				if resp.UsageMetadata != nil {
+					totalTokens = resp.UsageMetadata.CandidatesTokenCount
+				}
 			}
 		}
 	}()
 
-	return responseChan, tokensConsumeChan
+	return streamingResponseChan, fullResponseChan
 }
 
 func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, msg string) (<-chan StreamResponse,
@@ -165,23 +176,31 @@ func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, 
 	ctx = observability.WithFields(ctx, observability.Field{Key: "conversation_id", Value: conversation.ID.String()})
 	a.logger.Info(ctx, "Conversation created successfully")
 
-	_, err = a.store.CreateMessage(ctx, conversation.ID, "user", msg, len(msg))
+	_, err = a.store.CreateMessage(ctx, conversation.ID, "user", msg, int32(len(msg)))
 	if err != nil {
 		a.logger.Error(ctx, "Failed to create message", err)
 		return nil, fmt.Errorf("failed to create message: %w", err)
 	}
 
-	respChannel, totalTokensConsumedChannel := a.ChatWithGemini(ctx, []string{msg})
+	respChannel, modelResponseChannel := a.ChatWithGemini(ctx, []string{msg})
 	go func() {
-		for tokenCount := range totalTokensConsumedChannel {
+		for tokenCount := range modelResponseChannel {
+
+			message, err := a.store.CreateMessage(ctx, conversation.ID, "assistant", tokenCount.Message,
+				tokenCount.TotalTokens)
+			if err != nil {
+				a.logger.Error(ctx, "Failed to save assistant message", err)
+				return
+			}
+
 			usageLog := store.UsageLog{
 				UserID:         userID,
 				ConversationID: conversation.ID,
-				MessageID:      conversation.ID,
+				MessageID:      message.ID,
 				TokensUsed:     int(tokenCount.TotalTokens),
 				Model:          "gemini-2.5-pro-preview-03-25",
 			}
-			_, err := a.store.InsertUsageLog(ctx, usageLog)
+			_, err = a.store.InsertUsageLog(ctx, usageLog)
 			if err != nil {
 				a.logger.Error(ctx, "Failed to insert usage log", err)
 			}
