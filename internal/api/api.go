@@ -47,12 +47,12 @@ func (a *API) RegisterRoutes() {
 		protectedGroup.POST("billing/create-customer-portal", a.billingHandler.HandleCreateCustomerPortal)
 		protectedGroup.POST("billing/create-checkout-session", a.billingHandler.HandleCreateCheckoutSession)
 		protectedGroup.GET("billing/checkout-session", a.billingHandler.GetCheckoutSession)
+		protectedGroup.POST("ai/conversation", a.aiHandler.HandleNewConversation)
 	}
 	apiGroup.GET("billing/plans", a.billingHandler.ListPrices)
 	apiGroup.POST("billing/webhook", a.billingHandler.HandleWebhook)
 
 	apiGroup.POST("ai/gemini", a.aiHandler.HandleRequest)
-	apiGroup.POST("ai/conversation", a.aiHandler.HandleNewConversation)
 }
 
 func (a *API) Health() {

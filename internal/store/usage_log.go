@@ -20,8 +20,8 @@ type UsageLog struct {
 }
 
 const sqlInsertUsageLog = `
-INSERT INTO usage_logs ( user_id, conversation_id, tokens_used, cost_in_cents, model)
-VALUES ($1, $2, $4, $5, $6)
+INSERT INTO usage_logs (user_id, conversation_id, tokens_used, cost_in_cents, model)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING id, user_id, conversation_id, tokens_used, cost_in_cents, model, created_at, updated_at
 `
 

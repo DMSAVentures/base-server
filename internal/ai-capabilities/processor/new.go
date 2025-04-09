@@ -132,8 +132,8 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-
 				resp, err := iter.Next()
 				if errors.Is(err, iterator.Done) {
 					a.logger.Info(ctx, "Stream completed")
-					streamingResponseChan <- StreamResponse{Completed: true}
 					fullResponseChan <- ModelResponse{TotalTokens: totalTokens, Message: fullAssistantMessage.String()}
+					streamingResponseChan <- StreamResponse{Completed: true}
 					return
 				}
 				if err != nil {
@@ -165,6 +165,40 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-
 	return streamingResponseChan, fullResponseChan
 }
 
+func (a *AIProcessor) GenerateTitle(ctx context.Context, userMsg string, assistantMsg string) (string, error) {
+	prompt := fmt.Sprintf(`
+Given the following conversation, generate a short descriptive title (max 6 words). Avoid quotes.
+
+User: %s
+Assistant: %s
+
+Title:`, userMsg, assistantMsg)
+
+	c, err := genai.NewClient(ctx, option.WithAPIKey(a.apiKey))
+	if err != nil {
+		return "", fmt.Errorf("failed to create Gemini client: %w", err)
+	}
+	defer c.Close()
+
+	model := c.GenerativeModel("gemini-2.5-pro-preview-03-25")
+	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate title: %w", err)
+	}
+
+	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
+		return "", fmt.Errorf("no title returned from Gemini")
+	}
+
+	// Safely cast the part to Text and return
+	part, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
+	if !ok {
+		return "", fmt.Errorf("unexpected response format")
+	}
+
+	return strings.TrimSpace(string(part)), nil
+}
+
 func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, msg string) (<-chan StreamResponse,
 	error) {
 	a.logger.Info(ctx, "Creating conversation for user")
@@ -184,6 +218,7 @@ func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, 
 	}
 
 	respChannel, modelResponseChannel := a.ChatWithGemini(ctx, []string{msg})
+
 	go func() {
 		for resp := range modelResponseChannel {
 			_, err := a.store.CreateMessage(ctx, conversation.ID, "assistant", resp.Message)
@@ -192,10 +227,21 @@ func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, 
 				return
 			}
 
+			title, err := a.GenerateTitle(ctx, msg, resp.Message)
+			if err == nil {
+				err = a.store.UpdateConversationTitleByConversationID(ctx, conversation.ID, title)
+				if err != nil {
+					a.logger.Error(ctx, "Failed to update conversation title", err)
+				}
+			} else {
+				a.logger.Error(ctx, "Failed to generate title", err)
+			}
+
 			usageLog := store.UsageLog{
 				UserID:         userID,
 				ConversationID: conversation.ID,
 				TokensUsed:     resp.TotalTokens,
+				CostInCents:    0,
 				Model:          "gemini-2.5-pro-preview-03-25",
 			}
 			_, err = a.store.InsertUsageLog(ctx, usageLog)

@@ -2,17 +2,18 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/google/uuid"
 )
 
 type Conversation struct {
-	ID        uuid.UUID `db:"id"`
-	UserID    uuid.UUID `db:"user_id"`
-	Title     string    `db:"title"`
-	CreatedAt string    `db:"created_at"`
-	UpdatedAt string    `db:"updated_at"`
+	ID        uuid.UUID      `db:"id"`
+	UserID    uuid.UUID      `db:"user_id"`
+	Title     sql.NullString `db:"title"`
+	CreatedAt string         `db:"created_at"`
+	UpdatedAt string         `db:"updated_at"`
 }
 
 type Message struct {
@@ -94,4 +95,18 @@ func (s *Store) CreateMessage(ctx context.Context, conversationID uuid.UUID, rol
 	}
 
 	return &message, nil
+}
+
+const sqlUpdateConversationTitleByConversationID = `
+UPDATE conversations SET title = $1 WHERE id = $2
+`
+
+func (s *Store) UpdateConversationTitleByConversationID(ctx context.Context, conversationID uuid.UUID,
+	title string) error {
+	_, err := s.db.ExecContext(ctx, sqlUpdateConversationTitleByConversationID, title, conversationID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to update conversation title", err)
+		return fmt.Errorf("failed to update conversation title: %w", err)
+	}
+	return nil
 }
