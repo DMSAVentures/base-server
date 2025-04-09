@@ -135,9 +135,9 @@ func main() {
 	}
 
 	// Get default email sender
-	defaultEmailSender := os.Getenv("DEFAULT_EMAIL_SENDER")
+	defaultEmailSender := os.Getenv("DEFAULT_EMAIL_SENDER_ADDRESS")
 	if defaultEmailSender == "" {
-		logger.Error(ctx, "DEFAULT_EMAIL_SENDER is not set", ErrEmptyEnvironmentVariable)
+		logger.Error(ctx, "DEFAULT_EMAIL_SENDER_ADDRESS is not set", ErrEmptyEnvironmentVariable)
 		os.Exit(1)
 	}
 
