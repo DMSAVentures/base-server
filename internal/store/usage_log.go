@@ -12,24 +12,23 @@ type UsageLog struct {
 	ID             uuid.UUID `db:"id"`
 	UserID         uuid.UUID `db:"user_id"`
 	ConversationID uuid.UUID `db:"conversation_id"`
-	MessageID      uuid.UUID `db:"message_id"`
-	TokensUsed     int       `db:"tokens_used"`
+	TokensUsed     int32     `db:"tokens_used"`
 	CostInCents    int       `db:"cost_in_cents"`
 	Model          string    `db:"model"`
 	CreatedAt      time.Time `db:"created_at"`
+	UpdatedAt      time.Time `db:"updated_at"`
 }
 
 const sqlInsertUsageLog = `
-INSERT INTO usage_logs ( user_id, conversation_id, message_id, tokens_used, cost_in_cents, model)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, conversation_id, message_id, tokens_used, cost_in_cents, model, created_at
+INSERT INTO usage_logs ( user_id, conversation_id, tokens_used, cost_in_cents, model)
+VALUES ($1, $2, $4, $5, $6)
+RETURNING id, user_id, conversation_id, tokens_used, cost_in_cents, model, created_at, updated_at
 `
 
 func (s *Store) InsertUsageLog(ctx context.Context, usageLog UsageLog) (UsageLog, error) {
 	err := s.db.GetContext(ctx, &usageLog, sqlInsertUsageLog,
 		usageLog.UserID,
 		usageLog.ConversationID,
-		usageLog.MessageID,
 		usageLog.TokensUsed,
 		usageLog.CostInCents,
 		usageLog.Model,
@@ -42,8 +41,11 @@ func (s *Store) InsertUsageLog(ctx context.Context, usageLog UsageLog) (UsageLog
 }
 
 const sqlGetUsageLogsByUserIDForPeriod = `
-SELECT * FROM usage_logs WHERE user_id = $1 AND created_at >= $2 AND created_at <= $3
-ORDER BY created_at DESC
+SELECT * FROM usage_logs 
+WHERE user_id = $1 
+	AND created_at >= $2 
+	AND created_at <= $3
+ORDER BY created_at DESC 
 `
 
 func (s *Store) GetUsageLogsByUserIDForPeriod(ctx context.Context, userID uuid.UUID, startDate,
@@ -59,4 +61,19 @@ func (s *Store) GetUsageLogsByUserIDForPeriod(ctx context.Context, userID uuid.U
 		return nil, fmt.Errorf("failed to get usage logs by user ID for period: %w", err)
 	}
 	return usageLogs, nil
+}
+
+const sqlUpdateUsageTokensByConversationID = `
+UPDATE usage_logs
+SET tokens_used = $1
+WHERE conversation_id = $2
+`
+
+func (s *Store) UpdateUsageTokensByConversationID(ctx context.Context, conversationID uuid.UUID, delta int) error {
+	_, err := s.db.ExecContext(ctx, sqlUpdateUsageTokensByConversationID, delta, conversationID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to increment usage tokens", err)
+		return fmt.Errorf("failed to increment usage tokens: %w", err)
+	}
+	return err
 }

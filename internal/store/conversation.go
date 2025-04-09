@@ -20,7 +20,6 @@ type Message struct {
 	ConversationID uuid.UUID `db:"conversation_id"`
 	Role           string    `db:"role"`
 	Content        string    `db:"content"`
-	TokenCount     int       `db:"token_count"`
 	CreatedAt      string    `db:"created_at"`
 }
 
@@ -82,14 +81,13 @@ func (s *Store) GetAllMessagesByConversationID(ctx context.Context, conversation
 }
 
 const sqlCreateMessageForConversationID = `
-INSERT INTO messages (conversation_id, role, content, token_count)
-VALUES ($1, $2, $3, $4)
-RETURNING id, conversation_id, role, content, token_count, created_at`
+INSERT INTO messages (conversation_id, role, content)
+VALUES ($1, $2, $3)
+RETURNING id, conversation_id, role, content, created_at`
 
-func (s *Store) CreateMessage(ctx context.Context, conversationID uuid.UUID, role, content string,
-	tokenCount int32) (*Message, error) {
+func (s *Store) CreateMessage(ctx context.Context, conversationID uuid.UUID, role, content string) (*Message, error) {
 	var message Message
-	err := s.db.GetContext(ctx, &message, sqlCreateMessageForConversationID, conversationID, role, content, tokenCount)
+	err := s.db.GetContext(ctx, &message, sqlCreateMessageForConversationID, conversationID, role, content)
 	if err != nil {
 		s.logger.Error(ctx, "failed to create message", err)
 		return nil, fmt.Errorf("failed to create message: %w", err)

@@ -1,0 +1,1 @@
+ALTER TABLE usage_logs ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();

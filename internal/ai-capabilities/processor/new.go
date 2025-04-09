@@ -5,6 +5,7 @@ import (
 	"base-server/internal/store"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -129,7 +130,7 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-
 				return
 			default:
 				resp, err := iter.Next()
-				if err == iterator.Done {
+				if errors.Is(err, iterator.Done) {
 					a.logger.Info(ctx, "Stream completed")
 					streamingResponseChan <- StreamResponse{Completed: true}
 					fullResponseChan <- ModelResponse{TotalTokens: totalTokens, Message: fullAssistantMessage.String()}
@@ -155,7 +156,7 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-
 				}
 
 				if resp.UsageMetadata != nil {
-					totalTokens = resp.UsageMetadata.CandidatesTokenCount
+					totalTokens = resp.UsageMetadata.CandidatesTokenCount + resp.UsageMetadata.PromptTokenCount
 				}
 			}
 		}
@@ -176,7 +177,7 @@ func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, 
 	ctx = observability.WithFields(ctx, observability.Field{Key: "conversation_id", Value: conversation.ID.String()})
 	a.logger.Info(ctx, "Conversation created successfully")
 
-	_, err = a.store.CreateMessage(ctx, conversation.ID, "user", msg, int32(len(msg)))
+	_, err = a.store.CreateMessage(ctx, conversation.ID, "user", msg)
 	if err != nil {
 		a.logger.Error(ctx, "Failed to create message", err)
 		return nil, fmt.Errorf("failed to create message: %w", err)
@@ -184,10 +185,8 @@ func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, 
 
 	respChannel, modelResponseChannel := a.ChatWithGemini(ctx, []string{msg})
 	go func() {
-		for tokenCount := range modelResponseChannel {
-
-			message, err := a.store.CreateMessage(ctx, conversation.ID, "assistant", tokenCount.Message,
-				tokenCount.TotalTokens)
+		for resp := range modelResponseChannel {
+			_, err := a.store.CreateMessage(ctx, conversation.ID, "assistant", resp.Message)
 			if err != nil {
 				a.logger.Error(ctx, "Failed to save assistant message", err)
 				return
@@ -196,8 +195,7 @@ func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, 
 			usageLog := store.UsageLog{
 				UserID:         userID,
 				ConversationID: conversation.ID,
-				MessageID:      message.ID,
-				TokensUsed:     int(tokenCount.TotalTokens),
+				TokensUsed:     resp.TotalTokens,
 				Model:          "gemini-2.5-pro-preview-03-25",
 			}
 			_, err = a.store.InsertUsageLog(ctx, usageLog)
