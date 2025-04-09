@@ -92,7 +92,8 @@ func (a *AIProcessor) DoSomething(ctx context.Context) <-chan StreamResponse {
 	return responseChan
 }
 
-func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-chan StreamResponse,
+func (a *AIProcessor) ChatWithGemini(ctx context.Context, conversationID uuid.UUID,
+	messages []string) (<-chan StreamResponse,
 	<-chan ModelResponse) {
 	streamingResponseChan := make(chan StreamResponse)
 	fullResponseChan := make(chan ModelResponse, 1)
@@ -102,6 +103,8 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, messages []string) (<-
 		part := genai.Text(message)
 		geminiParts = append(geminiParts, part)
 	}
+
+	streamingResponseChan <- StreamResponse{Content: "[Conversation_ID]: " + conversationID.String()}
 
 	go func() {
 		defer close(streamingResponseChan)
@@ -217,7 +220,7 @@ func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, 
 		return nil, fmt.Errorf("failed to create message: %w", err)
 	}
 
-	respChannel, modelResponseChannel := a.ChatWithGemini(ctx, []string{msg})
+	respChannel, modelResponseChannel := a.ChatWithGemini(ctx, conversation.ID, []string{msg})
 
 	go func() {
 		for resp := range modelResponseChannel {
