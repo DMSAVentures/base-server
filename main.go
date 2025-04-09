@@ -1,8 +1,8 @@
 package main
 
 import (
-	googleAICapabilities "base-server/internal/ai-capabilities"
 	aiHandler "base-server/internal/ai-capabilities/handler"
+	googleAICapabilities "base-server/internal/ai-capabilities/processor"
 	"base-server/internal/api"
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
