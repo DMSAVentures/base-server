@@ -99,10 +99,11 @@ func (h *Handler) HandleRequest(c *gin.Context) {
 }
 
 type CreateConversationRequest struct {
-	Message string `json:"message"`
+	Message        string `json:"message"`
+	ConversationID string `json:"conversation_id"`
 }
 
-func (h *Handler) HandleNewConversation(c *gin.Context) {
+func (h *Handler) HandleConversation(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	userID, ok := c.Get("User-ID")

@@ -104,8 +104,6 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, conversationID uuid.UU
 		geminiParts = append(geminiParts, part)
 	}
 
-	streamingResponseChan <- StreamResponse{Content: "[Conversation_ID]: " + conversationID.String()}
-
 	go func() {
 		defer close(streamingResponseChan)
 		defer close(fullResponseChan)
@@ -124,6 +122,8 @@ func (a *AIProcessor) ChatWithGemini(ctx context.Context, conversationID uuid.UU
 
 		var totalTokens int32 = 0
 		var fullAssistantMessage strings.Builder
+
+		streamingResponseChan <- StreamResponse{Content: "[Conversation_ID]: " + conversationID.String()}
 
 		for {
 			select {
