@@ -40,6 +40,13 @@ type ModelResponse struct {
 	Message     string
 }
 
+type AIProcessorInterface interface {
+	CreateConversation(ctx context.Context, userID uuid.UUID, msg string) (<-chan StreamResponse, error)
+	ContinueConversation(ctx context.Context, userID uuid.UUID, conversationID uuid.UUID,
+		msg string) (<-chan StreamResponse,
+		error)
+}
+
 func (a *AIProcessor) ChatWithGemini(ctx context.Context, conversationID uuid.UUID,
 	messages []store.Message) (<-chan StreamResponse,
 	<-chan ModelResponse) {
