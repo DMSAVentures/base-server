@@ -319,46 +319,27 @@ func (a *AIProcessor) GenerateImageAI(ctx context.Context, conversationID uuid.U
 		}
 		client := openai.NewClient(options...)
 
-		iter := client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
-			Messages: []openai.ChatCompletionMessageParamUnion{
-				openai.UserMessage(prompt),
-			},
-			Model: openai.ChatModelGPT4o,
+		image, err := client.Images.Generate(ctx, openai.ImageGenerateParams{
+			Prompt:         prompt,
+			Size:           openai.ImageGenerateParamsSize256x256,
+			Model:          openai.ImageModelDallE2,
+			ResponseFormat: openai.ImageGenerateParamsResponseFormatB64JSON,
 		})
+		if err != nil {
+			a.logger.Error(ctx, "Failed to generate image", err)
+			streamingResponseChan <- StreamResponse{Error: fmt.Errorf("failed to generate image: %w", err)}
+			return
+		}
 
-		defer iter.Close()
-
-		var totalTokens int32 = 0
-		var fullAssistantMessage strings.Builder
+		//var totalTokens int32 = 0
+		//var fullAssistantMessage strings.Builder
 
 		streamingResponseChan <- StreamResponse{Content: "[Conversation_ID]: " + conversationID.String()}
 
-		for iter.Next() {
-			select {
-			case <-ctx.Done():
-				a.logger.Info(ctx, "Context cancelled, stopping stream")
-				fullResponseChan <- ModelResponse{TotalTokens: totalTokens, Message: fullAssistantMessage.String()}
-				return
-			default:
-				if err := iter.Err(); err != nil {
-					a.logger.Error(ctx, "Stream iteration error", err)
-					streamingResponseChan <- StreamResponse{Error: fmt.Errorf("stream error: %w", err)}
-					return
-				}
-
-				chunk := iter.Current()
-				for _, choice := range chunk.Choices {
-					if content := choice.Delta.Content; content != "" {
-						streamingResponseChan <- StreamResponse{Content: content}
-						fullAssistantMessage.WriteString(content)
-					}
-				}
-			}
-
-		}
+		streamingResponseChan <- StreamResponse{Content: "[Image_URL]: " + image.Data[0].B64JSON}
 		a.logger.Info(ctx, "Stream completed")
 		// NOTE: OpenAI Go SDK v1 does not return usage in stream chunks
-		fullResponseChan <- ModelResponse{TotalTokens: 0, Message: fullAssistantMessage.String()}
+		fullResponseChan <- ModelResponse{TotalTokens: 0, Message: image.Data[0].B64JSON}
 		streamingResponseChan <- StreamResponse{Completed: true}
 	}()
 
