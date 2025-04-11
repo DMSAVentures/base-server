@@ -302,8 +302,16 @@ func (a *AIProcessor) GenerateImageAI(ctx context.Context, conversationID uuid.U
 	fullResponseChan := make(chan ModelResponse, 1)
 
 	go func() {
-		defer close(streamingResponseChan)
-		defer close(fullResponseChan)
+		defer func() {
+			if r := recover(); r != nil {
+				a.logger.Error(ctx, "Recovered from panic in GenerateImageAI goroutine", fmt.Errorf("reason: %+v", r))
+				streamingResponseChan <- StreamResponse{Error: fmt.Errorf("panic: %+v", r)}
+				// Optionally also send to fullResponseChan to unblock receiver
+				//fullResponseChan <- ModelResponse{Message: fmt.Errorf("panic: %+v", r)}
+			}
+			close(streamingResponseChan)
+			close(fullResponseChan)
+		}()
 
 		a.logger.Info(ctx, "Starting AI stream")
 		options := []openaiOption.RequestOption{
@@ -316,7 +324,7 @@ func (a *AIProcessor) GenerateImageAI(ctx context.Context, conversationID uuid.U
 				openai.UserMessage(prompt),
 			},
 			Model: openai.ChatModelGPT4o,
-		}, nil)
+		})
 
 		defer iter.Close()
 
@@ -346,11 +354,12 @@ func (a *AIProcessor) GenerateImageAI(ctx context.Context, conversationID uuid.U
 					}
 				}
 			}
-			a.logger.Info(ctx, "Stream completed")
-			// NOTE: OpenAI Go SDK v1 does not return usage in stream chunks
-			fullResponseChan <- ModelResponse{TotalTokens: 0, Message: fullAssistantMessage.String()}
-			streamingResponseChan <- StreamResponse{Completed: true}
+
 		}
+		a.logger.Info(ctx, "Stream completed")
+		// NOTE: OpenAI Go SDK v1 does not return usage in stream chunks
+		fullResponseChan <- ModelResponse{TotalTokens: 0, Message: fullAssistantMessage.String()}
+		streamingResponseChan <- StreamResponse{Completed: true}
 	}()
 
 	return streamingResponseChan, fullResponseChan
