@@ -11,21 +11,25 @@ import (
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/google/uuid"
+	"github.com/openai/openai-go"
+	openaiOption "github.com/openai/openai-go/option"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
 type AIProcessor struct {
-	logger *observability.Logger
-	apiKey string
-	store  store.Store
+	logger       *observability.Logger
+	geminiApiKey string
+	openAiApiKey string
+	store        store.Store
 }
 
-func New(logger *observability.Logger, apiKey string, store store.Store) *AIProcessor {
+func New(logger *observability.Logger, geminiApiKey string, openAiApiKey string, store store.Store) *AIProcessor {
 	return &AIProcessor{
-		logger: logger,
-		apiKey: apiKey,
-		store:  store,
+		logger:       logger,
+		geminiApiKey: geminiApiKey,
+		openAiApiKey: openAiApiKey,
+		store:        store,
 	}
 }
 
@@ -84,7 +88,7 @@ func (a *AIProcessor) ChatTextAI(ctx context.Context, conversationID uuid.UUID,
 		defer close(fullResponseChan)
 
 		a.logger.Info(ctx, "Starting AI stream")
-		c, err := genai.NewClient(ctx, option.WithAPIKey(a.apiKey))
+		c, err := genai.NewClient(ctx, option.WithAPIKey(a.geminiApiKey))
 		if err != nil {
 			a.logger.Error(ctx, "Failed to create client", err)
 			streamingResponseChan <- StreamResponse{Error: fmt.Errorf("failed to create AI client: %w", err)}
@@ -154,7 +158,7 @@ Assistant: %s
 
 Title:`, userMsg, assistantMsg)
 
-	c, err := genai.NewClient(ctx, option.WithAPIKey(a.apiKey))
+	c, err := genai.NewClient(ctx, option.WithAPIKey(a.geminiApiKey))
 	if err != nil {
 		return "", fmt.Errorf("failed to create Gemini client: %w", err)
 	}
@@ -259,6 +263,176 @@ func (a *AIProcessor) ContinueConversation(ctx context.Context, userID uuid.UUID
 	})
 
 	respChannel, modelResponseChannel := a.ChatTextAI(ctx, conversationID, msgs)
+
+	go func() {
+		for resp := range modelResponseChannel {
+			_, err = a.store.CreateMessage(ctx, conversationID, "user", msg)
+			if err != nil {
+				a.logger.Error(ctx, "Failed to create message", err)
+				//return nil, fmt.Errorf("failed to create message: %w", err)
+			}
+
+			_, err := a.store.CreateMessage(ctx, conversationID, "assistant", resp.Message)
+			if err != nil {
+				a.logger.Error(ctx, "Failed to save assistant message", err)
+				return
+			}
+
+			usageLog := store.UsageLog{
+				UserID:         userID,
+				ConversationID: conversationID,
+				TokensUsed:     resp.TotalTokens,
+				CostInCents:    0,
+				Model:          "gemini-2.5-pro-preview-03-25",
+			}
+			_, err = a.store.InsertUsageLog(ctx, usageLog)
+			if err != nil {
+				a.logger.Error(ctx, "Failed to insert usage log", err)
+			}
+		}
+	}()
+
+	return respChannel, nil
+
+}
+
+func (a *AIProcessor) GenerateImageAI(ctx context.Context, conversationID uuid.UUID, prompt string) (<-chan StreamResponse,
+	<-chan ModelResponse) {
+	streamingResponseChan := make(chan StreamResponse)
+	fullResponseChan := make(chan ModelResponse, 1)
+
+	go func() {
+		defer close(streamingResponseChan)
+		defer close(fullResponseChan)
+
+		a.logger.Info(ctx, "Starting AI stream")
+		options := []openaiOption.RequestOption{
+			openaiOption.WithAPIKey(a.openAiApiKey),
+		}
+		client := openai.NewClient(options...)
+
+		iter := client.Chat.Completions.NewStreaming(ctx, openai.ChatCompletionNewParams{
+			Messages: []openai.ChatCompletionMessageParamUnion{
+				openai.UserMessage(prompt),
+			},
+			Model: openai.ChatModelGPT4o,
+		}, nil)
+
+		defer iter.Close()
+
+		var totalTokens int32 = 0
+		var fullAssistantMessage strings.Builder
+
+		streamingResponseChan <- StreamResponse{Content: "[Conversation_ID]: " + conversationID.String()}
+
+		for iter.Next() {
+			select {
+			case <-ctx.Done():
+				a.logger.Info(ctx, "Context cancelled, stopping stream")
+				fullResponseChan <- ModelResponse{TotalTokens: totalTokens, Message: fullAssistantMessage.String()}
+				return
+			default:
+				if err := iter.Err(); err != nil {
+					a.logger.Error(ctx, "Stream iteration error", err)
+					streamingResponseChan <- StreamResponse{Error: fmt.Errorf("stream error: %w", err)}
+					return
+				}
+
+				chunk := iter.Current()
+				for _, choice := range chunk.Choices {
+					if content := choice.Delta.Content; content != "" {
+						streamingResponseChan <- StreamResponse{Content: content}
+						fullAssistantMessage.WriteString(content)
+					}
+				}
+			}
+			a.logger.Info(ctx, "Stream completed")
+			// NOTE: OpenAI Go SDK v1 does not return usage in stream chunks
+			fullResponseChan <- ModelResponse{TotalTokens: 0, Message: fullAssistantMessage.String()}
+			streamingResponseChan <- StreamResponse{Completed: true}
+		}
+	}()
+
+	return streamingResponseChan, fullResponseChan
+}
+
+func (a *AIProcessor) CreateImageGenerationConversation(ctx context.Context, userID uuid.UUID,
+	msg string) (<-chan StreamResponse,
+	error) {
+	a.logger.Info(ctx, "Creating conversation for user")
+	conversation, err := a.store.CreateConversation(ctx, userID)
+	if err != nil {
+		a.logger.Error(ctx, "Failed to create conversation", err)
+		return nil, fmt.Errorf("failed to create conversation: %w", err)
+	}
+
+	ctx = observability.WithFields(ctx, observability.Field{Key: "conversation_id", Value: conversation.ID.String()})
+	a.logger.Info(ctx, "Conversation created successfully")
+
+	_, err = a.store.CreateMessage(ctx, conversation.ID, "user", msg)
+	if err != nil {
+		a.logger.Error(ctx, "Failed to create message", err)
+		return nil, fmt.Errorf("failed to create message: %w", err)
+	}
+
+	respChannel, modelResponseChannel := a.GenerateImageAI(ctx, conversation.ID, msg)
+
+	go func() {
+		for resp := range modelResponseChannel {
+			_, err := a.store.CreateMessage(ctx, conversation.ID, "assistant", resp.Message)
+			if err != nil {
+				a.logger.Error(ctx, "Failed to save assistant message", err)
+				return
+			}
+
+			title, err := a.GenerateTitle(ctx, msg, resp.Message)
+			if err == nil {
+				err = a.store.UpdateConversationTitleByConversationID(ctx, conversation.ID, title)
+				if err != nil {
+					a.logger.Error(ctx, "Failed to update conversation title", err)
+				}
+			} else {
+				a.logger.Error(ctx, "Failed to generate title", err)
+			}
+
+			usageLog := store.UsageLog{
+				UserID:         userID,
+				ConversationID: conversation.ID,
+				TokensUsed:     resp.TotalTokens,
+				CostInCents:    0,
+				Model:          "gemini-2.5-pro-preview-03-25",
+			}
+			_, err = a.store.InsertUsageLog(ctx, usageLog)
+			if err != nil {
+				a.logger.Error(ctx, "Failed to insert usage log", err)
+			}
+		}
+	}()
+
+	return respChannel, nil
+}
+
+func (a *AIProcessor) ContinueImageGenerationConversation(ctx context.Context, userID uuid.UUID,
+	conversationID uuid.UUID,
+	msg string) (<-chan StreamResponse,
+	error) {
+	a.logger.Info(ctx, "Continuing conversation for user")
+	msgs, err := a.store.GetAllMessagesByConversationID(ctx, conversationID)
+	if err != nil {
+		a.logger.Error(ctx, "Failed to get messages", err)
+		return nil, fmt.Errorf("failed to get messages: %w", err)
+	}
+	if len(msgs) == 0 {
+		a.logger.Error(ctx, "No messages found for conversation", nil)
+		return nil, fmt.Errorf("no messages found for conversation")
+	}
+
+	msgs = append(msgs, store.Message{
+		Role:    "user",
+		Content: msg,
+	})
+
+	respChannel, modelResponseChannel := a.GenerateImageAI(ctx, conversationID, msg)
 
 	go func() {
 		for resp := range modelResponseChannel {
