@@ -40,14 +40,17 @@ type ModelResponse struct {
 	Message     string
 }
 
-type AIProcessorInterface interface {
+type TextAIChatProcessor interface {
 	CreateConversation(ctx context.Context, userID uuid.UUID, msg string) (<-chan StreamResponse, error)
 	ContinueConversation(ctx context.Context, userID uuid.UUID, conversationID uuid.UUID,
 		msg string) (<-chan StreamResponse,
 		error)
+	ChatTextAI(ctx context.Context, conversationID uuid.UUID,
+		messages []store.Message) (<-chan StreamResponse,
+		<-chan ModelResponse)
 }
 
-func (a *AIProcessor) ChatWithGemini(ctx context.Context, conversationID uuid.UUID,
+func (a *AIProcessor) ChatTextAI(ctx context.Context, conversationID uuid.UUID,
 	messages []store.Message) (<-chan StreamResponse,
 	<-chan ModelResponse) {
 	streamingResponseChan := make(chan StreamResponse)
@@ -194,7 +197,7 @@ func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, 
 		return nil, fmt.Errorf("failed to create message: %w", err)
 	}
 
-	respChannel, modelResponseChannel := a.ChatWithGemini(ctx, conversation.ID, []store.Message{
+	respChannel, modelResponseChannel := a.ChatTextAI(ctx, conversation.ID, []store.Message{
 		{
 			Role:    "user",
 			Content: msg,
@@ -255,7 +258,7 @@ func (a *AIProcessor) ContinueConversation(ctx context.Context, userID uuid.UUID
 		Content: msg,
 	})
 
-	respChannel, modelResponseChannel := a.ChatWithGemini(ctx, conversationID, msgs)
+	respChannel, modelResponseChannel := a.ChatTextAI(ctx, conversationID, msgs)
 
 	go func() {
 		for resp := range modelResponseChannel {
