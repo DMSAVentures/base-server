@@ -4,14 +4,18 @@ import (
 	"base-server/internal/ai-capabilities/processor"
 	"base-server/internal/observability"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"github.com/twilio/twilio-go/twiml"
 )
 
 type Handler struct {
@@ -285,4 +289,90 @@ func writeSSEMessage(w io.Writer, f http.Flusher, field, value string) error {
 // You can improve this with a tokenizer that includes punctuation as separate tokens.
 func tokenize(content string) []string {
 	return strings.Fields(content)
+}
+
+func (h *Handler) HandleAnswerPhone(c *gin.Context) {
+	say := &twiml.VoiceSay{
+		Message: "Hello from your pals at Twilio! Have fun.",
+	}
+	stream := twiml.VoiceStream{
+		Name: "media-stream",
+		Url:  "wss://763a-174-93-24-21.ngrok-free.app/api/phone/media-stream",
+	}
+	connect := twiml.VoiceConnect{
+		InnerElements:      []twiml.Element{stream},
+		OptionalAttributes: nil,
+	}
+
+	twimlResult, err := twiml.Voice([]twiml.Element{say, connect})
+	if err != nil {
+		c.String(http.StatusInternalServerError, err.Error())
+	} else {
+		c.Header("Content-Type", "text/xml")
+		c.String(http.StatusOK, twimlResult)
+	}
+}
+
+// TwilioMediaEvent represents incoming JSON from Twilio Media Stream
+type TwilioMediaEvent struct {
+	Event string `json:"event"`
+	Start struct {
+		StreamSid string `json:"streamSid"`
+	} `json:"start,omitempty"`
+	Media struct {
+		Payload string `json:"payload"`
+	} `json:"media,omitempty"`
+	Stop struct {
+		StreamSid string `json:"streamSid"`
+	} `json:"stop,omitempty"`
+}
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true // allow all origins (for local testing only)
+	},
+}
+
+func (h *Handler) HandleVoice(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Println("WebSocket upgrade failed:", err)
+		return
+	}
+	defer conn.Close()
+	h.logger.Info(ctx, "Twilio WebSocket connection established")
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("Connection closed:", err)
+			break
+		}
+
+		var event TwilioMediaEvent
+		if err := json.Unmarshal(msg, &event); err != nil {
+			log.Println("❌ JSON parse error:", err)
+			continue
+		}
+
+		switch event.Event {
+		case "start":
+			log.Printf("🚀 Stream started: SID = %s", event.Start.StreamSid)
+
+		case "media":
+			audioBytes, err := base64.StdEncoding.DecodeString(event.Media.Payload)
+			if err != nil {
+				log.Println("❌ Failed to decode audio:", err)
+				continue
+			}
+			log.Printf("🎧 Received %d audio bytes", len(audioBytes))
+
+		case "stop":
+			log.Printf("🛑 Stream stopped: SID = %s", event.Stop.StreamSid)
+
+		default:
+			log.Printf("⚠️ Unknown event type: %s", event.Event)
+		}
+	}
 }
