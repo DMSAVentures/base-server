@@ -2,9 +2,11 @@ package openai
 
 import (
 	"base-server/internal/observability"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -143,4 +145,39 @@ func (c *OpenAIRealtimeClient) StartRealtimeTranscription(ctx context.Context, a
 		}
 	}()
 	return results, nil
+}
+
+// SynthesizeSpeech uses OpenAI's TTS API to synthesize speech from text.
+func (c *OpenAIRealtimeClient) SynthesizeSpeech(ctx context.Context, text string, voice string) ([]byte, error) {
+	url := "https://api.openai.com/v1/audio/speech"
+	jsonBody := map[string]interface{}{
+		"model":           "tts-1", // or "tts-1-hd"
+		"voice":           voice,   // e.g., "alloy", "echo", "fable", "onyx", "nova", "shimmer"
+		"input":           text,
+		"response_format": "mp3",
+	}
+	bodyBytes, err := json.Marshal(jsonBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal TTS request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TTS request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("OpenAI TTS request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("OpenAI TTS error: %s", string(respBody))
+	}
+
+	return io.ReadAll(resp.Body)
 }
