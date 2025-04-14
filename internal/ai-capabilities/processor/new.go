@@ -3,6 +3,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -454,4 +455,25 @@ func (a *AIProcessor) ContinueImageGenerationConversation(ctx context.Context, u
 
 	return respChannel, nil
 
+}
+
+// TranscribeWithWhisper sends audio bytes to the OpenAI Whisper API and returns the transcript using the openai-go SDK.
+func (a *AIProcessor) TranscribeWithWhisper(ctx context.Context, audio []byte) (string, error) {
+	if a.openAiApiKey == "" {
+		return "", errors.New("OpenAI API key not set")
+	}
+	client := openai.NewClient(
+		openaiOption.WithAPIKey(a.openAiApiKey),
+	)
+
+	file := openai.File(bytes.NewReader(audio), "audio.wav", "audio/wav")
+	params := openai.AudioTranscriptionNewParams{
+		Model: openai.AudioModelWhisper1,
+		File:  file,
+	}
+	resp, err := client.Audio.Transcriptions.New(ctx, params)
+	if err != nil {
+		return "", err
+	}
+	return resp.Text, nil
 }

@@ -343,6 +343,8 @@ func (h *Handler) HandleVoice(c *gin.Context) {
 	}
 	defer conn.Close()
 	h.logger.Info(ctx, "Twilio WebSocket connection established")
+
+	var audioBuffer []byte
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -359,7 +361,6 @@ func (h *Handler) HandleVoice(c *gin.Context) {
 		switch event.Event {
 		case "start":
 			log.Printf("🚀 Stream started: SID = %s", event.Start.StreamSid)
-
 		case "media":
 			audioBytes, err := base64.StdEncoding.DecodeString(event.Media.Payload)
 			if err != nil {
@@ -367,10 +368,21 @@ func (h *Handler) HandleVoice(c *gin.Context) {
 				continue
 			}
 			log.Printf("🎧 Received %d audio bytes", len(audioBytes))
-
+			audioBuffer = append(audioBuffer, audioBytes...)
+			// Optionally: implement silence/turn detection here
 		case "stop":
 			log.Printf("🛑 Stream stopped: SID = %s", event.Stop.StreamSid)
-
+			if len(audioBuffer) > 0 {
+				// Call Whisper transcription
+				transcript, err := h.aiCapabilities.TranscribeWithWhisper(ctx, audioBuffer)
+				if err != nil {
+					log.Println("❌ Whisper transcription failed:", err)
+				} else {
+					log.Printf("📝 Transcript: %s", transcript)
+					// Optionally: send transcript to client or store
+				}
+				audioBuffer = nil
+			}
 		default:
 			log.Printf("⚠️ Unknown event type: %s", event.Event)
 		}
