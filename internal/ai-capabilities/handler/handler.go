@@ -2,6 +2,7 @@ package handler
 
 import (
 	"base-server/internal/ai-capabilities/processor"
+	openai2 "base-server/internal/clients/openai"
 	"base-server/internal/observability"
 	"context"
 	"encoding/base64"
@@ -344,7 +345,35 @@ func (h *Handler) HandleVoice(c *gin.Context) {
 	defer conn.Close()
 	h.logger.Info(ctx, "Twilio WebSocket connection established")
 
-	var audioBuffer []byte
+	// Channel for streaming audio to the AI processor
+	audioChan := make(chan []byte, 32)
+	// Channel for signaling when to stop transcription
+	stopChan := make(chan struct{})
+
+	// Start transcription goroutine
+	go func() {
+		cfg := openai2.RealtimeTranscriptionConfig{
+			Model:    "whisper-1",
+			Language: "en",
+			// Add additional config as needed
+		}
+		results, err := h.aiCapabilities.TranscribeWithWhisperRealtime(ctx, audioChan, cfg)
+		if err != nil {
+			log.Println("❌ Real-time transcription failed:", err)
+			return
+		}
+		for res := range results {
+			if res.Type == "delta" && res.Delta != "" {
+				log.Printf("📝 Whisper delta: %s", res.Delta)
+				// Optionally: send delta to client (e.g., via WebSocket)
+			} else if res.Type == "completed" && res.Transcript != "" {
+				log.Printf("📝 Whisper transcript: %s", res.Transcript)
+				// Optionally: send final transcript to client or store
+			}
+		}
+		close(stopChan)
+	}()
+
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
@@ -368,21 +397,17 @@ func (h *Handler) HandleVoice(c *gin.Context) {
 				continue
 			}
 			log.Printf("🎧 Received %d audio bytes", len(audioBytes))
-			audioBuffer = append(audioBuffer, audioBytes...)
-			// Optionally: implement silence/turn detection here
+			select {
+			case audioChan <- audioBytes:
+				// sent successfully
+			default:
+				log.Println("⚠️ Audio channel full, dropping chunk")
+			}
 		case "stop":
 			log.Printf("🛑 Stream stopped: SID = %s", event.Stop.StreamSid)
-			if len(audioBuffer) > 0 {
-				// Call Whisper transcription
-				transcript, err := h.aiCapabilities.TranscribeWithWhisper(ctx, audioBuffer)
-				if err != nil {
-					log.Println("❌ Whisper transcription failed:", err)
-				} else {
-					log.Printf("📝 Transcript: %s", transcript)
-					// Optionally: send transcript to client or store
-				}
-				audioBuffer = nil
-			}
+			close(audioChan)
+			<-stopChan // Wait for transcription goroutine to finish
+			return
 		default:
 			log.Printf("⚠️ Unknown event type: %s", event.Event)
 		}
