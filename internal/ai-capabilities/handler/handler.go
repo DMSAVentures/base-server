@@ -2,7 +2,6 @@ package handler
 
 import (
 	"base-server/internal/ai-capabilities/processor"
-	openai2 "base-server/internal/clients/openai"
 	"base-server/internal/observability"
 	"context"
 	"encoding/base64"
@@ -298,7 +297,7 @@ func (h *Handler) HandleAnswerPhone(c *gin.Context) {
 	}
 	stream := twiml.VoiceStream{
 		Name: "media-stream",
-		Url:  "wss://763a-174-93-24-21.ngrok-free.app/api/phone/media-stream",
+		Url:  "wss://ba0c-174-93-24-21.ngrok-free.app/api/phone/media-stream",
 	}
 	connect := twiml.VoiceConnect{
 		InnerElements:      []twiml.Element{stream},
@@ -345,34 +344,7 @@ func (h *Handler) HandleVoice(c *gin.Context) {
 	defer conn.Close()
 	h.logger.Info(ctx, "Twilio WebSocket connection established")
 
-	// Channel for streaming audio to the AI processor
-	audioChan := make(chan []byte, 32)
-	// Channel for signaling when to stop transcription
-	stopChan := make(chan struct{})
-
-	// Start transcription goroutine
-	go func() {
-		cfg := openai2.RealtimeTranscriptionConfig{
-			Model:    "whisper-1",
-			Language: "en",
-			// Add additional config as needed
-		}
-		results, err := h.aiCapabilities.TranscribeWithWhisperRealtime(ctx, audioChan, cfg)
-		if err != nil {
-			log.Println("❌ Real-time transcription failed:", err)
-			return
-		}
-		for res := range results {
-			if res.Type == "delta" && res.Delta != "" {
-				log.Printf("📝 Whisper delta: %s", res.Delta)
-				// Optionally: send delta to client (e.g., via WebSocket)
-			} else if res.Type == "completed" && res.Transcript != "" {
-				log.Printf("📝 Whisper transcript: %s", res.Transcript)
-				// Optionally: send final transcript to client or store
-			}
-		}
-		close(stopChan)
-	}()
+	audioChan, stopChan := h.aiCapabilities.TranscribeTwilioCall(ctx)
 
 	for {
 		_, msg, err := conn.ReadMessage()

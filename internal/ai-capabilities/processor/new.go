@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/google/generative-ai-go/genai"
@@ -496,4 +497,38 @@ func (a *AIProcessor) TranscribeWithWhisperRealtime(ctx context.Context, audioSt
 		return nil, errors.New("OpenAIRealtimeClient not set in AIProcessor")
 	}
 	return a.openaiRealtime.StartRealtimeTranscription(ctx, audioStream, cfg)
+}
+
+func (a *AIProcessor) TranscribeTwilioCall(ctx context.Context) (chan []byte, chan struct{}) {
+	// Channel for streaming audio to the AI processor
+	audioChan := make(chan []byte, 32)
+	// Channel for signaling when to stop transcription
+	stopChan := make(chan struct{})
+
+	// Start transcription goroutine
+	go func() {
+		cfg := openai2.RealtimeTranscriptionConfig{
+			Model:    "whisper-1",
+			Language: "en",
+			// Add additional config as needed
+		}
+
+		results, err := a.openaiRealtime.StartRealtimeTranscription(ctx, audioChan, cfg)
+		if err != nil {
+			log.Println("❌ Real-time transcription failed:", err)
+			return
+		}
+		for res := range results {
+			if res.Type == "delta" && res.Delta != "" {
+				log.Printf("📝 Whisper delta: %s", res.Delta)
+				// Optionally: send delta to client (e.g., via WebSocket)
+			} else if res.Type == "completed" && res.Transcript != "" {
+				log.Printf("📝 Whisper transcript: %s", res.Transcript)
+				// Optionally: send final transcript to client or store
+			}
+		}
+		close(stopChan)
+	}()
+
+	return audioChan, stopChan
 }

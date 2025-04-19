@@ -65,8 +65,9 @@ func (c *OpenAIRealtimeClient) StartRealtimeTranscription(ctx context.Context, a
 
 		// 1. Send session creation message
 		sessionReq := map[string]interface{}{
-			"object":             "realtime.transcription_session",
-			"input_audio_format": "pcm16",
+			"object":              "realtime.transcription_session",
+			"input_audio_format":  "g711_ulaw",
+			"output_audio_format": "g711_ulaw",
 			"input_audio_transcription": []map[string]string{
 				{
 					"model":    cfg.Model,
