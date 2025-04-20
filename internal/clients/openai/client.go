@@ -4,6 +4,7 @@ import (
 	"base-server/internal/observability"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -73,6 +74,11 @@ type TranscriptionSessionRequest struct {
 	TurnDetection            TurnDetectionConfig      `json:"turn_detection"`
 }
 
+type Session struct {
+	Type    string                      `json:"type"`
+	Session TranscriptionSessionRequest `json:"session"`
+}
+
 type RealtimeTranscriptionSessionConfig struct {
 	InputAudioFormat         string                   `json:"input_audio_format"`
 	InputAudioNoiseReduction map[string]string        `json:"input_audio_noise_reduction"`
@@ -113,9 +119,7 @@ func (c *OpenAIWebsocketClient) StartRealtimeTranscription(ctx context.Context, 
 	results := make(chan TranscriptionChannelResult, 100)
 	go func() {
 		defer close(results)
-		dialer := websocket.Dialer{
-			Subprotocols: []string{"v1.audio.transcriptions"},
-		}
+		dialer := websocket.Dialer{}
 		headers := http.Header{}
 		headers.Set("Authorization", "Bearer "+c.apiKey)
 		headers.Set("OpenAI-Beta", "realtime=v1")
@@ -132,8 +136,9 @@ func (c *OpenAIWebsocketClient) StartRealtimeTranscription(ctx context.Context, 
 		query := openAIURl.Query()
 		query.Set("intent", "transcription")
 		openAIURl.RawQuery = query.Encode()
-
-		conn, _, err := dialer.DialContext(ctx, openAIURl.String(), headers)
+		openURL := openAIURl.String()
+		c.logger.Info(ctx, "Connecting to OpenAI Realtime URL: "+openURL)
+		conn, resp, err := dialer.DialContext(ctx, openURL, headers)
 		if err != nil {
 			if c.logger != nil {
 				c.logger.Error(ctx, "Failed to connect to OpenAI realtime endpoint", err)
@@ -141,10 +146,13 @@ func (c *OpenAIWebsocketClient) StartRealtimeTranscription(ctx context.Context, 
 			results <- TranscriptionChannelResult{Err: err}
 			return
 		}
+		b, _ := io.ReadAll(resp.Body)
+		c.logger.Info(ctx, fmt.Sprintf("Connected to OpenAI Realtime endpoint: %s", string(b)))
+
 		defer conn.Close()
 
 		sess := TranscriptionSessionRequest{
-			InputAudioFormat:         "g711_ulaw",
+			InputAudioFormat:         "pcm16",
 			InputAudioNoiseReduction: map[string]string{"type": "near_field"},
 			InputAudioTranscription: TranscriptionModelConfig{
 				Language: "en",
@@ -156,7 +164,12 @@ func (c *OpenAIWebsocketClient) StartRealtimeTranscription(ctx context.Context, 
 			},
 		}
 
-		if err := conn.WriteJSON(sess); err != nil {
+		sessUpdate := Session{
+			Type:    "session.update",
+			Session: sess,
+		}
+
+		if err := conn.WriteJSON(sessUpdate); err != nil {
 			if c.logger != nil {
 				c.logger.Error(ctx, "Failed to send session creation message", err)
 			}
@@ -206,8 +219,8 @@ func (c *OpenAIWebsocketClient) StartRealtimeTranscription(ctx context.Context, 
 					return
 				}
 				appendEvent := map[string]interface{}{
-					"type": "input_audio_buffer.append",
-					"data": chunk,
+					"type":  "input_audio_buffer.append",
+					"audio": base64.StdEncoding.EncodeToString(chunk),
 				}
 				if err := conn.WriteJSON(appendEvent); err != nil {
 					if c.logger != nil {
