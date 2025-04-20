@@ -1,7 +1,7 @@
 package processor
 
 import (
-	openai2 "base-server/internal/clients/openai"
+	openAIHTTP "base-server/internal/clients/openai"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"bytes"
@@ -24,17 +24,15 @@ type AIProcessor struct {
 	geminiApiKey   string
 	openAiApiKey   string
 	store          store.Store
-	openaiRealtime *openai2.OpenAIRealtimeClient
+	openaiRealtime *openAIHTTP.OpenAIWebsocketClient
 }
 
 func New(logger *observability.Logger, geminiApiKey string, openAiApiKey string, store store.Store) *AIProcessor {
-	var openaiRealtime *openai2.OpenAIRealtimeClient
+	var openaiRealtime *openAIHTTP.OpenAIWebsocketClient
 	if openAiApiKey != "" {
-		client, err := openai2.NewOpenAIRealtimeClient(openAiApiKey, logger)
+		client, err := openAIHTTP.NewOpenAIRealtimeClient(openAiApiKey, logger)
 		if err == nil {
 			openaiRealtime = client
-		} else if logger != nil {
-			logger.Error(context.Background(), "Failed to initialize OpenAIRealtimeClient", err)
 		}
 	}
 	return &AIProcessor{
@@ -491,9 +489,9 @@ func (a *AIProcessor) TranscribeWithWhisper(ctx context.Context, audio []byte) (
 }
 
 //// TranscribeWithWhisperRealtime streams audio to OpenAI's real-time endpoint and returns a channel of transcription results.
-//func (a *AIProcessor) TranscribeWithWhisperRealtime(ctx context.Context, audioStream <-chan []byte, cfg openai2.RealtimeTranscriptionConfig) (<-chan openai2.TranscriptionResult, error) {
+//func (a *AIProcessor) TranscribeWithWhisperRealtime(ctx context.Context, audioStream <-chan []byte, cfg openAIHTTP.RealtimeTranscriptionConfig) (<-chan openAIHTTP.TranscriptionResult, error) {
 //	if a.openaiRealtime == nil {
-//		return nil, errors.New("OpenAIRealtimeClient not set in AIProcessor")
+//		return nil, errors.New("OpenAIWebsocketClient not set in AIProcessor")
 //	}
 //	return a.openaiRealtime.StartRealtimeTranscription(ctx, audioStream, cfg)
 //}
@@ -506,13 +504,7 @@ func (a *AIProcessor) TranscribeTwilioCall(ctx context.Context) (chan []byte, ch
 
 	// Start transcription goroutine
 	go func() {
-		cfg := openai2.RealtimeTranscriptionConfig{
-			Model:    "whisper-1",
-			Language: "en",
-			// Add additional config as needed
-		}
-
-		results := a.openaiRealtime.StartRealtimeTranscription(ctx, audioChan, cfg)
+		results := a.openaiRealtime.StartRealtimeTranscription(ctx, audioChan)
 
 		for res := range results {
 			if res.Err != nil {
@@ -536,4 +528,8 @@ func (a *AIProcessor) TranscribeTwilioCall(ctx context.Context) (chan []byte, ch
 	}()
 
 	return audioChan, stopChan
+}
+
+func (a *AIProcessor) ConnectToWS(ctx context.Context) {
+	_ = a.openaiRealtime.StartRealtimeTranscription(ctx, nil)
 }

@@ -54,6 +54,7 @@ func (a *API) RegisterRoutes() {
 	apiGroup.POST("billing/webhook", a.billingHandler.HandleWebhook)
 	apiGroup.POST("phone/answer", a.aiHandler.HandleAnswerPhone)
 	apiGroup.GET("phone/media-stream", a.aiHandler.HandleVoice)
+	apiGroup.GET("transcribe", a.aiHandler.HandleTranscribe)
 }
 
 func (a *API) Health() {

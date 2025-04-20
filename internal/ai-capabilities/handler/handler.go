@@ -368,7 +368,7 @@ func (h *Handler) HandleVoice(c *gin.Context) {
 				log.Println("❌ Failed to decode audio:", err)
 				continue
 			}
-			log.Printf("🎧 Received %d audio bytes (audioChan len=%d)", len(audioBytes), len(audioChan))
+			//log.Printf("🎧 Received %d audio bytes", len(audioBytes))
 			select {
 			case audioChan <- audioBytes:
 				h.logger.Debug(ctx, fmt.Sprintf("Sent %d bytes to audioChan (len now %d)", len(audioBytes),
@@ -385,4 +385,9 @@ func (h *Handler) HandleVoice(c *gin.Context) {
 			log.Printf("⚠️ Unknown event type: %s", event.Event)
 		}
 	}
+}
+
+func (h *Handler) HandleTranscribe(c *gin.Context) {
+	ctx := c.Request.Context()
+	h.aiCapabilities.ConnectToWS(ctx)
 }

@@ -92,25 +92,24 @@ type TranscriptionChannelResult struct {
 	Err    error
 }
 
-type OpenAIRealtimeClient struct {
+type OpenAIWebsocketClient struct {
 	apiKey string
 	logger *observability.Logger
 	client http.Client
 }
 
-func NewOpenAIRealtimeClient(apiKey string, logger *observability.Logger) (*OpenAIRealtimeClient, error) {
+func NewOpenAIRealtimeClient(apiKey string, logger *observability.Logger) (*OpenAIWebsocketClient, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("OpenAI API key is required")
 	}
 	client := http.Client{
 		Timeout: 10 * time.Second,
 	}
-	return &OpenAIRealtimeClient{apiKey: apiKey, logger: logger, client: client}, nil
+	return &OpenAIWebsocketClient{apiKey: apiKey, logger: logger, client: client}, nil
 }
 
 // StartRealtimeTranscription opens a websocket, creates a session, streams audio, and returns a channel of transcription results.
-func (c *OpenAIRealtimeClient) StartRealtimeTranscription(ctx context.Context, audioStream <-chan []byte,
-	cfg RealtimeTranscriptionConfig) <-chan TranscriptionChannelResult {
+func (c *OpenAIWebsocketClient) StartRealtimeTranscription(ctx context.Context, audioStream <-chan []byte) <-chan TranscriptionChannelResult {
 	results := make(chan TranscriptionChannelResult, 100)
 	go func() {
 		defer close(results)
@@ -225,7 +224,7 @@ func (c *OpenAIRealtimeClient) StartRealtimeTranscription(ctx context.Context, a
 }
 
 // SynthesizeSpeech uses OpenAI's TTS API to synthesize speech from text.
-func (c *OpenAIRealtimeClient) SynthesizeSpeech(ctx context.Context, text string, voice string) ([]byte, error) {
+func (c *OpenAIWebsocketClient) SynthesizeSpeech(ctx context.Context, text string, voice string) ([]byte, error) {
 	url := "https://api.openai.com/v1/audio/speech"
 	jsonBody := map[string]interface{}{
 		"model":           "tts-1", // or "tts-1-hd"
@@ -259,7 +258,7 @@ func (c *OpenAIRealtimeClient) SynthesizeSpeech(ctx context.Context, text string
 	return io.ReadAll(resp.Body)
 }
 
-func (c *OpenAIRealtimeClient) CreateTranscriptionSession(ctx context.Context) (TranscriptionSession, error) {
+func (c *OpenAIWebsocketClient) CreateTranscriptionSession(ctx context.Context) (TranscriptionSession, error) {
 	req := &http.Request{
 		Method: http.MethodPost,
 		URL:    &url.URL{Host: baseRestURL, Path: "/v1/audio/transcriptions"},
