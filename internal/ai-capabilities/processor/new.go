@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/google/generative-ai-go/genai"
@@ -491,17 +490,17 @@ func (a *AIProcessor) TranscribeWithWhisper(ctx context.Context, audio []byte) (
 	return resp.Text, nil
 }
 
-// TranscribeWithWhisperRealtime streams audio to OpenAI's real-time endpoint and returns a channel of transcription results.
-func (a *AIProcessor) TranscribeWithWhisperRealtime(ctx context.Context, audioStream <-chan []byte, cfg openai2.RealtimeTranscriptionConfig) (<-chan openai2.TranscriptionResult, error) {
-	if a.openaiRealtime == nil {
-		return nil, errors.New("OpenAIRealtimeClient not set in AIProcessor")
-	}
-	return a.openaiRealtime.StartRealtimeTranscription(ctx, audioStream, cfg)
-}
+//// TranscribeWithWhisperRealtime streams audio to OpenAI's real-time endpoint and returns a channel of transcription results.
+//func (a *AIProcessor) TranscribeWithWhisperRealtime(ctx context.Context, audioStream <-chan []byte, cfg openai2.RealtimeTranscriptionConfig) (<-chan openai2.TranscriptionResult, error) {
+//	if a.openaiRealtime == nil {
+//		return nil, errors.New("OpenAIRealtimeClient not set in AIProcessor")
+//	}
+//	return a.openaiRealtime.StartRealtimeTranscription(ctx, audioStream, cfg)
+//}
 
 func (a *AIProcessor) TranscribeTwilioCall(ctx context.Context) (chan []byte, chan struct{}) {
 	// Channel for streaming audio to the AI processor
-	audioChan := make(chan []byte, 32)
+	audioChan := make(chan []byte, 4096)
 	// Channel for signaling when to stop transcription
 	stopChan := make(chan struct{})
 
@@ -513,20 +512,26 @@ func (a *AIProcessor) TranscribeTwilioCall(ctx context.Context) (chan []byte, ch
 			// Add additional config as needed
 		}
 
-		results, err := a.openaiRealtime.StartRealtimeTranscription(ctx, audioChan, cfg)
-		if err != nil {
-			log.Println("❌ Real-time transcription failed:", err)
-			return
-		}
+		results := a.openaiRealtime.StartRealtimeTranscription(ctx, audioChan, cfg)
+
 		for res := range results {
-			if res.Type == "delta" && res.Delta != "" {
-				log.Printf("📝 Whisper delta: %s", res.Delta)
-				// Optionally: send delta to client (e.g., via WebSocket)
-			} else if res.Type == "completed" && res.Transcript != "" {
-				log.Printf("📝 Whisper transcript: %s", res.Transcript)
-				// Optionally: send final transcript to client or store
+			if res.Err != nil {
+				a.logger.Error(ctx, "❌ Real-time transcription error:", res.Err)
+				return
 			}
+
+			a.logger.Info(ctx, fmt.Sprintf("📝 Whisper transcript: %s", res.Result.Transcript))
 		}
+
+		//for res := range results {
+		//	if res.Type == "delta" && res.Delta != "" {
+		//		a.logger.Info(ctx, fmt.Sprintf("📝 Whisper delta: %s", res.Delta))
+		//		// Optionally: send delta to client (e.g., via WebSocket)
+		//	} else if res.Type == "completed" && res.Transcript != "" {
+		//		a.logger.Info(ctx, fmt.Sprintf("📝 Whisper transcript: %s", res.Transcript))
+		//		// Optionally: send final transcript to client or store
+		//	}
+		//}
 		close(stopChan)
 	}()
 

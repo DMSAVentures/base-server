@@ -368,10 +368,11 @@ func (h *Handler) HandleVoice(c *gin.Context) {
 				log.Println("❌ Failed to decode audio:", err)
 				continue
 			}
-			log.Printf("🎧 Received %d audio bytes", len(audioBytes))
+			log.Printf("🎧 Received %d audio bytes (audioChan len=%d)", len(audioBytes), len(audioChan))
 			select {
 			case audioChan <- audioBytes:
-				// sent successfully
+				h.logger.Debug(ctx, fmt.Sprintf("Sent %d bytes to audioChan (len now %d)", len(audioBytes),
+					len(audioChan)))
 			default:
 				log.Println("⚠️ Audio channel full, dropping chunk")
 			}
