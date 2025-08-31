@@ -3,7 +3,7 @@ package main
 import (
 	aiHandler "base-server/internal/ai-capabilities/handler"
 	AICapabilities "base-server/internal/ai-capabilities/processor"
-	"base-server/internal/api"
+	apisetup "base-server/internal/api"
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
 	"base-server/internal/clients/googleoauth"
@@ -15,6 +15,8 @@ import (
 	"base-server/internal/money/subscriptions"
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	voiceCallHandler "base-server/internal/voicecall/handler"
+	voiceCallProcessor "base-server/internal/voicecall/processor"
 	"context"
 	"errors"
 	"fmt"
@@ -215,7 +217,10 @@ func main() {
 
 	aiHandler := aiHandler.New(aiCapability, logger)
 
-	api := api.New(rootRouter, authHandler, billingHandler, aiHandler)
+	newVoiceCallProcessor := voiceCallProcessor.NewVoiceCallProcessor(aiCapability, logger)
+	voicecallHandler := voiceCallHandler.New(newVoiceCallProcessor, logger)
+
+	api := apisetup.New(rootRouter, authHandler, billingHandler, aiHandler, voicecallHandler)
 	api.RegisterRoutes()
 
 	server := &http.Server{

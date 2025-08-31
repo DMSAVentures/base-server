@@ -5,7 +5,10 @@
       "Bash(go mod:*)",
       "Bash(go doc:*)",
       "Bash(go build:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:pkg.go.dev)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []

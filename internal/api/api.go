@@ -4,24 +4,28 @@ import (
 	aiHandler "base-server/internal/ai-capabilities/handler"
 	authHandler "base-server/internal/auth/handler"
 	billingHandler "base-server/internal/money/billing/handler"
+	voiceCallHandler "base-server/internal/voicecall/handler"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
 type API struct {
-	router         *gin.RouterGroup
-	authHandler    authHandler.Handler
-	billingHandler billingHandler.Handler
-	aiHandler      aiHandler.Handler
+	router           *gin.RouterGroup
+	authHandler      authHandler.Handler
+	billingHandler   billingHandler.Handler
+	aiHandler        aiHandler.Handler
+	voicecallHandler voiceCallHandler.Handler
 }
 
-func New(router *gin.RouterGroup, authHandler authHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler) API {
+func New(router *gin.RouterGroup, authHandler authHandler.Handler, handler billingHandler.Handler,
+	aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler) API {
 	return API{
-		router:         router,
-		authHandler:    authHandler,
-		billingHandler: handler,
-		aiHandler:      aiHandler,
+		router:           router,
+		authHandler:      authHandler,
+		billingHandler:   handler,
+		aiHandler:        aiHandler,
+		voicecallHandler: voicecallHandler,
 	}
 }
 
@@ -52,9 +56,10 @@ func (a *API) RegisterRoutes() {
 	}
 	apiGroup.GET("billing/plans", a.billingHandler.ListPrices)
 	apiGroup.POST("billing/webhook", a.billingHandler.HandleWebhook)
-	apiGroup.POST("phone/answer", a.aiHandler.HandleAnswerPhone)
-	apiGroup.GET("phone/media-stream", a.aiHandler.HandleVoice)
-	apiGroup.GET("transcribe", a.aiHandler.HandleTranscribe)
+	apiGroup.POST("phone/answer", a.voicecallHandler.HandleAnswerPhone)
+	apiGroup.GET("audio/transcribe", a.voicecallHandler.HandleVoice)               // WebSocket requires GET
+	apiGroup.POST("phone/answer-agent", a.voicecallHandler.HandleAnswerVoiceAgent) // TwiML for voice agent
+	apiGroup.GET("phone/voice-agent", a.voicecallHandler.HandleVoiceAgent)         // WebSocket for voice agent
 }
 
 func (a *API) Health() {

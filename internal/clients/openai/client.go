@@ -67,11 +67,11 @@ type TranscriptionSession struct {
 }
 
 type TranscriptionSessionRequest struct {
-	Modalities               []string                 `json:"modalities"`
-	InputAudioFormat         string                   `json:"input_audio_format"`
-	InputAudioNoiseReduction map[string]string        `json:"input_audio_noise_reduction"`
-	InputAudioTranscription  TranscriptionModelConfig `json:"input_audio_transcription"`
-	TurnDetection            TurnDetectionConfig      `json:"turn_detection"`
+	Modalities               []string                 `json:"modalities,omitempty"`
+	InputAudioFormat         string                   `json:"input_audio_format,omitempty"`
+	InputAudioNoiseReduction map[string]string        `json:"input_audio_noise_reduction,omitempty"`
+	InputAudioTranscription  TranscriptionModelConfig `json:"input_audio_transcription,omitempty"`
+	TurnDetection            TurnDetectionConfig      `json:"turn_detection,omitempty"`
 }
 
 type Session struct {
@@ -80,17 +80,17 @@ type Session struct {
 }
 
 type RealtimeTranscriptionSessionConfig struct {
-	InputAudioFormat         string                   `json:"input_audio_format"`
-	InputAudioNoiseReduction map[string]string        `json:"input_audio_noise_reduction"`
-	InputAudioTranscription  TranscriptionModelConfig `json:"input_audio_transcription"`
-	Instructions             string                   `json:"instructions"`
-	MaxResponseOutputTokens  int                      `json:"max_response_output_tokens"`
-	Modalities               []string                 `json:"modalities"`
-	OutputAudioFormat        string                   `json:"output_audio_format"`
-	Temperature              int                      `json:"temperature"`
-	ToolChoice               string                   `json:"tool_choice"`
-	Tools                    []string                 `json:"tools"`
-	TurnDetection            TurnDetectionConfig      `json:"turn_detection"`
+	InputAudioFormat         string                   `json:"input_audio_format,omitempty"`
+	InputAudioNoiseReduction map[string]string        `json:"input_audio_noise_reduction,omitempty"`
+	InputAudioTranscription  TranscriptionModelConfig `json:"input_audio_transcription,omitempty"`
+	Instructions             string                   `json:"instructions,omitempty"`
+	MaxResponseOutputTokens  int                      `json:"max_response_output_tokens,omitempty"`
+	Modalities               []string                 `json:"modalities,omitempty"`
+	OutputAudioFormat        string                   `json:"output_audio_format,omitempty"`
+	Temperature              int                      `json:"temperature,omitempty"`
+	ToolChoice               string                   `json:"tool_choice,omitempty"`
+	Tools                    []string                 `json:"tools,omitempty"`
+	TurnDetection            TurnDetectionConfig      `json:"turn_detection,omitempty"`
 }
 
 type TranscriptionChannelResult struct {
@@ -117,101 +117,112 @@ func NewOpenAIRealtimeClient(apiKey string, logger *observability.Logger) (*Open
 // StartRealtimeTranscription opens a websocket, creates a session, streams audio, and returns a channel of transcription results.
 func (c *OpenAIWebsocketClient) StartRealtimeTranscription(ctx context.Context, audioStream <-chan []byte) <-chan TranscriptionChannelResult {
 	results := make(chan TranscriptionChannelResult, 100)
+
+	dialer := websocket.Dialer{}
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer "+c.apiKey)
+	headers.Set("OpenAI-Beta", "realtime=v1")
+
+	openAIURl, err := url.Parse(openAIRealtimeURL)
+	if err != nil {
+		if c.logger != nil {
+			c.logger.Error(ctx, "Failed to parse OpenAI realtime URL", err)
+		}
+		results <- TranscriptionChannelResult{Err: err}
+
+	}
+
+	query := openAIURl.Query()
+	query.Set("intent", "transcription")
+	openAIURl.RawQuery = query.Encode()
+	openURL := openAIURl.String()
+	c.logger.Info(ctx, "Connecting to OpenAI Realtime URL: "+openURL)
+	conn, resp, err := dialer.DialContext(ctx, openURL, headers)
+	if err != nil {
+		if c.logger != nil {
+			c.logger.Error(ctx, "Failed to connect to OpenAI realtime endpoint", err)
+		}
+		results <- TranscriptionChannelResult{Err: err}
+
+	}
+	//defer conn.Close()
+
+	b, _ := io.ReadAll(resp.Body)
+	c.logger.Info(ctx, fmt.Sprintf("Connected to OpenAI Realtime endpoint: %s", string(b)))
+
+	//sess := TranscriptionSessionRequest{
+	//	InputAudioFormat:         "pcm16",
+	//	InputAudioNoiseReduction: map[string]string{"type": "near_field"},
+	//	InputAudioTranscription: TranscriptionModelConfig{
+	//		Language: "en",
+	//		Model:    "gpt-4o-transcribe",
+	//		Prompt:   "Please transcribe this audio.",
+	//	},
+	//	TurnDetection: TurnDetectionConfig{
+	//		Type: "server_vad",
+	//	},
+	//	Modalities: []string{"audio", "text"},
+	//}
+	//
+	//sessUpdate := Session{
+	//	Type:    "session.update",
+	//	Session: sess,
+	//}
+	//
+	//c.logger.Info(ctx, fmt.Sprintf("session to send: %+v\n", sessUpdate))
+	//
+	//err = conn.WriteJSON(sessUpdate)
+	//if err != nil {
+	//	c.logger.Error(ctx, "Failed to send session creation message", err)
+	//	results <- TranscriptionChannelResult{Err: err}
+	//}
+	//time.Sleep(time.Second)
+
+	// 2. Start goroutine to read events
 	go func() {
-		defer close(results)
-		dialer := websocket.Dialer{}
-		headers := http.Header{}
-		headers.Set("Authorization", "Bearer "+c.apiKey)
-		headers.Set("OpenAI-Beta", "realtime=v1")
-
-		openAIURl, err := url.Parse(openAIRealtimeURL)
-		if err != nil {
-			if c.logger != nil {
-				c.logger.Error(ctx, "Failed to parse OpenAI realtime URL", err)
+		for {
+			_, msg, err := conn.ReadMessage()
+			if err != nil {
+				c.logger.Error(ctx, "Failed to receive message", err)
+				close(results)
+				return
 			}
-			results <- TranscriptionChannelResult{Err: err}
-			return
-		}
-
-		query := openAIURl.Query()
-		query.Set("intent", "transcription")
-		openAIURl.RawQuery = query.Encode()
-		openURL := openAIURl.String()
-		c.logger.Info(ctx, "Connecting to OpenAI Realtime URL: "+openURL)
-		conn, resp, err := dialer.DialContext(ctx, openURL, headers)
-		if err != nil {
-			if c.logger != nil {
-				c.logger.Error(ctx, "Failed to connect to OpenAI realtime endpoint", err)
+			var event map[string]interface{}
+			err = json.Unmarshal(msg, &event)
+			if err != nil {
+				c.logger.Error(ctx, "Failed to unmarshal message", err)
+				continue
 			}
-			results <- TranscriptionChannelResult{Err: err}
-			return
-		}
-		b, _ := io.ReadAll(resp.Body)
-		c.logger.Info(ctx, fmt.Sprintf("Connected to OpenAI Realtime endpoint: %s", string(b)))
-
-		defer conn.Close()
-
-		sess := TranscriptionSessionRequest{
-			InputAudioFormat:         "pcm16",
-			InputAudioNoiseReduction: map[string]string{"type": "near_field"},
-			InputAudioTranscription: TranscriptionModelConfig{
-				Language: "en",
-				Model:    "gpt-4o-transcribe",
-				Prompt:   "Please transcribe this audio.",
-			},
-			TurnDetection: TurnDetectionConfig{
-				Type: "server_vad",
-			},
-		}
-
-		sessUpdate := Session{
-			Type:    "session.update",
-			Session: sess,
-		}
-
-		if err := conn.WriteJSON(sessUpdate); err != nil {
-			if c.logger != nil {
-				c.logger.Error(ctx, "Failed to send session creation message", err)
-			}
-			results <- TranscriptionChannelResult{Err: err}
-			return
-		}
-
-		// 2. Start goroutine to read events
-		go func() {
-			for {
-				_, msg, err := conn.ReadMessage()
-				if err != nil {
-					return
-				}
-				var event map[string]interface{}
-				if err := json.Unmarshal(msg, &event); err != nil {
+			typeStr := event["type"].(string)
+			switch typeStr {
+			case "conversation.item.input_audio_transcription.delta":
+				var res TranscriptionDeltaResult
+				if err := json.Unmarshal(msg, &res); err != nil {
+					c.logger.Error(ctx, "Failed to unmarshal delta event", err)
 					continue
 				}
-				typeStr := event["type"].(string)
-				switch typeStr {
-				case "conversation.item.input_audio_transcription.delta":
-					var res TranscriptionDeltaResult
-					if err := json.Unmarshal(msg, &res); err != nil {
-						c.logger.Error(ctx, "Failed to unmarshal delta event", err)
-						continue
-					}
-					c.logger.Info(ctx, fmt.Sprintf("Received delta event %s", res.Delta))
-				case "conversation.item.input_audio_transcription.completed":
-					var res TranscriptionCompletedResult
-					if err := json.Unmarshal(msg, &res); err != nil {
-						c.logger.Error(ctx, "Failed to unmarshal completed event", err)
-						continue
-					}
-					results <- TranscriptionChannelResult{Result: res}
+				c.logger.Info(ctx, fmt.Sprintf("Received delta event %s", res.Delta))
+			case "conversation.item.input_audio_transcription.completed":
+				var res TranscriptionCompletedResult
+				if err := json.Unmarshal(msg, &res); err != nil {
+					c.logger.Error(ctx, "Failed to unmarshal completed event", err)
+					continue
 				}
+				results <- TranscriptionChannelResult{Result: res}
+			default:
+				c.logger.Info(ctx, fmt.Sprintf("Received unknown event type: %s", typeStr))
+				c.logger.Info(ctx, fmt.Sprintf("event: %+v\n", event))
 			}
-		}()
 
-		// 3. Send audio chunks as input_audio_buffer.append events
+		}
+	}()
+
+	// 3. Send audio chunks as input_audio_buffer.append events
+	go func() {
 		for {
 			select {
 			case <-ctx.Done():
+				c.logger.Info(ctx, "Context done, closing connection")
 				return
 			case chunk, ok := <-audioStream:
 				if !ok {
@@ -225,8 +236,8 @@ func (c *OpenAIWebsocketClient) StartRealtimeTranscription(ctx context.Context, 
 				if err := conn.WriteJSON(appendEvent); err != nil {
 					if c.logger != nil {
 						c.logger.Error(ctx, "Failed to send audio chunk", err)
+						return
 					}
-					return
 				}
 				// Optional: throttle to match real-time or API rate limits
 				time.Sleep(40 * time.Millisecond)
