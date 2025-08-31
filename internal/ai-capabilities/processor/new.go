@@ -11,12 +11,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/generative-ai-go/genai"
+	"google.golang.org/genai"
 	"github.com/google/uuid"
 	"github.com/openai/openai-go"
 	openaiOption "github.com/openai/openai-go/option"
-	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
 )
 
 type AIProcessor struct {
@@ -71,27 +69,19 @@ func (a *AIProcessor) ChatTextAI(ctx context.Context, conversationID uuid.UUID,
 	streamingResponseChan := make(chan StreamResponse)
 	fullResponseChan := make(chan ModelResponse, 1)
 
-	var history []*genai.Content
-	var prompt genai.Part
+	var allMessages []*genai.Content
 
-	if len(messages) > 1 {
-		for _, m := range messages[:len(messages)-1] {
-			role := "user"
-			if m.Role == "assistant" {
-				role = "model" // Gemini SDK expects "model"
-			}
-
-			history = append(history, &genai.Content{
-				Role:  role,
-				Parts: []genai.Part{genai.Text(m.Content)},
-			})
+	for _, m := range messages {
+		role := "user"
+		if m.Role == "assistant" {
+			role = "model" // Gemini SDK expects "model"
 		}
-
-		// Last message is the new user prompt
-		prompt = genai.Text(messages[len(messages)-1].Content)
-
-	} else if len(messages) == 1 {
-		prompt = genai.Text(messages[0].Content)
+		// Use genai.Text helper which returns []*Content
+		content := genai.Text(m.Content)
+		if len(content) > 0 {
+			content[0].Role = role
+			allMessages = append(allMessages, content[0])
+		}
 	}
 
 	go func() {
@@ -99,38 +89,31 @@ func (a *AIProcessor) ChatTextAI(ctx context.Context, conversationID uuid.UUID,
 		defer close(fullResponseChan)
 
 		a.logger.Info(ctx, "Starting AI stream")
-		c, err := genai.NewClient(ctx, option.WithAPIKey(a.geminiApiKey))
+		c, err := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey: a.geminiApiKey,
+		})
 		if err != nil {
 			a.logger.Error(ctx, "Failed to create client", err)
 			streamingResponseChan <- StreamResponse{Error: fmt.Errorf("failed to create AI client: %w", err)}
 			return
 		}
-		defer c.Close()
 
-		model := c.GenerativeModel("gemini-2.5-pro-preview-03-25")
-		chat := model.StartChat()
-		chat.History = history
-		iter := chat.SendMessageStream(ctx, prompt)
+		// Use the Models API with GenerateContentStream
+		iter := c.Models.GenerateContentStream(ctx, "gemini-2.5-pro-preview-03-25", allMessages, nil)
 
 		var totalTokens int32 = 0
 		var fullAssistantMessage strings.Builder
 
 		streamingResponseChan <- StreamResponse{Content: "[Conversation_ID]: " + conversationID.String()}
 
-		for {
+		// New iterator API uses range-over-func
+		for resp, err := range iter {
 			select {
 			case <-ctx.Done():
 				a.logger.Info(ctx, "Context cancelled, stopping stream")
 				fullResponseChan <- ModelResponse{TotalTokens: totalTokens, Message: fullAssistantMessage.String()}
 				return
 			default:
-				resp, err := iter.Next()
-				if errors.Is(err, iterator.Done) {
-					a.logger.Info(ctx, "Stream completed")
-					fullResponseChan <- ModelResponse{TotalTokens: totalTokens, Message: fullAssistantMessage.String()}
-					streamingResponseChan <- StreamResponse{Completed: true}
-					return
-				}
 				if err != nil {
 					a.logger.Error(ctx, "Failed to get next response", err)
 					streamingResponseChan <- StreamResponse{Error: fmt.Errorf("failed to get AI response: %w", err)}
@@ -138,16 +121,22 @@ func (a *AIProcessor) ChatTextAI(ctx context.Context, conversationID uuid.UUID,
 				}
 
 				for _, part := range resp.Candidates[0].Content.Parts {
-					bs, err := json.Marshal(part)
-					if err != nil {
-						a.logger.Error(ctx, "Failed to marshal response part", err)
-						streamingResponseChan <- StreamResponse{Error: fmt.Errorf("failed to marshal response: %w", err)}
-						continue
+					// Check if the part has text
+					if part.Text != "" {
+						streamingResponseChan <- StreamResponse{Content: part.Text}
+						fullAssistantMessage.WriteString(part.Text)
+					} else {
+						// For non-text parts, marshal to JSON
+						bs, err := json.Marshal(part)
+						if err != nil {
+							a.logger.Error(ctx, "Failed to marshal response part", err)
+							streamingResponseChan <- StreamResponse{Error: fmt.Errorf("failed to marshal response: %w", err)}
+							continue
+						}
+						stringPart := string(bs)
+						streamingResponseChan <- StreamResponse{Content: stringPart}
+						fullAssistantMessage.WriteString(stringPart)
 					}
-
-					stringPart := string(bs)
-					streamingResponseChan <- StreamResponse{Content: stringPart}
-					fullAssistantMessage.WriteString(stringPart)
 				}
 
 				if resp.UsageMetadata != nil {
@@ -155,6 +144,10 @@ func (a *AIProcessor) ChatTextAI(ctx context.Context, conversationID uuid.UUID,
 				}
 			}
 		}
+		// Stream completed
+		a.logger.Info(ctx, "Stream completed")
+		fullResponseChan <- ModelResponse{TotalTokens: totalTokens, Message: fullAssistantMessage.String()}
+		streamingResponseChan <- StreamResponse{Completed: true}
 	}()
 
 	return streamingResponseChan, fullResponseChan
@@ -169,14 +162,16 @@ Assistant: %s
 
 Title:`, userMsg, assistantMsg)
 
-	c, err := genai.NewClient(ctx, option.WithAPIKey(a.geminiApiKey))
+	c, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey: a.geminiApiKey,
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create Gemini client: %w", err)
 	}
-	defer c.Close()
 
-	model := c.GenerativeModel("gemini-2.5-pro-preview-03-25")
-	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
+	// Use genai.Text helper to create content
+	contents := genai.Text(prompt)
+	resp, err := c.Models.GenerateContent(ctx, "gemini-2.5-pro-preview-03-25", contents, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate title: %w", err)
 	}
@@ -185,13 +180,11 @@ Title:`, userMsg, assistantMsg)
 		return "", fmt.Errorf("no title returned from Gemini")
 	}
 
-	// Safely cast the part to Text and return
-	part, ok := resp.Candidates[0].Content.Parts[0].(genai.Text)
-	if !ok {
-		return "", fmt.Errorf("unexpected response format")
+	// Extract text from the part
+	if resp.Candidates[0].Content.Parts[0].Text != "" {
+		return strings.TrimSpace(resp.Candidates[0].Content.Parts[0].Text), nil
 	}
-
-	return strings.TrimSpace(string(part)), nil
+	return "", fmt.Errorf("unexpected response format")
 }
 
 func (a *AIProcessor) CreateConversation(ctx context.Context, userID uuid.UUID, msg string) (<-chan StreamResponse,
@@ -331,10 +324,10 @@ func (a *AIProcessor) GenerateImageAI(ctx context.Context, conversationID uuid.U
 		client := openai.NewClient(options...)
 
 		image, err := client.Images.Generate(ctx, openai.ImageGenerateParams{
-			Prompt:         prompt,
-			Size:           openai.ImageGenerateParamsSize256x256,
-			Model:          openai.ImageModelDallE2,
-			ResponseFormat: openai.ImageGenerateParamsResponseFormatB64JSON,
+			Prompt: prompt,
+			Size:   openai.ImageGenerateParamsSize1024x1024,
+			Model:  openai.ImageModelGPTImage1,
+			//ResponseFormat: openai.ImageGenerateParamsResponseFormatB64JSON,
 		})
 		if err != nil {
 			a.logger.Error(ctx, "Failed to generate image", err)
