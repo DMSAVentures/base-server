@@ -95,6 +95,7 @@ func (h *Handler) HandleJWTMiddleware(c *gin.Context) {
 		return
 	}
 	c.Set("User-ID", sub)
+	c.Set("Account-ID", claims.AccountID)
 	// Continue to the next handler if the token is valid
 	c.Next()
 }
