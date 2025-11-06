@@ -72,11 +72,16 @@ func Middleware(l *Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Create an initial context with some observability fields.
 		ctx := context.Background()
-		if c.Request.Header.Get("X-Request-ID") == "" {
-			c.Request.Header.Set("X-Request-ID", fmt.Sprintf("req-%s", uuid.New().String()))
+		requestID := c.Request.Header.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = fmt.Sprintf("req-%s", uuid.New().String())
+			c.Request.Header.Set("X-Request-ID", requestID)
 		}
+		// Add request ID to response headers
+		c.Writer.Header().Set("X-Request-ID", requestID)
+
 		ctx = WithFields(ctx,
-			Field{"request_id", c.Writer.Header().Get("X-Request-ID")},
+			Field{"request_id", requestID},
 			Field{"path", c.Request.URL.Path},
 			Field{"method", c.Request.Method},
 		)
@@ -112,7 +117,7 @@ func Middleware(l *Logger) gin.HandlerFunc {
 				MetricField{"path", c.Request.URL.Path},
 				MetricField{"status", status},
 				MetricField{"latency", latency},
-				MetricField{"request_id", c.Writer.Header().Get("X-Request-ID")},
+				MetricField{"request_id", c.Request.Header.Get("X-Request-ID")},
 			)
 		}()
 		c.Next() // Proceed with request handling.
