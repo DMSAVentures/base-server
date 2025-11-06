@@ -13,6 +13,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
+	github.com/lib/pq v1.10.9
 	github.com/openai/openai-go v1.12.0
 	github.com/resendlabs/resend-go v1.7.0
 	github.com/stripe/stripe-go/v79 v79.12.0
