@@ -1,0 +1,2885 @@
+openapi: 3.0.3
+info:
+  title: Viral Waitlist & Referral Marketing Platform API
+  description: |
+    REST API for the Viral Waitlist & Referral Marketing Platform.
+
+    ## Authentication
+
+    All API requests require authentication via:
+    - **API Key:** Header `X-API-Key: sk_live_xxxxx` or `Authorization: Bearer sk_live_xxxxx`
+    - **JWT Token:** For dashboard users, `Authorization: Bearer <jwt>`
+
+    API Key Format:
+    - Test: `sk_test_` (test mode)
+    - Live: `sk_live_` (production)
+
+    ## Rate Limiting
+
+    Rate limits by tier (per minute):
+    - **Free:** 60 requests
+    - **Starter:** 60 requests
+    - **Pro:** 180 requests
+    - **Enterprise:** 600+ requests (custom)
+
+    Response headers include:
+    - `X-RateLimit-Limit`: Maximum requests per window
+    - `X-RateLimit-Remaining`: Remaining requests in current window
+    - `X-RateLimit-Reset`: Unix timestamp when the rate limit resets
+    - `X-Request-ID`: Unique request identifier for debugging
+
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.example.com
+    description: Production server
+  - url: https://api-staging.example.com
+    description: Staging server
+  - url: http://localhost:8080
+    description: Development server
+
+tags:
+  - name: Campaigns
+    description: Campaign management endpoints
+  - name: Waitlist Users
+    description: Waitlist user management endpoints
+  - name: Referrals
+    description: Referral tracking and management endpoints
+  - name: Rewards
+    description: Reward configuration and management endpoints
+  - name: Email Templates
+    description: Email template management endpoints
+  - name: Analytics
+    description: Analytics and reporting endpoints
+  - name: Webhooks
+    description: Webhook configuration and management endpoints
+
+security:
+  - ApiKeyAuth: []
+  - BearerAuth: []
+
+paths:
+  # ==================== CAMPAIGNS ====================
+  /api/v1/campaigns:
+    post:
+      tags:
+        - Campaigns
+      summary: Create a new campaign
+      description: Creates a new waitlist or referral campaign
+      operationId: createCampaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCampaignRequest'
+      responses:
+        '201':
+          description: Campaign created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    get:
+      tags:
+        - Campaigns
+      summary: List all campaigns
+      description: Retrieve a list of all campaigns for the authenticated account
+      operationId: listCampaigns
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          description: Filter by campaign status
+          schema:
+            type: string
+            enum: [draft, active, paused, completed]
+        - name: type
+          in: query
+          description: Filter by campaign type
+          schema:
+            type: string
+            enum: [waitlist, referral, contest]
+      responses:
+        '200':
+          description: List of campaigns
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListCampaignsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}:
+    parameters:
+      - $ref: '#/components/parameters/CampaignIdParam'
+
+    get:
+      tags:
+        - Campaigns
+      summary: Get campaign by ID
+      description: Retrieve detailed information about a specific campaign
+      operationId: getCampaign
+      responses:
+        '200':
+          description: Campaign details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags:
+        - Campaigns
+      summary: Update campaign
+      description: Update an existing campaign's configuration
+      operationId: updateCampaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCampaignRequest'
+      responses:
+        '200':
+          description: Campaign updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - Campaigns
+      summary: Delete campaign
+      description: Soft delete a campaign (can be recovered)
+      operationId: deleteCampaign
+      responses:
+        '204':
+          description: Campaign deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/status:
+    patch:
+      tags:
+        - Campaigns
+      summary: Update campaign status
+      description: Update the status of a campaign (draft, active, paused, completed)
+      operationId: updateCampaignStatus
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [draft, active, paused, completed]
+                  description: New status for the campaign
+      responses:
+        '200':
+          description: Campaign status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Campaign'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== WAITLIST USERS ====================
+  /api/v1/campaigns/{campaign_id}/users:
+    parameters:
+      - $ref: '#/components/parameters/CampaignIdParam'
+
+    post:
+      tags:
+        - Waitlist Users
+      summary: Sign up a user to the waitlist
+      description: Add a new user to the campaign waitlist
+      operationId: signupUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: User signed up successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignupResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    get:
+      tags:
+        - Waitlist Users
+      summary: List waitlist users
+      description: Retrieve a paginated list of waitlist users for a campaign
+      operationId: listUsers
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          description: Filter by user status
+          schema:
+            type: string
+            enum: [pending, verified, converted, removed, blocked]
+        - name: sort
+          in: query
+          description: Sort field
+          schema:
+            type: string
+            enum: [position, created_at, referral_count]
+            default: position
+        - name: order
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        '200':
+          description: List of waitlist users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListUsersResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/users/{user_id}:
+    parameters:
+      - $ref: '#/components/parameters/CampaignIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+
+    get:
+      tags:
+        - Waitlist Users
+      summary: Get user details
+      description: Retrieve detailed information about a specific waitlist user
+      operationId: getUser
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistUser'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags:
+        - Waitlist Users
+      summary: Update user information
+      description: Update a waitlist user's information
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WaitlistUser'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - Waitlist Users
+      summary: Remove user from waitlist
+      description: Remove a user from the waitlist (soft delete)
+      operationId: deleteUser
+      responses:
+        '204':
+          description: User removed successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/users/search:
+    post:
+      tags:
+        - Waitlist Users
+      summary: Search waitlist users
+      description: Search and filter waitlist users with advanced criteria
+      operationId: searchUsers
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+                  description: Search query (email, name)
+                status:
+                  type: array
+                  items:
+                    type: string
+                    enum: [pending, verified, converted, removed, blocked]
+                verified:
+                  type: boolean
+                  description: Filter by email verification status
+                min_referrals:
+                  type: integer
+                  description: Minimum referral count
+                date_from:
+                  type: string
+                  format: date-time
+                  description: Filter users created after this date
+                date_to:
+                  type: string
+                  format: date-time
+                  description: Filter users created before this date
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListUsersResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/users/import:
+    post:
+      tags:
+        - Waitlist Users
+      summary: Bulk import users
+      description: Import multiple users to the waitlist from CSV or JSON
+      operationId: importUsers
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV or JSON file containing user data
+                format:
+                  type: string
+                  enum: [csv, json]
+                  default: csv
+      responses:
+        '202':
+          description: Import job accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    format: uuid
+                  message:
+                    type: string
+                  status:
+                    type: string
+                    enum: [pending, processing]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/users/export:
+    post:
+      tags:
+        - Waitlist Users
+      summary: Export users
+      description: Export waitlist users to CSV or JSON format
+      operationId: exportUsers
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:
+                  type: string
+                  enum: [csv, json]
+                  default: csv
+                filters:
+                  type: object
+                  description: Optional filters to apply before export
+      responses:
+        '202':
+          description: Export job accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                    format: uuid
+                  message:
+                    type: string
+                  download_url:
+                    type: string
+                    format: uri
+                    description: URL to download the export (available after processing)
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/users/{user_id}/verify:
+    post:
+      tags:
+        - Waitlist Users
+      summary: Verify user email
+      description: Manually verify a user's email address
+      operationId: verifyUser
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: User verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/users/{user_id}/resend-verification:
+    post:
+      tags:
+        - Waitlist Users
+      summary: Resend verification email
+      description: Resend the email verification link to a user
+      operationId: resendVerification
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: Verification email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  sent_at:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== REFERRALS ====================
+  /api/v1/campaigns/{campaign_id}/referrals:
+    get:
+      tags:
+        - Referrals
+      summary: List all referrals
+      description: Retrieve a list of all referrals for a campaign
+      operationId: listReferrals
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          description: Filter by referral status
+          schema:
+            type: string
+            enum: [pending, verified, converted, invalid]
+      responses:
+        '200':
+          description: List of referrals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListReferralsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/referrals/track:
+    post:
+      tags:
+        - Referrals
+      summary: Track a referral
+      description: Track when someone clicks on a referral link
+      operationId: trackReferral
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - referral_code
+              properties:
+                referral_code:
+                  type: string
+                  description: The referral code from the link
+                source:
+                  type: string
+                  description: Where the referral came from
+                  enum: [email, twitter, facebook, linkedin, whatsapp, direct]
+      responses:
+        '200':
+          description: Referral tracked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  referrer:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/users/{user_id}/referrals:
+    get:
+      tags:
+        - Referrals
+      summary: Get user's referrals
+      description: Retrieve all referrals made by a specific user
+      operationId: getUserReferrals
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: User's referrals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  referrals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Referral'
+                  total_referrals:
+                    type: integer
+                  verified_referrals:
+                    type: integer
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/users/{user_id}/referral-link:
+    get:
+      tags:
+        - Referrals
+      summary: Get user's referral link
+      description: Retrieve the unique referral link for a user
+      operationId: getReferralLink
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/UserIdParam'
+      responses:
+        '200':
+          description: Referral link
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  referral_link:
+                    type: string
+                    format: uri
+                  referral_code:
+                    type: string
+                  share_links:
+                    type: object
+                    properties:
+                      twitter:
+                        type: string
+                        format: uri
+                      facebook:
+                        type: string
+                        format: uri
+                      linkedin:
+                        type: string
+                        format: uri
+                      whatsapp:
+                        type: string
+                        format: uri
+                      email:
+                        type: string
+                        format: uri
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== REWARDS ====================
+  /api/v1/campaigns/{campaign_id}/rewards:
+    parameters:
+      - $ref: '#/components/parameters/CampaignIdParam'
+
+    post:
+      tags:
+        - Rewards
+      summary: Create a reward
+      description: Create a new reward for the campaign
+      operationId: createReward
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRewardRequest'
+      responses:
+        '201':
+          description: Reward created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reward'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    get:
+      tags:
+        - Rewards
+      summary: List rewards
+      description: Retrieve all rewards configured for a campaign
+      operationId: listRewards
+      responses:
+        '200':
+          description: List of rewards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reward'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/rewards/{reward_id}:
+    parameters:
+      - $ref: '#/components/parameters/CampaignIdParam'
+      - $ref: '#/components/parameters/RewardIdParam'
+
+    get:
+      tags:
+        - Rewards
+      summary: Get reward details
+      description: Retrieve detailed information about a specific reward
+      operationId: getReward
+      responses:
+        '200':
+          description: Reward details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reward'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags:
+        - Rewards
+      summary: Update reward
+      description: Update a reward's configuration
+      operationId: updateReward
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRewardRequest'
+      responses:
+        '200':
+          description: Reward updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reward'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - Rewards
+      summary: Delete reward
+      description: Delete a reward configuration
+      operationId: deleteReward
+      responses:
+        '204':
+          description: Reward deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/users/{user_id}/rewards:
+    parameters:
+      - $ref: '#/components/parameters/CampaignIdParam'
+      - $ref: '#/components/parameters/UserIdParam'
+
+    post:
+      tags:
+        - Rewards
+      summary: Grant reward to user
+      description: Manually grant a reward to a specific user
+      operationId: grantReward
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reward_id
+              properties:
+                reward_id:
+                  type: string
+                  format: uuid
+                reason:
+                  type: string
+                  description: Optional reason for manual grant
+      responses:
+        '201':
+          description: Reward granted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserReward'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    get:
+      tags:
+        - Rewards
+      summary: Get user's rewards
+      description: Retrieve all rewards earned by a specific user
+      operationId: getUserRewards
+      responses:
+        '200':
+          description: User's rewards
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserReward'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== EMAIL TEMPLATES ====================
+  /api/v1/campaigns/{campaign_id}/email-templates:
+    parameters:
+      - $ref: '#/components/parameters/CampaignIdParam'
+
+    post:
+      tags:
+        - Email Templates
+      summary: Create email template
+      description: Create a new email template for the campaign
+      operationId: createEmailTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEmailTemplateRequest'
+      responses:
+        '201':
+          description: Email template created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    get:
+      tags:
+        - Email Templates
+      summary: List email templates
+      description: Retrieve all email templates for a campaign
+      operationId: listEmailTemplates
+      parameters:
+        - name: type
+          in: query
+          description: Filter by template type
+          schema:
+            type: string
+            enum: [verification, welcome, position_update, reward_earned, milestone, custom]
+      responses:
+        '200':
+          description: List of email templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmailTemplate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/email-templates/{template_id}:
+    parameters:
+      - $ref: '#/components/parameters/CampaignIdParam'
+      - $ref: '#/components/parameters/TemplateIdParam'
+
+    get:
+      tags:
+        - Email Templates
+      summary: Get email template
+      description: Retrieve a specific email template
+      operationId: getEmailTemplate
+      responses:
+        '200':
+          description: Email template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplate'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags:
+        - Email Templates
+      summary: Update email template
+      description: Update an email template
+      operationId: updateEmailTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateEmailTemplateRequest'
+      responses:
+        '200':
+          description: Email template updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmailTemplate'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - Email Templates
+      summary: Delete email template
+      description: Delete an email template
+      operationId: deleteEmailTemplate
+      responses:
+        '204':
+          description: Email template deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/email-templates/{template_id}/send-test:
+    post:
+      tags:
+        - Email Templates
+      summary: Send test email
+      description: Send a test email using this template
+      operationId: sendTestEmail
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/TemplateIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - recipient_email
+              properties:
+                recipient_email:
+                  type: string
+                  format: email
+                  description: Email address to send test to
+                test_data:
+                  type: object
+                  description: Test data for template variables
+      responses:
+        '200':
+          description: Test email sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  sent_at:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== ANALYTICS ====================
+  /api/v1/campaigns/{campaign_id}/analytics/overview:
+    get:
+      tags:
+        - Analytics
+      summary: Get analytics overview
+      description: Retrieve high-level analytics for a campaign
+      operationId: getAnalyticsOverview
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+      responses:
+        '200':
+          description: Analytics overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOverview'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/analytics/conversions:
+    get:
+      tags:
+        - Analytics
+      summary: Get conversion analytics
+      description: Retrieve conversion funnel analytics
+      operationId: getConversionAnalytics
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/DateRangeParams'
+      responses:
+        '200':
+          description: Conversion analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_signups:
+                    type: integer
+                  total_verified:
+                    type: integer
+                  total_converted:
+                    type: integer
+                  verification_rate:
+                    type: number
+                    format: float
+                  conversion_rate:
+                    type: number
+                    format: float
+                  funnel_data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        stage:
+                          type: string
+                        count:
+                          type: integer
+                        percentage:
+                          type: number
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/analytics/referrals:
+    get:
+      tags:
+        - Analytics
+      summary: Get referral analytics
+      description: Retrieve referral performance analytics
+      operationId: getReferralAnalytics
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/DateRangeParams'
+      responses:
+        '200':
+          description: Referral analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_referrals:
+                    type: integer
+                  verified_referrals:
+                    type: integer
+                  average_referrals_per_user:
+                    type: number
+                    format: float
+                  viral_coefficient:
+                    type: number
+                    format: float
+                    description: K-factor (average referrals that convert)
+                  top_referrers:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TopReferrer'
+                  referral_sources:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SourceBreakdown'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/analytics/time-series:
+    get:
+      tags:
+        - Analytics
+      summary: Get time series data
+      description: Retrieve time-series analytics data
+      operationId: getTimeSeriesAnalytics
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/DateRangeParams'
+        - name: granularity
+          in: query
+          description: Time granularity for data points
+          schema:
+            type: string
+            enum: [hour, day, week, month]
+            default: day
+        - name: metrics
+          in: query
+          description: Comma-separated list of metrics to retrieve
+          schema:
+            type: string
+            example: "signups,verified,referrals"
+      responses:
+        '200':
+          description: Time series data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date:
+                      type: string
+                      format: date-time
+                    signups:
+                      type: integer
+                    verified:
+                      type: integer
+                    referrals:
+                      type: integer
+                    emails_sent:
+                      type: integer
+                    emails_opened:
+                      type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/analytics/sources:
+    get:
+      tags:
+        - Analytics
+      summary: Get source analytics
+      description: Retrieve traffic source breakdown
+      operationId: getSourceAnalytics
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/DateRangeParams'
+      responses:
+        '200':
+          description: Source analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sources:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SourceBreakdown'
+                  utm_campaigns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        utm_campaign:
+                          type: string
+                        count:
+                          type: integer
+                  utm_sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        utm_source:
+                          type: string
+                        count:
+                          type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/campaigns/{campaign_id}/analytics/funnel:
+    get:
+      tags:
+        - Analytics
+      summary: Get conversion funnel
+      description: Retrieve conversion funnel visualization data
+      operationId: getFunnelAnalytics
+      parameters:
+        - $ref: '#/components/parameters/CampaignIdParam'
+        - $ref: '#/components/parameters/DateRangeParams'
+      responses:
+        '200':
+          description: Funnel analytics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  funnel_steps:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        step:
+                          type: string
+                          enum: [landed, signed_up, verified, referred, converted]
+                        count:
+                          type: integer
+                        percentage:
+                          type: number
+                          format: float
+                        drop_off_rate:
+                          type: number
+                          format: float
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # ==================== WEBHOOKS ====================
+  /api/v1/webhooks:
+    post:
+      tags:
+        - Webhooks
+      summary: Create webhook
+      description: Create a new webhook endpoint
+      operationId: createWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+      responses:
+        '201':
+          description: Webhook created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhook:
+                    $ref: '#/components/schemas/Webhook'
+                  secret:
+                    type: string
+                    description: Webhook signing secret (only returned once)
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    get:
+      tags:
+        - Webhooks
+      summary: List webhooks
+      description: Retrieve all webhooks for the authenticated account
+      operationId: listWebhooks
+      parameters:
+        - name: campaign_id
+          in: query
+          description: Filter by campaign ID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of webhooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/webhooks/{webhook_id}:
+    parameters:
+      - $ref: '#/components/parameters/WebhookIdParam'
+
+    get:
+      tags:
+        - Webhooks
+      summary: Get webhook details
+      description: Retrieve detailed information about a webhook
+      operationId: getWebhook
+      responses:
+        '200':
+          description: Webhook details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    put:
+      tags:
+        - Webhooks
+      summary: Update webhook
+      description: Update a webhook's configuration
+      operationId: updateWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWebhookRequest'
+      responses:
+        '200':
+          description: Webhook updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    delete:
+      tags:
+        - Webhooks
+      summary: Delete webhook
+      description: Delete a webhook endpoint
+      operationId: deleteWebhook
+      responses:
+        '204':
+          description: Webhook deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/webhooks/{webhook_id}/deliveries:
+    get:
+      tags:
+        - Webhooks
+      summary: List webhook deliveries
+      description: Retrieve delivery history for a webhook
+      operationId: listWebhookDeliveries
+      parameters:
+        - $ref: '#/components/parameters/WebhookIdParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: status
+          in: query
+          description: Filter by delivery status
+          schema:
+            type: string
+            enum: [pending, success, failed]
+      responses:
+        '200':
+          description: Webhook delivery history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListWebhookDeliveriesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/webhooks/{webhook_id}/test:
+    post:
+      tags:
+        - Webhooks
+      summary: Test webhook
+      description: Send a test event to a webhook endpoint
+      operationId: testWebhook
+      parameters:
+        - $ref: '#/components/parameters/WebhookIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event_type:
+                  type: string
+                  description: Event type to send in test
+                  default: "webhook.test"
+      responses:
+        '200':
+          description: Test webhook sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  delivery:
+                    $ref: '#/components/schemas/WebhookDelivery'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API Key authentication (sk_live_* or sk_test_*)
+
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token authentication for dashboard users
+
+  parameters:
+    CampaignIdParam:
+      name: campaign_id
+      in: path
+      required: true
+      description: Campaign unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    UserIdParam:
+      name: user_id
+      in: path
+      required: true
+      description: Waitlist user unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    RewardIdParam:
+      name: reward_id
+      in: path
+      required: true
+      description: Reward unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    TemplateIdParam:
+      name: template_id
+      in: path
+      required: true
+      description: Email template unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    WebhookIdParam:
+      name: webhook_id
+      in: path
+      required: true
+      description: Webhook unique identifier
+      schema:
+        type: string
+        format: uuid
+
+    PageParam:
+      name: page
+      in: query
+      description: Page number for pagination
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    DateRangeParams:
+      name: date_from
+      in: query
+      description: Start date for analytics range
+      schema:
+        type: string
+        format: date-time
+
+  responses:
+    BadRequest:
+      description: Bad request - Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            validation:
+              value:
+                error: "invalid request"
+            missing_field:
+              value:
+                error: "email is required"
+
+    Unauthorized:
+      description: Unauthorized - Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Authorization token is missing or invalid"
+
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "insufficient permissions"
+
+    NotFound:
+      description: Not found - Resource does not exist
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "campaign not found"
+
+    Conflict:
+      description: Conflict - Resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "email already exists"
+
+    TooManyRequests:
+      description: Too many requests - Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          description: Maximum requests per window
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: Remaining requests in current window
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          description: Unix timestamp when rate limit resets
+          schema:
+            type: integer
+        Retry-After:
+          description: Seconds to wait before retrying
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "rate limit exceeded"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "internal server error"
+
+  schemas:
+    # ==================== ERROR SCHEMA ====================
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+      example:
+        error: "invalid request"
+
+    # ==================== CORE MODELS ====================
+    Campaign:
+      type: object
+      required:
+        - id
+        - account_id
+        - name
+        - slug
+        - status
+        - type
+      properties:
+        id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, paused, completed]
+        type:
+          type: string
+          enum: [waitlist, referral, contest]
+        launch_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        form_config:
+          $ref: '#/components/schemas/FormConfig'
+        referral_config:
+          $ref: '#/components/schemas/ReferralConfig'
+        email_config:
+          $ref: '#/components/schemas/EmailConfig'
+        branding_config:
+          $ref: '#/components/schemas/BrandingConfig'
+        privacy_policy_url:
+          type: string
+          format: uri
+        terms_url:
+          type: string
+          format: uri
+        max_signups:
+          type: integer
+        total_signups:
+          type: integer
+        total_verified:
+          type: integer
+        total_referrals:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WaitlistUser:
+      type: object
+      required:
+        - id
+        - campaign_id
+        - email
+        - status
+        - position
+        - referral_code
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        status:
+          type: string
+          enum: [pending, verified, converted, removed, blocked]
+        position:
+          type: integer
+          description: Current position in waitlist
+        original_position:
+          type: integer
+          description: Original position when signed up
+        referral_code:
+          type: string
+          description: Unique referral code for this user
+        referred_by_id:
+          type: string
+          format: uuid
+        referral_count:
+          type: integer
+          description: Total number of referrals
+        verified_referral_count:
+          type: integer
+          description: Number of verified referrals
+        points:
+          type: integer
+        email_verified:
+          type: boolean
+        verified_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [direct, referral, social, ad]
+        utm_source:
+          type: string
+        utm_medium:
+          type: string
+        utm_campaign:
+          type: string
+        utm_term:
+          type: string
+        utm_content:
+          type: string
+        country_code:
+          type: string
+          minLength: 2
+          maxLength: 2
+        city:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        marketing_consent:
+          type: boolean
+        marketing_consent_at:
+          type: string
+          format: date-time
+        terms_accepted:
+          type: boolean
+        terms_accepted_at:
+          type: string
+          format: date-time
+        last_activity_at:
+          type: string
+          format: date-time
+        share_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Referral:
+      type: object
+      required:
+        - id
+        - campaign_id
+        - referrer_id
+        - referred_id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        referrer_id:
+          type: string
+          format: uuid
+        referred_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, verified, converted, invalid]
+        source:
+          type: string
+          enum: [email, twitter, facebook, linkedin, whatsapp, direct]
+        verified_at:
+          type: string
+          format: date-time
+        converted_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Reward:
+      type: object
+      required:
+        - id
+        - campaign_id
+        - name
+        - type
+        - trigger_type
+        - delivery_method
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        type:
+          type: string
+          enum: [early_access, discount, premium_feature, merchandise, custom]
+        config:
+          $ref: '#/components/schemas/RewardConfig'
+        trigger_type:
+          type: string
+          enum: [referral_count, position, milestone, manual]
+        trigger_config:
+          $ref: '#/components/schemas/TriggerConfig'
+        delivery_method:
+          type: string
+          enum: [email, webhook, manual]
+        delivery_config:
+          type: object
+          additionalProperties: true
+        total_available:
+          type: integer
+        total_claimed:
+          type: integer
+        user_limit:
+          type: integer
+          default: 1
+        status:
+          type: string
+          enum: [active, paused, expired]
+        starts_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserReward:
+      type: object
+      required:
+        - id
+        - user_id
+        - reward_id
+        - campaign_id
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        reward_id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, earned, delivered, redeemed, revoked, expired]
+        reward_data:
+          type: object
+          description: Snapshot of reward details at time of earning
+          properties:
+            code:
+              type: string
+            value:
+              type: string
+            instructions:
+              type: string
+        earned_at:
+          type: string
+          format: date-time
+        delivered_at:
+          type: string
+          format: date-time
+        redeemed_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        delivery_attempts:
+          type: integer
+        delivery_error:
+          type: string
+        revoked_reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EmailTemplate:
+      type: object
+      required:
+        - id
+        - campaign_id
+        - name
+        - type
+        - subject
+        - html_body
+        - text_body
+      properties:
+        id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 255
+        type:
+          type: string
+          enum: [verification, welcome, position_update, reward_earned, milestone, custom]
+        subject:
+          type: string
+          maxLength: 255
+        html_body:
+          type: string
+          description: HTML email body with template variables
+        text_body:
+          type: string
+          description: Plain text email body with template variables
+        enabled:
+          type: boolean
+          default: true
+        send_automatically:
+          type: boolean
+          default: true
+        variant_name:
+          type: string
+        variant_weight:
+          type: integer
+          default: 100
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Webhook:
+      type: object
+      required:
+        - id
+        - account_id
+        - url
+        - events
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+        campaign_id:
+          type: string
+          format: uuid
+          description: Optional - campaign-specific webhook
+        url:
+          type: string
+          format: uri
+          maxLength: 500
+        events:
+          type: array
+          items:
+            type: string
+            enum:
+              - user.created
+              - user.updated
+              - user.verified
+              - user.deleted
+              - user.position_changed
+              - user.converted
+              - referral.created
+              - referral.verified
+              - referral.converted
+              - reward.earned
+              - reward.delivered
+              - reward.redeemed
+              - campaign.milestone
+              - campaign.launched
+              - campaign.completed
+              - email.sent
+              - email.delivered
+              - email.opened
+              - email.clicked
+              - email.bounced
+        status:
+          type: string
+          enum: [active, paused, failed]
+        retry_enabled:
+          type: boolean
+          default: true
+        max_retries:
+          type: integer
+          default: 5
+        total_sent:
+          type: integer
+        total_failed:
+          type: integer
+        last_success_at:
+          type: string
+          format: date-time
+        last_failure_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WebhookDelivery:
+      type: object
+      required:
+        - id
+        - webhook_id
+        - event_type
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        webhook_id:
+          type: string
+          format: uuid
+        event_type:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [pending, success, failed]
+        response_status:
+          type: integer
+          description: HTTP status code from webhook endpoint
+        response_body:
+          type: string
+        duration_ms:
+          type: integer
+          description: Request duration in milliseconds
+        attempt_number:
+          type: integer
+        next_retry_at:
+          type: string
+          format: date-time
+        error_message:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        delivered_at:
+          type: string
+          format: date-time
+
+    # ==================== CONFIGURATION SCHEMAS ====================
+    FormConfig:
+      type: object
+      properties:
+        fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormField'
+        captcha_enabled:
+          type: boolean
+          default: false
+        double_opt_in:
+          type: boolean
+          default: true
+        custom_css:
+          type: string
+
+    FormField:
+      type: object
+      required:
+        - name
+        - type
+        - label
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [email, text, select, checkbox, textarea, number]
+        label:
+          type: string
+        placeholder:
+          type: string
+        required:
+          type: boolean
+          default: false
+        options:
+          type: array
+          items:
+            type: string
+          description: Options for select fields
+        validation:
+          type: string
+          description: Regex pattern for validation
+
+    ReferralConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        points_per_referral:
+          type: integer
+          default: 1
+        verified_only:
+          type: boolean
+          default: true
+        sharing_channels:
+          type: array
+          items:
+            type: string
+            enum: [email, twitter, facebook, linkedin, whatsapp]
+        custom_share_messages:
+          type: object
+          additionalProperties:
+            type: string
+
+    EmailConfig:
+      type: object
+      properties:
+        from_name:
+          type: string
+        from_email:
+          type: string
+          format: email
+        reply_to:
+          type: string
+          format: email
+        verification_required:
+          type: boolean
+          default: true
+
+    BrandingConfig:
+      type: object
+      properties:
+        logo_url:
+          type: string
+          format: uri
+        primary_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          default: '#2563EB'
+        font_family:
+          type: string
+          default: 'Inter'
+        custom_domain:
+          type: string
+          format: hostname
+
+    RewardConfig:
+      type: object
+      properties:
+        value:
+          type: string
+          description: Reward value (e.g., "20% off", "$50 credit")
+        code_template:
+          type: string
+          description: Template for generating reward codes
+        instructions:
+          type: string
+          description: Instructions for redeeming reward
+        expiry_days:
+          type: integer
+          description: Days until reward expires
+
+    TriggerConfig:
+      type: object
+      properties:
+        referral_count:
+          type: integer
+          description: Number of referrals required
+        verified_only:
+          type: boolean
+          default: true
+        position:
+          type: integer
+          description: Position threshold for position-based triggers
+
+    # ==================== REQUEST SCHEMAS ====================
+    CreateCampaignRequest:
+      type: object
+      required:
+        - name
+        - slug
+        - type
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 255
+          pattern: '^[a-z0-9-]+$'
+        description:
+          type: string
+        type:
+          type: string
+          enum: [waitlist, referral, contest]
+        form_config:
+          $ref: '#/components/schemas/FormConfig'
+        referral_config:
+          $ref: '#/components/schemas/ReferralConfig'
+        email_config:
+          $ref: '#/components/schemas/EmailConfig'
+        branding_config:
+          $ref: '#/components/schemas/BrandingConfig'
+
+    UpdateCampaignRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        launch_date:
+          type: string
+          format: date-time
+        end_date:
+          type: string
+          format: date-time
+        form_config:
+          $ref: '#/components/schemas/FormConfig'
+        referral_config:
+          $ref: '#/components/schemas/ReferralConfig'
+        email_config:
+          $ref: '#/components/schemas/EmailConfig'
+        branding_config:
+          $ref: '#/components/schemas/BrandingConfig'
+        max_signups:
+          type: integer
+
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - first_name
+        - last_name
+        - terms_accepted
+      properties:
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        last_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        referral_code:
+          type: string
+          description: Referral code if referred by another user
+        custom_fields:
+          type: object
+          additionalProperties:
+            type: string
+        utm_source:
+          type: string
+        utm_medium:
+          type: string
+        utm_campaign:
+          type: string
+        utm_term:
+          type: string
+        utm_content:
+          type: string
+        marketing_consent:
+          type: boolean
+          default: false
+        terms_accepted:
+          type: boolean
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          maxLength: 100
+        last_name:
+          type: string
+          maxLength: 100
+        status:
+          type: string
+          enum: [pending, verified, converted, removed, blocked]
+        metadata:
+          type: object
+          additionalProperties: true
+
+    CreateRewardRequest:
+      type: object
+      required:
+        - name
+        - type
+        - trigger_type
+        - delivery_method
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        type:
+          type: string
+          enum: [early_access, discount, premium_feature, merchandise, custom]
+        config:
+          $ref: '#/components/schemas/RewardConfig'
+        trigger_type:
+          type: string
+          enum: [referral_count, position, milestone, manual]
+        trigger_config:
+          $ref: '#/components/schemas/TriggerConfig'
+        delivery_method:
+          type: string
+          enum: [email, webhook, manual]
+        delivery_config:
+          type: object
+          additionalProperties: true
+        total_available:
+          type: integer
+        user_limit:
+          type: integer
+          default: 1
+        starts_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+
+    UpdateRewardRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        config:
+          $ref: '#/components/schemas/RewardConfig'
+        trigger_config:
+          $ref: '#/components/schemas/TriggerConfig'
+        delivery_config:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [active, paused, expired]
+        total_available:
+          type: integer
+        expires_at:
+          type: string
+          format: date-time
+
+    CreateEmailTemplateRequest:
+      type: object
+      required:
+        - name
+        - type
+        - subject
+        - html_body
+        - text_body
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        type:
+          type: string
+          enum: [verification, welcome, position_update, reward_earned, milestone, custom]
+        subject:
+          type: string
+          maxLength: 255
+        html_body:
+          type: string
+        text_body:
+          type: string
+        enabled:
+          type: boolean
+          default: true
+        send_automatically:
+          type: boolean
+          default: true
+
+    UpdateEmailTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+        subject:
+          type: string
+          maxLength: 255
+        html_body:
+          type: string
+        text_body:
+          type: string
+        enabled:
+          type: boolean
+        send_automatically:
+          type: boolean
+
+    CreateWebhookRequest:
+      type: object
+      required:
+        - url
+        - events
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 500
+        campaign_id:
+          type: string
+          format: uuid
+          description: Optional - make this campaign-specific
+        events:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        retry_enabled:
+          type: boolean
+          default: true
+        max_retries:
+          type: integer
+          default: 5
+          minimum: 1
+          maximum: 10
+
+    UpdateWebhookRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+          maxLength: 500
+        events:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        status:
+          type: string
+          enum: [active, paused]
+        retry_enabled:
+          type: boolean
+        max_retries:
+          type: integer
+          minimum: 1
+          maximum: 10
+
+    # ==================== RESPONSE SCHEMAS ====================
+    SignupResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/WaitlistUser'
+        position:
+          type: integer
+        referral_link:
+          type: string
+          format: uri
+        message:
+          type: string
+
+    ListCampaignsResponse:
+      type: object
+      properties:
+        campaigns:
+          type: array
+          items:
+            $ref: '#/components/schemas/Campaign'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    ListUsersResponse:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/WaitlistUser'
+        total_count:
+          type: integer
+        page:
+          type: integer
+        page_size:
+          type: integer
+        total_pages:
+          type: integer
+
+    ListReferralsResponse:
+      type: object
+      properties:
+        referrals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Referral'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    ListWebhookDeliveriesResponse:
+      type: object
+      properties:
+        deliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDelivery'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    AnalyticsOverview:
+      type: object
+      properties:
+        total_signups:
+          type: integer
+        total_verified:
+          type: integer
+        total_referrals:
+          type: integer
+        verification_rate:
+          type: number
+          format: float
+        average_referrals:
+          type: number
+          format: float
+        viral_coefficient:
+          type: number
+          format: float
+          description: K-factor (average referrals that result in signups)
+        top_referrers:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopReferrer'
+        signups_over_time:
+          type: array
+          items:
+            $ref: '#/components/schemas/TimeSeriesData'
+        referral_sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/SourceBreakdown'
+
+    TopReferrer:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+        referral_count:
+          type: integer
+
+    TimeSeriesData:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        count:
+          type: integer
+
+    SourceBreakdown:
+      type: object
+      properties:
+        source:
+          type: string
+        count:
+          type: integer
+
+    # ==================== COMMON SCHEMAS ====================
+    Pagination:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+          description: Cursor for next page
+        has_more:
+          type: boolean
+        total_count:
+          type: integer
