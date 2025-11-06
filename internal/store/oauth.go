@@ -59,6 +59,21 @@ func (s *Store) CreateUserOnGoogleSignIn(ctx context.Context, googleUserId strin
 		s.logger.Error(ctx, "failed to create google oauth entry", err)
 		return User{}, fmt.Errorf("failed to create google oauth entry: %w", err)
 	}
+
+	// Create default account for user
+	accountName := fmt.Sprintf("%s %s's Account", firstName, lastName)
+	accountSlug := fmt.Sprintf("user-%s", user.ID.String()[:8])
+	var accountID uuid.UUID
+	const sqlCreateAccountForOAuthUser = `
+		INSERT INTO accounts (name, slug, owner_user_id, plan, settings)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id`
+	err = tx.GetContext(ctx, &accountID, sqlCreateAccountForOAuthUser, accountName, accountSlug, user.ID, "free", JSONB{})
+	if err != nil {
+		s.logger.Error(ctx, "failed to create account for user", err)
+		return User{}, fmt.Errorf("failed to create account for user: %w", err)
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		s.logger.Error(ctx, "failed to commit transaction", err)

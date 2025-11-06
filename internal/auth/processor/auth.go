@@ -79,6 +79,7 @@ type BaseClaims struct {
 	Issuer         string           `json:"iss"`
 	Subject        string           `json:"sub"`
 	Audience       jwt.ClaimStrings `json:"aud"`
+	AccountID      string           `json:"account_id"`
 	AuthType       string           `json:"auth_type"`
 }
 
