@@ -26,6 +26,7 @@ info:
     - `X-RateLimit-Limit`: Maximum requests per window
     - `X-RateLimit-Remaining`: Remaining requests in current window
     - `X-RateLimit-Reset`: Unix timestamp when the rate limit resets
+    - `X-Request-ID`: Unique request identifier for debugging
 
   version: 1.0.0
   contact:
@@ -83,7 +84,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CreateCampaignResponse'
+                $ref: '#/components/schemas/Campaign'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -122,14 +123,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  campaigns:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Campaign'
-                  pagination:
-                    $ref: '#/components/schemas/Pagination'
+                $ref: '#/components/schemas/ListCampaignsResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -153,10 +147,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  campaign:
-                    $ref: '#/components/schemas/Campaign'
+                $ref: '#/components/schemas/Campaign'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -184,10 +175,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  campaign:
-                    $ref: '#/components/schemas/Campaign'
+                $ref: '#/components/schemas/Campaign'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -245,10 +233,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  campaign:
-                    $ref: '#/components/schemas/Campaign'
+                $ref: '#/components/schemas/Campaign'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -355,10 +340,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  user:
-                    $ref: '#/components/schemas/WaitlistUser'
+                $ref: '#/components/schemas/WaitlistUser'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -386,10 +368,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  user:
-                    $ref: '#/components/schemas/WaitlistUser'
+                $ref: '#/components/schemas/WaitlistUser'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -589,8 +568,6 @@ paths:
               schema:
                 type: object
                 properties:
-                  user:
-                    $ref: '#/components/schemas/WaitlistUser'
                   message:
                     type: string
         '400':
@@ -662,14 +639,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  referrals:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Referral'
-                  pagination:
-                    $ref: '#/components/schemas/Pagination'
+                $ref: '#/components/schemas/ListReferralsResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -843,10 +813,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  reward:
-                    $ref: '#/components/schemas/Reward'
+                $ref: '#/components/schemas/Reward'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -868,12 +835,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  rewards:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Reward'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reward'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -900,10 +864,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  reward:
-                    $ref: '#/components/schemas/Reward'
+                $ref: '#/components/schemas/Reward'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -931,10 +892,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  reward:
-                    $ref: '#/components/schemas/Reward'
+                $ref: '#/components/schemas/Reward'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -996,10 +954,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  user_reward:
-                    $ref: '#/components/schemas/UserReward'
+                $ref: '#/components/schemas/UserReward'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1023,12 +978,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  rewards:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/UserReward'
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserReward'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1061,10 +1013,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  template:
-                    $ref: '#/components/schemas/EmailTemplate'
+                $ref: '#/components/schemas/EmailTemplate'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1093,12 +1042,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  templates:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/EmailTemplate'
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmailTemplate'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1125,10 +1071,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  template:
-                    $ref: '#/components/schemas/EmailTemplate'
+                $ref: '#/components/schemas/EmailTemplate'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1156,10 +1099,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  template:
-                    $ref: '#/components/schemas/EmailTemplate'
+                $ref: '#/components/schemas/EmailTemplate'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1255,7 +1195,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AnalyticsOverviewResponse'
+                $ref: '#/components/schemas/AnalyticsOverview'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1390,26 +1330,23 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        date:
-                          type: string
-                          format: date-time
-                        signups:
-                          type: integer
-                        verified:
-                          type: integer
-                        referrals:
-                          type: integer
-                        emails_sent:
-                          type: integer
-                        emails_opened:
-                          type: integer
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date:
+                      type: string
+                      format: date-time
+                    signups:
+                      type: integer
+                    verified:
+                      type: integer
+                    referrals:
+                      type: integer
+                    emails_sent:
+                      type: integer
+                    emails_opened:
+                      type: integer
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1566,12 +1503,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  webhooks:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Webhook'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -1595,10 +1529,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  webhook:
-                    $ref: '#/components/schemas/Webhook'
+                $ref: '#/components/schemas/Webhook'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1626,10 +1557,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  webhook:
-                    $ref: '#/components/schemas/Webhook'
+                $ref: '#/components/schemas/Webhook'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1682,14 +1610,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  deliveries:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/WebhookDelivery'
-                  pagination:
-                    $ref: '#/components/schemas/Pagination'
+                $ref: '#/components/schemas/ListWebhookDeliveriesResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -1836,6 +1757,13 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          examples:
+            validation:
+              value:
+                error: "invalid request"
+            missing_field:
+              value:
+                error: "email is required"
 
     Unauthorized:
       description: Unauthorized - Authentication required
@@ -1843,6 +1771,8 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error: "Authorization token is missing or invalid"
 
     Forbidden:
       description: Forbidden - Insufficient permissions
@@ -1850,6 +1780,8 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error: "insufficient permissions"
 
     NotFound:
       description: Not found - Resource does not exist
@@ -1857,6 +1789,8 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error: "campaign not found"
 
     Conflict:
       description: Conflict - Resource already exists
@@ -1864,6 +1798,8 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error: "email already exists"
 
     TooManyRequests:
       description: Too many requests - Rate limit exceeded
@@ -1888,6 +1824,8 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error: "rate limit exceeded"
 
     InternalError:
       description: Internal server error
@@ -1895,8 +1833,22 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error: "internal server error"
 
   schemas:
+    # ==================== ERROR SCHEMA ====================
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+      example:
+        error: "invalid request"
+
     # ==================== CORE MODELS ====================
     Campaign:
       type: object
@@ -2799,12 +2751,6 @@ components:
           maximum: 10
 
     # ==================== RESPONSE SCHEMAS ====================
-    CreateCampaignResponse:
-      type: object
-      properties:
-        campaign:
-          $ref: '#/components/schemas/Campaign'
-
     SignupResponse:
       type: object
       properties:
@@ -2817,6 +2763,16 @@ components:
           format: uri
         message:
           type: string
+
+    ListCampaignsResponse:
+      type: object
+      properties:
+        campaigns:
+          type: array
+          items:
+            $ref: '#/components/schemas/Campaign'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
 
     ListUsersResponse:
       type: object
@@ -2834,7 +2790,27 @@ components:
         total_pages:
           type: integer
 
-    AnalyticsOverviewResponse:
+    ListReferralsResponse:
+      type: object
+      properties:
+        referrals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Referral'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    ListWebhookDeliveriesResponse:
+      type: object
+      properties:
+        deliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDelivery'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    AnalyticsOverview:
       type: object
       properties:
         total_signups:
@@ -2907,33 +2883,3 @@ components:
           type: boolean
         total_count:
           type: integer
-
-    Error:
-      type: object
-      required:
-        - error
-      properties:
-        error:
-          type: object
-          required:
-            - code
-            - message
-          properties:
-            code:
-              type: string
-              enum:
-                - validation_error
-                - unauthorized
-                - forbidden
-                - not_found
-                - conflict
-                - rate_limit_exceeded
-                - internal_error
-            message:
-              type: string
-            details:
-              type: object
-              additionalProperties: true
-            request_id:
-              type: string
-              description: Unique request identifier for debugging
