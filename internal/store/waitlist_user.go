@@ -1,0 +1,440 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// CreateWaitlistUserParams represents parameters for creating a waitlist user
+type CreateWaitlistUserParams struct {
+	CampaignID         uuid.UUID
+	Email              string
+	FirstName          *string
+	LastName           *string
+	ReferralCode       string
+	ReferredByID       *uuid.UUID
+	Position           int
+	OriginalPosition   int
+	Source             *string
+	UTMSource          *string
+	UTMMedium          *string
+	UTMCampaign        *string
+	UTMTerm            *string
+	UTMContent         *string
+	IPAddress          *string
+	UserAgent          *string
+	CountryCode        *string
+	City               *string
+	DeviceFingerprint  *string
+	Metadata           JSONB
+	MarketingConsent   bool
+	TermsAccepted      bool
+	VerificationToken  *string
+}
+
+// UpdateWaitlistUserParams represents parameters for updating a waitlist user
+type UpdateWaitlistUserParams struct {
+	FirstName   *string
+	LastName    *string
+	Status      *string
+	Position    *int
+	Points      *int
+	Metadata    JSONB
+}
+
+const sqlCreateWaitlistUser = `
+INSERT INTO waitlist_users (
+	campaign_id, email, first_name, last_name, referral_code, referred_by_id, position, original_position,
+	source, utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+	ip_address, user_agent, country_code, city, device_fingerprint,
+	metadata, marketing_consent, terms_accepted, verification_token
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+RETURNING id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+`
+
+// CreateWaitlistUser creates a new waitlist user
+func (s *Store) CreateWaitlistUser(ctx context.Context, params CreateWaitlistUserParams) (WaitlistUser, error) {
+	var user WaitlistUser
+	err := s.db.GetContext(ctx, &user, sqlCreateWaitlistUser,
+		params.CampaignID,
+		params.Email,
+		params.FirstName,
+		params.LastName,
+		params.ReferralCode,
+		params.ReferredByID,
+		params.Position,
+		params.OriginalPosition,
+		params.Source,
+		params.UTMSource,
+		params.UTMMedium,
+		params.UTMCampaign,
+		params.UTMTerm,
+		params.UTMContent,
+		params.IPAddress,
+		params.UserAgent,
+		params.CountryCode,
+		params.City,
+		params.DeviceFingerprint,
+		params.Metadata,
+		params.MarketingConsent,
+		params.TermsAccepted,
+		params.VerificationToken)
+	if err != nil {
+		s.logger.Error(ctx, "failed to create waitlist user", err)
+		return WaitlistUser{}, fmt.Errorf("failed to create waitlist user: %w", err)
+	}
+	return user, nil
+}
+
+const sqlGetWaitlistUserByID = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+// GetWaitlistUserByID retrieves a waitlist user by ID
+func (s *Store) GetWaitlistUserByID(ctx context.Context, userID uuid.UUID) (WaitlistUser, error) {
+	var user WaitlistUser
+	err := s.db.GetContext(ctx, &user, sqlGetWaitlistUserByID, userID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return WaitlistUser{}, ErrNotFound
+		}
+		s.logger.Error(ctx, "failed to get waitlist user by id", err)
+		return WaitlistUser{}, fmt.Errorf("failed to get waitlist user by id: %w", err)
+	}
+	return user, nil
+}
+
+const sqlGetWaitlistUserByEmail = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE campaign_id = $1 AND email = $2 AND deleted_at IS NULL
+`
+
+// GetWaitlistUserByEmail retrieves a waitlist user by campaign ID and email
+func (s *Store) GetWaitlistUserByEmail(ctx context.Context, campaignID uuid.UUID, email string) (WaitlistUser, error) {
+	var user WaitlistUser
+	err := s.db.GetContext(ctx, &user, sqlGetWaitlistUserByEmail, campaignID, email)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return WaitlistUser{}, ErrNotFound
+		}
+		s.logger.Error(ctx, "failed to get waitlist user by email", err)
+		return WaitlistUser{}, fmt.Errorf("failed to get waitlist user by email: %w", err)
+	}
+	return user, nil
+}
+
+const sqlGetWaitlistUserByReferralCode = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE referral_code = $1 AND deleted_at IS NULL
+`
+
+// GetWaitlistUserByReferralCode retrieves a waitlist user by referral code
+func (s *Store) GetWaitlistUserByReferralCode(ctx context.Context, referralCode string) (WaitlistUser, error) {
+	var user WaitlistUser
+	err := s.db.GetContext(ctx, &user, sqlGetWaitlistUserByReferralCode, referralCode)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return WaitlistUser{}, ErrNotFound
+		}
+		s.logger.Error(ctx, "failed to get waitlist user by referral code", err)
+		return WaitlistUser{}, fmt.Errorf("failed to get waitlist user by referral code: %w", err)
+	}
+	return user, nil
+}
+
+const sqlGetWaitlistUsersByCampaign = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE campaign_id = $1 AND deleted_at IS NULL
+ORDER BY position ASC
+LIMIT $2 OFFSET $3
+`
+
+// ListWaitlistUsersParams represents parameters for listing waitlist users
+type ListWaitlistUsersParams struct {
+	Limit  int
+	Offset int
+}
+
+// GetWaitlistUsersByCampaign retrieves waitlist users for a campaign with pagination
+func (s *Store) GetWaitlistUsersByCampaign(ctx context.Context, campaignID uuid.UUID, params ListWaitlistUsersParams) ([]WaitlistUser, error) {
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, sqlGetWaitlistUsersByCampaign, campaignID, params.Limit, params.Offset)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get waitlist users by campaign", err)
+		return nil, fmt.Errorf("failed to get waitlist users by campaign: %w", err)
+	}
+	return users, nil
+}
+
+const sqlGetWaitlistUsersByStatus = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE campaign_id = $1 AND status = $2 AND deleted_at IS NULL
+ORDER BY position ASC
+`
+
+// GetWaitlistUsersByStatus retrieves waitlist users by campaign ID and status
+func (s *Store) GetWaitlistUsersByStatus(ctx context.Context, campaignID uuid.UUID, status string) ([]WaitlistUser, error) {
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, sqlGetWaitlistUsersByStatus, campaignID, status)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get waitlist users by status", err)
+		return nil, fmt.Errorf("failed to get waitlist users by status: %w", err)
+	}
+	return users, nil
+}
+
+const sqlCountWaitlistUsersByCampaign = `
+SELECT COUNT(*)
+FROM waitlist_users
+WHERE campaign_id = $1 AND deleted_at IS NULL
+`
+
+// CountWaitlistUsersByCampaign counts total waitlist users for a campaign
+func (s *Store) CountWaitlistUsersByCampaign(ctx context.Context, campaignID uuid.UUID) (int, error) {
+	var count int
+	err := s.db.GetContext(ctx, &count, sqlCountWaitlistUsersByCampaign, campaignID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to count waitlist users", err)
+		return 0, fmt.Errorf("failed to count waitlist users: %w", err)
+	}
+	return count, nil
+}
+
+const sqlUpdateWaitlistUser = `
+UPDATE waitlist_users
+SET first_name = COALESCE($2, first_name),
+    last_name = COALESCE($3, last_name),
+    status = COALESCE($4, status),
+    position = COALESCE($5, position),
+    points = COALESCE($6, points),
+    metadata = COALESCE($7, metadata),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+RETURNING id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+`
+
+// UpdateWaitlistUser updates a waitlist user
+func (s *Store) UpdateWaitlistUser(ctx context.Context, userID uuid.UUID, params UpdateWaitlistUserParams) (WaitlistUser, error) {
+	var user WaitlistUser
+	err := s.db.GetContext(ctx, &user, sqlUpdateWaitlistUser,
+		userID,
+		params.FirstName,
+		params.LastName,
+		params.Status,
+		params.Position,
+		params.Points,
+		params.Metadata)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return WaitlistUser{}, ErrNotFound
+		}
+		s.logger.Error(ctx, "failed to update waitlist user", err)
+		return WaitlistUser{}, fmt.Errorf("failed to update waitlist user: %w", err)
+	}
+	return user, nil
+}
+
+const sqlVerifyWaitlistUserEmail = `
+UPDATE waitlist_users
+SET email_verified = TRUE,
+    verified_at = CURRENT_TIMESTAMP,
+    verification_token = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+// VerifyWaitlistUserEmail marks a user's email as verified
+func (s *Store) VerifyWaitlistUserEmail(ctx context.Context, userID uuid.UUID) error {
+	res, err := s.db.ExecContext(ctx, sqlVerifyWaitlistUserEmail, userID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to verify waitlist user email", err)
+		return fmt.Errorf("failed to verify waitlist user email: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		s.logger.Error(ctx, "failed to get rows affected", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+const sqlIncrementReferralCount = `
+UPDATE waitlist_users
+SET referral_count = referral_count + 1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+// IncrementReferralCount increments the referral count for a user
+func (s *Store) IncrementReferralCount(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.db.ExecContext(ctx, sqlIncrementReferralCount, userID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to increment referral count", err)
+		return fmt.Errorf("failed to increment referral count: %w", err)
+	}
+	return nil
+}
+
+const sqlIncrementVerifiedReferralCount = `
+UPDATE waitlist_users
+SET verified_referral_count = verified_referral_count + 1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+// IncrementVerifiedReferralCount increments the verified referral count for a user
+func (s *Store) IncrementVerifiedReferralCount(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.db.ExecContext(ctx, sqlIncrementVerifiedReferralCount, userID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to increment verified referral count", err)
+		return fmt.Errorf("failed to increment verified referral count: %w", err)
+	}
+	return nil
+}
+
+const sqlUpdateWaitlistUserPosition = `
+UPDATE waitlist_users
+SET position = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+// UpdateWaitlistUserPosition updates a user's position in the waitlist
+func (s *Store) UpdateWaitlistUserPosition(ctx context.Context, userID uuid.UUID, position int) error {
+	_, err := s.db.ExecContext(ctx, sqlUpdateWaitlistUserPosition, userID, position)
+	if err != nil {
+		s.logger.Error(ctx, "failed to update waitlist user position", err)
+		return fmt.Errorf("failed to update waitlist user position: %w", err)
+	}
+	return nil
+}
+
+const sqlUpdateLastActivity = `
+UPDATE waitlist_users
+SET last_activity_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+// UpdateLastActivity updates a user's last activity timestamp
+func (s *Store) UpdateLastActivity(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.db.ExecContext(ctx, sqlUpdateLastActivity, userID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to update last activity", err)
+		return fmt.Errorf("failed to update last activity: %w", err)
+	}
+	return nil
+}
+
+const sqlDeleteWaitlistUser = `
+UPDATE waitlist_users
+SET deleted_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+// DeleteWaitlistUser soft deletes a waitlist user
+func (s *Store) DeleteWaitlistUser(ctx context.Context, userID uuid.UUID) error {
+	res, err := s.db.ExecContext(ctx, sqlDeleteWaitlistUser, userID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to delete waitlist user", err)
+		return fmt.Errorf("failed to delete waitlist user: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		s.logger.Error(ctx, "failed to get rows affected", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+const sqlGetTopReferrers = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE campaign_id = $1 AND deleted_at IS NULL
+ORDER BY verified_referral_count DESC, referral_count DESC
+LIMIT $2
+`
+
+// GetTopReferrers retrieves the top referrers for a campaign
+func (s *Store) GetTopReferrers(ctx context.Context, campaignID uuid.UUID, limit int) ([]WaitlistUser, error) {
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, sqlGetTopReferrers, campaignID, limit)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get top referrers", err)
+		return nil, fmt.Errorf("failed to get top referrers: %w", err)
+	}
+	return users, nil
+}
+
+const sqlUpdateVerificationToken = `
+UPDATE waitlist_users
+SET verification_token = $2,
+    verification_sent_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+// UpdateVerificationToken updates the verification token and sent timestamp
+func (s *Store) UpdateVerificationToken(ctx context.Context, userID uuid.UUID, token string) error {
+	res, err := s.db.ExecContext(ctx, sqlUpdateVerificationToken, userID, token)
+	if err != nil {
+		s.logger.Error(ctx, "failed to update verification token", err)
+		return fmt.Errorf("failed to update verification token: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		s.logger.Error(ctx, "failed to get rows affected", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+const sqlGetWaitlistUserByVerificationToken = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE verification_token = $1 AND deleted_at IS NULL
+`
+
+// GetWaitlistUserByVerificationToken retrieves a user by verification token
+func (s *Store) GetWaitlistUserByVerificationToken(ctx context.Context, token string) (WaitlistUser, error) {
+	var user WaitlistUser
+	err := s.db.GetContext(ctx, &user, sqlGetWaitlistUserByVerificationToken, token)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return WaitlistUser{}, ErrNotFound
+		}
+		s.logger.Error(ctx, "failed to get waitlist user by verification token", err)
+		return WaitlistUser{}, fmt.Errorf("failed to get waitlist user by verification token: %w", err)
+	}
+	return user, nil
+}
