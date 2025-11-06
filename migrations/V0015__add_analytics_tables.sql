@@ -1,3 +1,7 @@
+-- Install TimescaleDB extension for time-series analytics
+-- Required for campaign_analytics hypertable
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
 -- Campaign Analytics Table (Hypertable for TimescaleDB)
 CREATE TABLE campaign_analytics (
     time TIMESTAMPTZ NOT NULL,
@@ -24,17 +28,8 @@ CREATE TABLE campaign_analytics (
     PRIMARY KEY (time, campaign_id)
 );
 
--- Convert to hypertable (TimescaleDB) - only runs if TimescaleDB extension is available
--- This will fail gracefully if TimescaleDB is not installed
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb'
-    ) THEN
-        PERFORM create_hypertable('campaign_analytics', 'time', if_not_exists => TRUE);
-    END IF;
-END
-$$;
+-- Convert to hypertable for optimized time-series storage and queries
+SELECT create_hypertable('campaign_analytics', 'time', if_not_exists => TRUE);
 
 CREATE INDEX idx_campaign_analytics_campaign ON campaign_analytics(campaign_id, time DESC);
 

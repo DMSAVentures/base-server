@@ -100,7 +100,7 @@ After the instance has rebooted and is available:
 
 #### Option A: Run Migration (Recommended)
 
-The V0018 migration will automatically install TimescaleDB:
+The V0015 migration will automatically install TimescaleDB and create the analytics tables:
 
 ```bash
 # Build migration container
@@ -114,6 +114,11 @@ docker run --platform linux/amd64 --rm \
   flyway-migrate
 ```
 
+This migration will:
+1. Install the TimescaleDB extension
+2. Create the `campaign_analytics` table
+3. Convert it to a hypertable for time-series optimization
+
 #### Option B: Manual Installation
 
 Connect to your database and run:
@@ -126,20 +131,9 @@ CREATE EXTENSION IF NOT EXISTS timescaledb;
 SELECT extname, extversion FROM pg_extension WHERE extname = 'timescaledb';
 ```
 
-### 4. Convert Existing Tables to Hypertables
+### 4. Verify Installation
 
-If the `campaign_analytics` table already exists but wasn't converted to a hypertable, the V0018 migration will handle this automatically. Alternatively, run manually:
-
-```sql
--- Convert campaign_analytics to hypertable
-SELECT create_hypertable('campaign_analytics', 'time',
-                        if_not_exists => TRUE,
-                        migrate_data => TRUE);
-```
-
-### 5. Verify Installation
-
-Run the verification script:
+Run the verification script to confirm everything is set up correctly:
 
 ```bash
 # Using psql
@@ -156,6 +150,8 @@ Expected output should show:
 - ✓ TimescaleDB extension is installed
 - TimescaleDB version (e.g., 2.11.0)
 - ✓ campaign_analytics is a hypertable
+
+All checks should pass after running the V0015 migration.
 
 ## Troubleshooting
 
@@ -192,14 +188,16 @@ GRANT rds_superuser TO your_username;
 
 **Error**: `table "campaign_analytics" already exists`
 
-**Solution**: If the table exists but isn't a hypertable, the V0018 migration will convert it. You can also run:
+**Solution**: If the table was created manually before running migrations, you can convert it to a hypertable:
 
 ```sql
--- Convert existing table
+-- Convert existing table to hypertable
 SELECT create_hypertable('campaign_analytics', 'time',
                         migrate_data => TRUE,
                         if_not_exists => TRUE);
 ```
+
+Note: The V0015 migration handles this automatically, so this error should only occur if you manually created the table.
 
 ### Performance Impact
 

@@ -14,7 +14,7 @@ SELECT
     CASE
         WHEN EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'timescaledb')
         THEN '✓ TimescaleDB extension is installed'
-        ELSE '✗ TimescaleDB extension is NOT installed - run V0018 migration or CREATE EXTENSION timescaledb'
+        ELSE '✗ TimescaleDB extension is NOT installed - run V0015 migration or CREATE EXTENSION timescaledb'
     END AS extension_installation;
 
 -- 3. Check TimescaleDB version (if installed)
@@ -46,7 +46,7 @@ SELECT
             SELECT 1 FROM information_schema.tables
             WHERE table_name = 'campaign_analytics'
         )
-        THEN '⚠ campaign_analytics exists but is NOT a hypertable - run V0018 migration'
+        THEN '⚠ campaign_analytics exists but is NOT a hypertable - run V0015 migration'
         ELSE '✗ campaign_analytics table does not exist'
     END AS campaign_analytics_status;
 
