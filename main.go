@@ -6,6 +6,8 @@ import (
 	apisetup "base-server/internal/api"
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
+	campaignHandler "base-server/internal/campaign/handler"
+	campaignProcessor "base-server/internal/campaign/processor"
 	"base-server/internal/clients/googleoauth"
 	"base-server/internal/clients/mail"
 	"base-server/internal/email"
@@ -220,7 +222,11 @@ func main() {
 	newVoiceCallProcessor := voiceCallProcessor.NewVoiceCallProcessor(aiCapability, logger)
 	voicecallHandler := voiceCallHandler.New(newVoiceCallProcessor, logger)
 
-	api := apisetup.New(rootRouter, authHandler, billingHandler, aiHandler, voicecallHandler)
+	// Initialize campaign processor and handler
+	newCampaignProcessor := campaignProcessor.New(store, logger)
+	newCampaignHandler := campaignHandler.New(newCampaignProcessor, logger)
+
+	api := apisetup.New(rootRouter, authHandler, newCampaignHandler, billingHandler, aiHandler, voicecallHandler)
 	api.RegisterRoutes()
 
 	server := &http.Server{

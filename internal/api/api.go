@@ -3,6 +3,7 @@ package api
 import (
 	aiHandler "base-server/internal/ai-capabilities/handler"
 	authHandler "base-server/internal/auth/handler"
+	campaignHandler "base-server/internal/campaign/handler"
 	billingHandler "base-server/internal/money/billing/handler"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	"net/http"
@@ -13,16 +14,18 @@ import (
 type API struct {
 	router           *gin.RouterGroup
 	authHandler      authHandler.Handler
+	campaignHandler  campaignHandler.Handler
 	billingHandler   billingHandler.Handler
 	aiHandler        aiHandler.Handler
 	voicecallHandler voiceCallHandler.Handler
 }
 
-func New(router *gin.RouterGroup, authHandler authHandler.Handler, handler billingHandler.Handler,
-	aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler) API {
+func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
+	handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler) API {
 	return API{
 		router:           router,
 		authHandler:      authHandler,
+		campaignHandler:  campaignHandler,
 		billingHandler:   handler,
 		aiHandler:        aiHandler,
 		voicecallHandler: voicecallHandler,
@@ -53,6 +56,20 @@ func (a *API) RegisterRoutes() {
 		protectedGroup.GET("billing/checkout-session", a.billingHandler.GetCheckoutSession)
 		protectedGroup.POST("ai/conversation", a.aiHandler.HandleConversation)
 		protectedGroup.POST("ai/image/generate", a.aiHandler.HandleGenerateImage)
+	}
+
+	// Campaign API routes (v1)
+	v1Group := apiGroup.Group("/v1", a.authHandler.HandleJWTMiddleware)
+	{
+		campaignsGroup := v1Group.Group("/campaigns")
+		{
+			campaignsGroup.POST("", a.campaignHandler.HandleCreateCampaign)
+			campaignsGroup.GET("", a.campaignHandler.HandleListCampaigns)
+			campaignsGroup.GET("/:campaign_id", a.campaignHandler.HandleGetCampaign)
+			campaignsGroup.PUT("/:campaign_id", a.campaignHandler.HandleUpdateCampaign)
+			campaignsGroup.DELETE("/:campaign_id", a.campaignHandler.HandleDeleteCampaign)
+			campaignsGroup.PATCH("/:campaign_id/status", a.campaignHandler.HandleUpdateCampaignStatus)
+		}
 	}
 	apiGroup.GET("billing/plans", a.billingHandler.ListPrices)
 	apiGroup.POST("billing/webhook", a.billingHandler.HandleWebhook)

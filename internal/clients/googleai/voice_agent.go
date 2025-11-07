@@ -84,8 +84,8 @@ func (g *GoogleAILiveClient) StartVoiceAgent(ctx context.Context, audioStream <-
 							return // Clean shutdown
 						}
 						// Check if it's a connection closed error (expected when we close the session)
-						if strings.Contains(err.Error(), "use of closed network connection") || 
-						   strings.Contains(err.Error(), "closed") {
+						if strings.Contains(err.Error(), "use of closed network connection") ||
+							strings.Contains(err.Error(), "closed") {
 							g.logger.Info(ctx, "Google AI session closed, stopping receive goroutine")
 							return // Expected closure
 						}
@@ -99,61 +99,61 @@ func (g *GoogleAILiveClient) StartVoiceAgent(ctx context.Context, audioStream <-
 						return
 					}
 
-				// Log all messages to understand what we're getting
-				if msg.ServerContent != nil {
-					if msg.ServerContent.Interrupted {
-						g.logger.Info(ctx, "Model was interrupted")
+					// Log all messages to understand what we're getting
+					if msg.ServerContent != nil {
+						if msg.ServerContent.Interrupted {
+							g.logger.Info(ctx, "Model was interrupted")
+						}
+						if msg.ServerContent.InputTranscription != nil && msg.ServerContent.InputTranscription.Text != "" {
+							g.logger.Info(ctx, fmt.Sprintf("📢 User is saying: %s", msg.ServerContent.InputTranscription.Text))
+						}
 					}
-					if msg.ServerContent.InputTranscription != nil && msg.ServerContent.InputTranscription.Text != "" {
-						g.logger.Info(ctx, fmt.Sprintf("📢 User is saying: %s", msg.ServerContent.InputTranscription.Text))
-					}
-				}
 
-				// Handle audio responses from model turn
-				if msg.ServerContent != nil && msg.ServerContent.ModelTurn != nil {
-					for _, part := range msg.ServerContent.ModelTurn.Parts {
-						// Check if part has inline data (audio)
-						if part.InlineData != nil && part.InlineData.Data != nil {
-							g.logger.Info(ctx, fmt.Sprintf("Received %d bytes of audio from model", len(part.InlineData.Data)))
-							// Try to send audio, but don't panic if channel is closed
+					// Handle audio responses from model turn
+					if msg.ServerContent != nil && msg.ServerContent.ModelTurn != nil {
+						for _, part := range msg.ServerContent.ModelTurn.Parts {
+							// Check if part has inline data (audio)
+							if part.InlineData != nil && part.InlineData.Data != nil {
+								g.logger.Info(ctx, fmt.Sprintf("Received %d bytes of audio from model", len(part.InlineData.Data)))
+								// Try to send audio, but don't panic if channel is closed
+								select {
+								case results <- VoiceAgentResult{
+									AudioData: part.InlineData.Data, // This is 24kHz PCM audio
+								}:
+								case <-voiceCtx.Done():
+									return
+								}
+							}
+						}
+					}
+
+					// Handle transcriptions of the model's audio output
+					if msg.ServerContent != nil && msg.ServerContent.OutputTranscription != nil {
+						transcript := msg.ServerContent.OutputTranscription.Text
+						if transcript != "" {
+							g.logger.Info(ctx, fmt.Sprintf("Model said: %s", transcript))
+							// Try to send transcript, but don't panic if channel is closed
 							select {
 							case results <- VoiceAgentResult{
-								AudioData: part.InlineData.Data, // This is 24kHz PCM audio
+								Text: transcript,
 							}:
 							case <-voiceCtx.Done():
 								return
 							}
 						}
 					}
-				}
 
-				// Handle transcriptions of the model's audio output
-				if msg.ServerContent != nil && msg.ServerContent.OutputTranscription != nil {
-					transcript := msg.ServerContent.OutputTranscription.Text
-					if transcript != "" {
-						g.logger.Info(ctx, fmt.Sprintf("Model said: %s", transcript))
-						// Try to send transcript, but don't panic if channel is closed
-						select {
-						case results <- VoiceAgentResult{
-							Text: transcript,
-						}:
-						case <-voiceCtx.Done():
-							return
+					// Log input transcriptions for debugging
+					if msg.ServerContent != nil && msg.ServerContent.InputTranscription != nil {
+						if msg.ServerContent.InputTranscription.Text != "" {
+							g.logger.Info(ctx, fmt.Sprintf("User said: %s", msg.ServerContent.InputTranscription.Text))
 						}
 					}
-				}
 
-				// Log input transcriptions for debugging
-				if msg.ServerContent != nil && msg.ServerContent.InputTranscription != nil {
-					if msg.ServerContent.InputTranscription.Text != "" {
-						g.logger.Info(ctx, fmt.Sprintf("User said: %s", msg.ServerContent.InputTranscription.Text))
+					// Handle turn completion
+					if msg.ServerContent != nil && msg.ServerContent.TurnComplete {
+						g.logger.Info(ctx, "Model turn completed")
 					}
-				}
-
-				// Handle turn completion
-				if msg.ServerContent != nil && msg.ServerContent.TurnComplete {
-					g.logger.Info(ctx, "Model turn completed")
-				}
 				}
 			}
 		}()
@@ -200,7 +200,7 @@ func (g *GoogleAILiveClient) StartVoiceAgent(ctx context.Context, audioStream <-
 					}
 					return
 				}
-				
+
 				// Log every 100 chunks to see if we're actually sending
 				if audioChunkCount%100 == 0 {
 					g.logger.Debug(ctx, fmt.Sprintf("Sent chunk %d to Google AI, size: %d bytes", audioChunkCount, len(pcmAudio)))

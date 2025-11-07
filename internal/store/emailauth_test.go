@@ -167,10 +167,10 @@ func TestStore_GetCredentialsByEmail(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T) uuid.UUID
-		email   string
-		wantErr bool
+		name     string
+		setup    func(t *testing.T) uuid.UUID
+		email    string
+		wantErr  bool
 		validate func(t *testing.T, auth EmailAuth, expectedAuthID uuid.UUID)
 	}{
 		{

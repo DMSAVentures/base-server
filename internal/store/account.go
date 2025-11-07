@@ -11,10 +11,10 @@ import (
 
 // CreateAccountParams represents parameters for creating an account
 type CreateAccountParams struct {
-	Name            string
-	Slug            string
-	OwnerUserID     uuid.UUID
-	Plan            string
+	Name             string
+	Slug             string
+	OwnerUserID      uuid.UUID
+	Plan             string
 	StripeCustomerID *string
 }
 

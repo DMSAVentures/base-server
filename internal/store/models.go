@@ -71,12 +71,12 @@ type Campaign struct {
 
 // WaitlistUser represents a user on a waitlist
 type WaitlistUser struct {
-	ID        uuid.UUID  `db:"id" json:"id"`
+	ID         uuid.UUID `db:"id" json:"id"`
 	CampaignID uuid.UUID `db:"campaign_id" json:"campaign_id"`
-	Email      string     `db:"email" json:"email"`
-	FirstName  *string    `db:"first_name" json:"first_name,omitempty"`
-	LastName   *string    `db:"last_name" json:"last_name,omitempty"`
-	Status     string     `db:"status" json:"status"`
+	Email      string    `db:"email" json:"email"`
+	FirstName  *string   `db:"first_name" json:"first_name,omitempty"`
+	LastName   *string   `db:"last_name" json:"last_name,omitempty"`
+	Status     string    `db:"status" json:"status"`
 
 	Position         int `db:"position" json:"position"`
 	OriginalPosition int `db:"original_position" json:"original_position"`
@@ -122,13 +122,13 @@ type WaitlistUser struct {
 
 // Referral represents a referral relationship
 type Referral struct {
-	ID         uuid.UUID  `db:"id" json:"id"`
-	CampaignID uuid.UUID  `db:"campaign_id" json:"campaign_id"`
-	ReferrerID uuid.UUID  `db:"referrer_id" json:"referrer_id"`
-	ReferredID uuid.UUID  `db:"referred_id" json:"referred_id"`
-	Status     string     `db:"status" json:"status"`
-	Source     *string    `db:"source" json:"source,omitempty"`
-	IPAddress  *string    `db:"ip_address" json:"-"`
+	ID         uuid.UUID `db:"id" json:"id"`
+	CampaignID uuid.UUID `db:"campaign_id" json:"campaign_id"`
+	ReferrerID uuid.UUID `db:"referrer_id" json:"referrer_id"`
+	ReferredID uuid.UUID `db:"referred_id" json:"referred_id"`
+	Status     string    `db:"status" json:"status"`
+	Source     *string   `db:"source" json:"source,omitempty"`
+	IPAddress  *string   `db:"ip_address" json:"-"`
 
 	VerifiedAt  *time.Time `db:"verified_at" json:"verified_at,omitempty"`
 	ConvertedAt *time.Time `db:"converted_at" json:"converted_at,omitempty"`
@@ -139,11 +139,11 @@ type Referral struct {
 
 // Reward represents a reward definition
 type Reward struct {
-	ID          uuid.UUID  `db:"id" json:"id"`
-	CampaignID  uuid.UUID  `db:"campaign_id" json:"campaign_id"`
-	Name        string     `db:"name" json:"name"`
-	Description *string    `db:"description" json:"description,omitempty"`
-	Type        string     `db:"type" json:"type"`
+	ID          uuid.UUID `db:"id" json:"id"`
+	CampaignID  uuid.UUID `db:"campaign_id" json:"campaign_id"`
+	Name        string    `db:"name" json:"name"`
+	Description *string   `db:"description" json:"description,omitempty"`
+	Type        string    `db:"type" json:"type"`
 
 	Config         JSONB  `db:"config" json:"config"`
 	TriggerType    string `db:"trigger_type" json:"trigger_type"`
@@ -194,16 +194,16 @@ type UserReward struct {
 
 // EmailTemplate represents an email template
 type EmailTemplate struct {
-	ID         uuid.UUID  `db:"id" json:"id"`
-	CampaignID uuid.UUID  `db:"campaign_id" json:"campaign_id"`
-	Name       string     `db:"name" json:"name"`
-	Type       string     `db:"type" json:"type"`
-	Subject    string     `db:"subject" json:"subject"`
+	ID         uuid.UUID `db:"id" json:"id"`
+	CampaignID uuid.UUID `db:"campaign_id" json:"campaign_id"`
+	Name       string    `db:"name" json:"name"`
+	Type       string    `db:"type" json:"type"`
+	Subject    string    `db:"subject" json:"subject"`
 
 	HTMLBody string `db:"html_body" json:"html_body"`
 	TextBody string `db:"text_body" json:"text_body"`
 
-	Enabled          bool `db:"enabled" json:"enabled"`
+	Enabled           bool `db:"enabled" json:"enabled"`
 	SendAutomatically bool `db:"send_automatically" json:"send_automatically"`
 
 	VariantName   *string `db:"variant_name" json:"variant_name,omitempty"`
@@ -299,8 +299,8 @@ type Webhook struct {
 	RetryEnabled bool `db:"retry_enabled" json:"retry_enabled"`
 	MaxRetries   int  `db:"max_retries" json:"max_retries"`
 
-	TotalSent   int        `db:"total_sent" json:"total_sent"`
-	TotalFailed int        `db:"total_failed" json:"total_failed"`
+	TotalSent     int        `db:"total_sent" json:"total_sent"`
+	TotalFailed   int        `db:"total_failed" json:"total_failed"`
 	LastSuccessAt *time.Time `db:"last_success_at" json:"last_success_at,omitempty"`
 	LastFailureAt *time.Time `db:"last_failure_at" json:"last_failure_at,omitempty"`
 
@@ -366,9 +366,9 @@ type AuditLog struct {
 	ID        uuid.UUID  `db:"id" json:"id"`
 	AccountID *uuid.UUID `db:"account_id" json:"account_id,omitempty"`
 
-	ActorUserID    *uuid.UUID `db:"actor_user_id" json:"actor_user_id,omitempty"`
-	ActorType      string     `db:"actor_type" json:"actor_type"`
-	ActorIdentifier *string   `db:"actor_identifier" json:"actor_identifier,omitempty"`
+	ActorUserID     *uuid.UUID `db:"actor_user_id" json:"actor_user_id,omitempty"`
+	ActorType       string     `db:"actor_type" json:"actor_type"`
+	ActorIdentifier *string    `db:"actor_identifier" json:"actor_identifier,omitempty"`
 
 	Action       string     `db:"action" json:"action"`
 	ResourceType string     `db:"resource_type" json:"resource_type"`
@@ -395,9 +395,9 @@ type FraudDetection struct {
 
 	Status string `db:"status" json:"status"`
 
-	ReviewedBy   *uuid.UUID `db:"reviewed_by" json:"reviewed_by,omitempty"`
-	ReviewedAt   *time.Time `db:"reviewed_at" json:"reviewed_at,omitempty"`
-	ReviewNotes  *string    `db:"review_notes" json:"review_notes,omitempty"`
+	ReviewedBy  *uuid.UUID `db:"reviewed_by" json:"reviewed_by,omitempty"`
+	ReviewedAt  *time.Time `db:"reviewed_at" json:"reviewed_at,omitempty"`
+	ReviewNotes *string    `db:"review_notes" json:"review_notes,omitempty"`
 
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }

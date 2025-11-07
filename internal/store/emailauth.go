@@ -32,6 +32,7 @@ type UserWithEmail struct {
 
 type AuthenticatedUser struct {
 	UserID    uuid.UUID `db:"id"`
+	AccountID uuid.UUID `db:"account_id"`
 	FirstName string    `db:"first_name"`
 	LastName  string    `db:"last_name"`
 	AuthID    uuid.UUID `db:"auth_id"`
@@ -80,6 +81,11 @@ INSERT INTO email_auth (auth_id, email, hashed_password)
 VALUES ($1, $2, $3) 
 RETURNING email, hashed_password, auth_id`
 
+const sqlCreateAccountForUser = `
+INSERT INTO accounts (name, slug, owner_user_id, plan, settings)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id`
+
 func (s *Store) CreateUserOnEmailSignup(
 	ctx context.Context, firstName string, lastName string, email string, hashedPassword string) (User, error) {
 	tx, err := s.db.BeginTxx(ctx, nil)
@@ -117,6 +123,17 @@ func (s *Store) CreateUserOnEmailSignup(
 		s.logger.Error(ctx, "failed to create email auth entry", err)
 		return User{}, fmt.Errorf("failed to create email auth entry: %w", err)
 	}
+
+	// Create default account for user
+	accountName := fmt.Sprintf("%s %s's Account", firstName, lastName)
+	accountSlug := fmt.Sprintf("user-%s", user.ID.String()[:8])
+	var accountID uuid.UUID
+	err = tx.GetContext(ctx, &accountID, sqlCreateAccountForUser, accountName, accountSlug, user.ID, "free", JSONB{})
+	if err != nil {
+		s.logger.Error(ctx, "failed to create account for user", err)
+		return User{}, fmt.Errorf("failed to create account for user: %w", err)
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		s.logger.Error(ctx, "failed to commit transaction", err)
@@ -146,14 +163,14 @@ func (s *Store) GetCredentialsByEmail(ctx context.Context, email string) (EmailA
 const sqlGetUserByAuthID = `
 SELECT
     loggedInUser.id,
+    acc.id as account_id,
     loggedInUser.first_name,
     loggedInUser.last_name,
     auth.id as auth_id,
     auth.auth_type
 FROM users AS loggedInUser
-LEFT JOIN user_auth auth
-ON
-    loggedInUser.id = auth.user_id
+LEFT JOIN user_auth auth ON loggedInUser.id = auth.user_id
+LEFT JOIN accounts acc ON acc.owner_user_id = loggedInUser.id AND acc.deleted_at IS NULL
 WHERE auth.id = $1
 `
 
