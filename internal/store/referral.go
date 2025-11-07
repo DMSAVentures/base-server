@@ -198,3 +198,77 @@ func (s *Store) GetReferralsByStatus(ctx context.Context, campaignID uuid.UUID, 
 	}
 	return referrals, nil
 }
+
+const sqlGetReferralsByCampaignWithStatusFilter = `
+SELECT id, campaign_id, referrer_id, referred_id, status, source, ip_address, verified_at, converted_at, created_at, updated_at
+FROM referrals
+WHERE campaign_id = $1
+  AND ($2::text IS NULL OR status = $2)
+ORDER BY created_at DESC
+LIMIT $3 OFFSET $4
+`
+
+// GetReferralsByCampaignWithStatusFilter retrieves referrals for a campaign with optional status filter and pagination
+func (s *Store) GetReferralsByCampaignWithStatusFilter(ctx context.Context, campaignID uuid.UUID, status *string, limit, offset int) ([]Referral, error) {
+	var referrals []Referral
+	err := s.db.SelectContext(ctx, &referrals, sqlGetReferralsByCampaignWithStatusFilter, campaignID, status, limit, offset)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get referrals by campaign with filter", err)
+		return nil, fmt.Errorf("failed to get referrals by campaign with filter: %w", err)
+	}
+	return referrals, nil
+}
+
+const sqlCountReferralsByCampaignWithStatusFilter = `
+SELECT COUNT(*)
+FROM referrals
+WHERE campaign_id = $1
+  AND ($2::text IS NULL OR status = $2)
+`
+
+// CountReferralsByCampaignWithStatusFilter counts total referrals for a campaign with optional status filter
+func (s *Store) CountReferralsByCampaignWithStatusFilter(ctx context.Context, campaignID uuid.UUID, status *string) (int, error) {
+	var count int
+	err := s.db.GetContext(ctx, &count, sqlCountReferralsByCampaignWithStatusFilter, campaignID, status)
+	if err != nil {
+		s.logger.Error(ctx, "failed to count referrals with filter", err)
+		return 0, fmt.Errorf("failed to count referrals with filter: %w", err)
+	}
+	return count, nil
+}
+
+const sqlGetReferralsByReferrerWithPagination = `
+SELECT id, campaign_id, referrer_id, referred_id, status, source, ip_address, verified_at, converted_at, created_at, updated_at
+FROM referrals
+WHERE referrer_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+// GetReferralsByReferrerWithPagination retrieves referrals made by a specific user with pagination
+func (s *Store) GetReferralsByReferrerWithPagination(ctx context.Context, referrerID uuid.UUID, limit, offset int) ([]Referral, error) {
+	var referrals []Referral
+	err := s.db.SelectContext(ctx, &referrals, sqlGetReferralsByReferrerWithPagination, referrerID, limit, offset)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get referrals by referrer with pagination", err)
+		return nil, fmt.Errorf("failed to get referrals by referrer with pagination: %w", err)
+	}
+	return referrals, nil
+}
+
+const sqlCountReferralsByReferrer = `
+SELECT COUNT(*)
+FROM referrals
+WHERE referrer_id = $1
+`
+
+// CountReferralsByReferrer counts total referrals for a specific referrer
+func (s *Store) CountReferralsByReferrer(ctx context.Context, referrerID uuid.UUID) (int, error) {
+	var count int
+	err := s.db.GetContext(ctx, &count, sqlCountReferralsByReferrer, referrerID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to count referrals by referrer", err)
+		return 0, fmt.Errorf("failed to count referrals by referrer: %w", err)
+	}
+	return count, nil
+}
