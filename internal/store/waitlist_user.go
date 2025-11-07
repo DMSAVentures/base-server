@@ -370,25 +370,6 @@ func (s *Store) DeleteWaitlistUser(ctx context.Context, userID uuid.UUID) error 
 	return nil
 }
 
-const sqlGetTopReferrers = `
-SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
-FROM waitlist_users
-WHERE campaign_id = $1 AND deleted_at IS NULL
-ORDER BY verified_referral_count DESC, referral_count DESC
-LIMIT $2
-`
-
-// GetTopReferrers retrieves the top referrers for a campaign
-func (s *Store) GetTopReferrers(ctx context.Context, campaignID uuid.UUID, limit int) ([]WaitlistUser, error) {
-	var users []WaitlistUser
-	err := s.db.SelectContext(ctx, &users, sqlGetTopReferrers, campaignID, limit)
-	if err != nil {
-		s.logger.Error(ctx, "failed to get top referrers", err)
-		return nil, fmt.Errorf("failed to get top referrers: %w", err)
-	}
-	return users, nil
-}
-
 const sqlUpdateVerificationToken = `
 UPDATE waitlist_users
 SET verification_token = $2,
