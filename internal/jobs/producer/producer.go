@@ -180,3 +180,4 @@ func (p *JobProducer) EnqueueAnalyticsAggregationJob(ctx context.Context, payloa
 	p.logger.Info(ctx, "enqueued analytics aggregation job")
 	return nil
 }
+

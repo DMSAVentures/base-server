@@ -1,45 +1,27 @@
 # Background Job Workers
 
-This document explains the background job processing system using **two complementary patterns**:
-
-1. **🔔 Event-Driven Jobs** - Triggered by user actions (via Kafka)
-2. **⏰ Scheduled Jobs** - Run on time intervals (via built-in scheduler)
-
-## Why Two Patterns?
-
-**Event-Driven** is perfect for:
-- Reacting to user actions (signup → send email)
-- Processing triggered by events
-- Workload scales with user activity
-
-**Scheduled** is perfect for:
-- Periodic batch processing
-- Analytics aggregation
-- System maintenance tasks
-- Fraud detection scans
+This document explains the event-driven background job processing system using Apache Kafka, following the same pattern as webhook delivery.
 
 ## Architecture Overview
 
-### Event-Driven Jobs (Kafka)
 ```
-User Signs Up ──▶ App Publishes Event ──▶ Kafka ──▶ Worker Pool ──▶ Send Email
-User Refers   ──▶ App Publishes Event ──▶ Kafka ──▶ Worker Pool ──▶ Update Position
-Reward Earned ──▶ App Publishes Event ──▶ Kafka ──▶ Worker Pool ──▶ Deliver Reward
+User Action ──▶ App Enqueues Event ──▶ Kafka ──▶ Worker Pool ──▶ Process Job
+  Signup           job.email.verification    (10 workers)      Send Email
+  Referral         job.position.recalculate  (10 workers)      Update Positions
+  Reward Earned    job.reward.deliver        (10 workers)      Deliver Reward
 ```
 
-### Scheduled Jobs (Cron-like)
-```
-Every Hour     ──▶ Scheduler ──▶ Analytics Aggregation
-Every 15 Minutes ──▶ Scheduler ──▶ Fraud Detection Scan
-```
+**Pattern**: Just like webhooks, jobs are:
+1. Published to Kafka topic
+2. Consumed by worker pool
+3. Processed concurrently
+4. Durable and replayable
 
 ## Job Types
 
-### 🔔 Event-Driven Jobs
-
-#### 1. Email Jobs (Event-Driven)
+### 1. Email Jobs
 **Trigger**: User actions (signup, verification, referral, etc.)
-**Pattern**: Kafka event → Worker pool processes → Email sent
+**Pattern**: Event → Kafka → Worker → Send Email
 
 Types:
 - `job.email.verification` - Email address verification
@@ -57,9 +39,9 @@ jobProducer.EnqueueEmailJob(ctx, jobs.EmailJobPayload{
 })
 ```
 
-#### 2. Position Recalculation (Event-Driven)
+### 2. Position Recalculation
 **Trigger**: Referral verification completed
-**Pattern**: Kafka event → Recalculate all positions
+**Pattern**: Event → Kafka → Worker → Recalculate
 
 **Algorithm**: `Position = Original Position - (Verified Referrals × Points Per Referral)`
 
@@ -71,9 +53,9 @@ jobProducer.EnqueuePositionRecalcJob(ctx, jobs.PositionRecalcJobPayload{
 })
 ```
 
-#### 3. Reward Delivery (Event-Driven)
+### 3. Reward Delivery
 **Trigger**: User earns a reward
-**Pattern**: Kafka event → Deliver reward via email/webhook
+**Pattern**: Event → Kafka → Worker → Deliver
 
 **Usage**:
 ```go
@@ -82,47 +64,14 @@ jobProducer.EnqueueRewardDeliveryJob(ctx, jobs.RewardDeliveryJobPayload{
 })
 ```
 
-### ⏰ Scheduled Jobs
-
-#### 4. Analytics Aggregation (Scheduled)
-**Schedule**: Every hour (configurable)
-**Pattern**: Cron scheduler → Aggregate metrics for all campaigns
-
-**Metrics Collected**:
-- New signups count
-- Email verification count
-- Referral count
-- Emails sent count
-- Rewards delivered count
-
-**No manual triggering needed** - runs automatically on schedule.
-
-#### 5. Fraud Detection (Scheduled)
-**Schedule**: Every 15 minutes (configurable)
-**Pattern**: Cron scheduler → Scan recent users for fraud
-
-**Check Types**:
-- Self-referral detection
-- Velocity checks (too many referrals too quickly)
-- Fake email detection
-- Bot detection
-- Duplicate IP address detection
-- Duplicate device fingerprint detection
-
-**No manual triggering needed** - runs automatically on schedule.
-
 ## Environment Variables
 
 ```bash
-# Kafka Configuration (for event-driven jobs)
+# Kafka Configuration
 KAFKA_BROKERS=localhost:9092                   # Comma-separated broker list
 KAFKA_JOB_TOPIC=job-events                     # Topic name (default: job-events)
 KAFKA_JOB_CONSUMER_GROUP=job-workers           # Consumer group (default: job-workers)
 KAFKA_WORKER_POOL_SIZE=10                      # Concurrent workers (default: 10)
-
-# Scheduler Configuration (for scheduled jobs)
-ANALYTICS_INTERVAL=1h                          # Analytics aggregation interval (default: 1h)
-FRAUD_DETECTION_INTERVAL=15m                   # Fraud detection interval (default: 15m)
 ```
 
 ### AWS MSK Example
@@ -132,22 +81,21 @@ KAFKA_BROKERS=b-1.cluster.kafka.us-east-1.amazonaws.com:9092,b-2.cluster.kafka.u
 KAFKA_JOB_TOPIC=job-events
 KAFKA_JOB_CONSUMER_GROUP=job-workers-prod
 KAFKA_WORKER_POOL_SIZE=20
-ANALYTICS_INTERVAL=1h
-FRAUD_DETECTION_INTERVAL=10m
 ```
 
 ## Running the Worker Server
 
 ```bash
-# Start the worker server (handles BOTH event-driven and scheduled jobs)
+# Start the worker server
 go run cmd/kafka-worker/main.go
 ```
 
 The worker server will:
-1. ✅ Start Kafka consumer for event-driven jobs (emails, position, rewards)
-2. ✅ Start scheduler for cron-based jobs (analytics, fraud detection)
-3. ✅ Process jobs concurrently with worker pool
-4. ✅ Handle graceful shutdown
+1. ✅ Connect to Kafka brokers
+2. ✅ Start worker pool (default: 10 concurrent workers)
+3. ✅ Consume job events from `job-events` topic
+4. ✅ Process jobs concurrently
+5. ✅ Handle graceful shutdown
 
 **Startup Log Example**:
 ```
@@ -156,17 +104,16 @@ Kafka job worker server configuration:
   - Kafka brokers: [localhost:9092]
   - Kafka topic: job-events
   - Consumer group: job-workers
-  - Analytics aggregation: every 1h0m0s
-  - Fraud detection: every 15m0s
 ```
 
 ## Usage Examples
 
-### Event-Driven Job Enqueueing
+### Enqueuing Jobs
 
 ```go
 import (
 	"base-server/internal/clients/kafka"
+	"base-server/internal/jobs"
 	"base-server/internal/jobs/producer"
 )
 
@@ -178,7 +125,7 @@ kafkaProducer := kafka.NewProducer(kafka.ProducerConfig{
 
 jobProducer := producer.New(kafkaProducer, logger)
 
-// Example 1: Send verification email (event-driven)
+// Example 1: Send verification email
 err := jobProducer.EnqueueEmailJob(ctx, jobs.EmailJobPayload{
 	Type:       "verification",
 	CampaignID: campaignID,
@@ -186,47 +133,30 @@ err := jobProducer.EnqueueEmailJob(ctx, jobs.EmailJobPayload{
 	Priority:   1,
 })
 
-// Example 2: Recalculate positions after referral (event-driven)
+// Example 2: Recalculate positions after referral
 err := jobProducer.EnqueuePositionRecalcJob(ctx, jobs.PositionRecalcJobPayload{
 	CampaignID:        campaignID,
 	PointsPerReferral: 1,
 })
 
-// Example 3: Deliver reward (event-driven)
+// Example 3: Deliver reward
 err := jobProducer.EnqueueRewardDeliveryJob(ctx, jobs.RewardDeliveryJobPayload{
 	UserRewardID: userRewardID,
 })
 ```
 
-### Scheduled Jobs
-
-**No code needed!** Scheduled jobs (analytics, fraud detection) run automatically based on the configured intervals.
-
-To customize intervals, set environment variables:
-```bash
-ANALYTICS_INTERVAL=30m        # Run analytics every 30 minutes
-FRAUD_DETECTION_INTERVAL=5m   # Run fraud detection every 5 minutes
-```
-
 ## Benefits
 
-### Event-Driven Jobs
-- ✅ **Responsive**: Immediate processing of user actions
-- ✅ **Scalable**: Workload scales with user activity
-- ✅ **Durable**: Kafka persists events before processing
-- ✅ **Replay**: Can reprocess events from any point in time
-- ✅ **Decoupled**: Application doesn't wait for job completion
-
-### Scheduled Jobs
-- ✅ **Predictable**: Runs at consistent intervals
-- ✅ **Efficient**: Batch processing reduces overhead
-- ✅ **Simple**: No need to trigger manually
-- ✅ **Resource-aware**: Runs during low-traffic periods
-- ✅ **Comprehensive**: Scans all data, not just recent events
+✅ **Responsive**: Immediate processing of user actions
+✅ **Scalable**: Workload scales with user activity
+✅ **Durable**: Kafka persists events before processing
+✅ **Replay**: Can reprocess events from any point in time
+✅ **Decoupled**: Application doesn't wait for job completion
+✅ **Consistent**: Same pattern as webhook delivery
 
 ## Event Schema
 
-Event-driven jobs published to Kafka follow this schema:
+Events published to Kafka follow this schema:
 
 ```json
 {
@@ -246,7 +176,7 @@ Event-driven jobs published to Kafka follow this schema:
 
 ## Worker Pool Architecture
 
-Event-driven jobs use a worker pool for concurrent processing:
+Jobs are processed by a worker pool for concurrent execution:
 
 ```go
 // Worker pool processes events concurrently
@@ -264,8 +194,8 @@ jobConsumer := consumer.New(
 1. Kafka consumer fetches messages
 2. Messages sent to buffered channel
 3. Worker pool (10 goroutines) consumes from channel
-4. Each worker processes job
-5. Offset committed after success
+4. Each worker processes job and routes to appropriate handler
+5. Offset committed after successful processing
 
 ## Local Development
 
@@ -316,26 +246,18 @@ kafka-topics --create \
 
    KAFKA_BROKERS=$MSK_BROKERS \
    KAFKA_WORKER_POOL_SIZE=20 \
-   ANALYTICS_INTERVAL=1h \
-   FRAUD_DETECTION_INTERVAL=10m \
    ./kafka-worker
    ```
 
 ### Scaling
 
-**Event-Driven Jobs**:
-- Add more worker instances (horizontal scaling)
-- Increase worker pool size per instance
-- Add more Kafka partitions
-
-**Scheduled Jobs**:
-- Run in a single instance (distributed locking not needed for these jobs)
-- Adjust intervals based on load
-- Schedule during off-peak hours
+- **Horizontal**: Add more worker instances (they share consumer group)
+- **Vertical**: Increase worker pool size per instance
+- **Partitions**: Add more Kafka partitions for parallelism
 
 ## Monitoring
 
-### Kafka Metrics (Event-Driven)
+### Kafka Metrics
 ```bash
 # Check consumer lag
 kafka-consumer-groups --bootstrap-server $KAFKA_BROKERS \
@@ -343,39 +265,32 @@ kafka-consumer-groups --bootstrap-server $KAFKA_BROKERS \
 ```
 
 ### Application Logs
-- Event-driven jobs: Check Kafka consumer logs
-- Scheduled jobs: Check scheduler logs (runs every interval)
+- Check Kafka consumer logs
 - Look for:
   - Jobs processed count
   - Processing time
   - Error rates
 
 ### Key Metrics to Track
-- **Event-driven**: Messages per second, consumer lag, processing time
-- **Scheduled**: Job completion time, records processed, error count
+- Messages per second
+- Consumer lag
+- Processing time per job type
+- Error rate by job type
 
 ## Troubleshooting
 
-### Event-Driven Jobs Not Processing
+### Jobs Not Processing
 
 1. Check consumer lag (are messages piling up?)
 2. Verify topic exists and has messages
 3. Check worker logs for errors
 4. Ensure Kafka brokers are reachable
 
-### Scheduled Jobs Not Running
-
-1. Check scheduler logs for job execution
-2. Verify intervals are configured correctly
-3. Check database connectivity
-4. Look for errors in job execution logs
-
 ### Slow Processing
 
 1. Increase worker pool size: `KAFKA_WORKER_POOL_SIZE=20`
 2. Scale horizontally (add more instances)
 3. Optimize job processing logic
-4. Adjust scheduled job intervals
 
 ## Migration from Asynq/Redis
 

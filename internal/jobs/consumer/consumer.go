@@ -140,7 +140,7 @@ func (c *JobConsumer) processEvent(ctx context.Context, event kafka.EventMessage
 
 	c.logger.Info(ctx, fmt.Sprintf("Processing event %s", event.Type))
 
-	// Route based on event type (only event-driven jobs)
+	// Route based on event type
 	var err error
 	switch {
 	case strings.HasPrefix(event.Type, "job.email."):
@@ -150,7 +150,7 @@ func (c *JobConsumer) processEvent(ctx context.Context, event kafka.EventMessage
 	case event.Type == "job.reward.deliver":
 		err = c.processRewardJob(ctx, event)
 	default:
-		c.logger.Warn(ctx, fmt.Sprintf("Unknown event-driven job type: %s (fraud/analytics are scheduled)", event.Type))
+		c.logger.Warn(ctx, fmt.Sprintf("Unknown job type: %s", event.Type))
 		return nil
 	}
 

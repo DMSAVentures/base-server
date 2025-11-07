@@ -9,20 +9,16 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"base-server/internal/clients/kafka"
 	"base-server/internal/email"
 	"base-server/internal/jobs/consumer"
 	"base-server/internal/jobs/producer"
-	"base-server/internal/jobs/scheduler"
-	scheduledJobs "base-server/internal/jobs/scheduler/jobs"
 	"base-server/internal/jobs/workers"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 
 	"github.com/joho/godotenv"
-	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -64,10 +60,6 @@ func main() {
 			workerCount = parsed
 		}
 	}
-
-	// Scheduler intervals
-	analyticsInterval := parseInterval(os.Getenv("ANALYTICS_INTERVAL"), 1*time.Hour)
-	fraudInterval := parseInterval(os.Getenv("FRAUD_DETECTION_INTERVAL"), 15*time.Minute)
 
 	// Database configuration
 	dbHost := os.Getenv("DB_HOST")
@@ -115,8 +107,6 @@ func main() {
 	emailWorker := workers.NewEmailWorker(&dataStore, emailService, logger)
 	positionWorker := workers.NewPositionWorker(&dataStore, logger)
 	rewardWorker := workers.NewRewardWorker(&dataStore, emailService, nil, logger)
-	analyticsWorker := workers.NewAnalyticsWorker(&dataStore, logger)
-	fraudWorker := workers.NewFraudWorker(&dataStore, logger)
 
 	// Initialize event-driven job consumer (emails, position recalc, rewards)
 	jobConsumer := consumer.New(
@@ -128,33 +118,12 @@ func main() {
 		workerCount,
 	)
 
-	// Initialize scheduler for cron-based jobs
-	jobScheduler := scheduler.New(logger)
-
-	// Register analytics aggregation job (runs hourly by default)
-	jobScheduler.Register(scheduledJobs.NewAnalyticsAggregationJob(
-		&dataStore,
-		logger,
-		analyticsInterval,
-	))
-
-	// Register fraud detection job (runs every 15 minutes by default)
-	jobScheduler.Register(scheduledJobs.NewFraudDetectionJob(
-		&dataStore,
-		fraudWorker,
-		logger,
-		fraudInterval,
-	))
-
 	logger.Info(ctx, fmt.Sprintf(`Kafka job worker server configuration:
   - Event-driven jobs: %d concurrent workers
   - Kafka brokers: %v
   - Kafka topic: %s
-  - Consumer group: %s
-  - Analytics aggregation: every %s
-  - Fraud detection: every %s`,
-		workerCount, brokers, kafkaTopic, kafkaConsumerGroup,
-		analyticsInterval, fraudInterval))
+  - Consumer group: %s`,
+		workerCount, brokers, kafkaTopic, kafkaConsumerGroup))
 
 	// Handle graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -163,37 +132,24 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Start both event-driven consumer and scheduler using errgroup
-	g, gCtx := errgroup.WithContext(ctx)
-
 	// Start event-driven job consumer
-	g.Go(func() error {
-		logger.Info(gCtx, "Starting event-driven job consumer...")
-		return jobConsumer.Start(gCtx)
-	})
-
-	// Start scheduler for cron-based jobs
-	g.Go(func() error {
-		logger.Info(gCtx, "Starting scheduled job scheduler...")
-		return jobScheduler.Start(gCtx)
-	})
+	go func() {
+		logger.Info(ctx, "Starting event-driven job consumer...")
+		if err := jobConsumer.Start(ctx); err != nil && err != context.Canceled {
+			logger.Error(ctx, "Job consumer error", err)
+			cancel()
+		}
+	}()
 
 	logger.Info(ctx, "Kafka job worker server started successfully")
 
 	// Wait for shutdown signal
-	select {
-	case <-sigChan:
-		logger.Info(ctx, "Received shutdown signal, stopping workers...")
-	case <-gCtx.Done():
-		logger.Info(ctx, "Context cancelled")
-	}
-
+	<-sigChan
+	logger.Info(ctx, "Received shutdown signal, stopping workers...")
 	cancel()
 
-	// Wait for all goroutines to finish
-	if err := g.Wait(); err != nil && err != context.Canceled {
-		logger.Error(ctx, "Error during shutdown", err)
-	}
+	// Give workers time to finish current jobs
+	logger.Info(ctx, "Waiting for workers to finish...")
 
 	// Stop consumer
 	if err := jobConsumer.Stop(); err != nil {
@@ -201,19 +157,4 @@ func main() {
 	}
 
 	logger.Info(ctx, "Kafka job worker server stopped")
-}
-
-// parseInterval parses a duration string with fallback to default
-func parseInterval(intervalStr string, defaultInterval time.Duration) time.Duration {
-	if intervalStr == "" {
-		return defaultInterval
-	}
-
-	interval, err := time.ParseDuration(intervalStr)
-	if err != nil {
-		log.Printf("Warning: invalid interval '%s', using default %s", intervalStr, defaultInterval)
-		return defaultInterval
-	}
-
-	return interval
 }
