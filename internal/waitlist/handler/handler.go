@@ -2,8 +2,8 @@ package handler
 
 import (
 	"base-server/internal/observability"
-	"base-server/internal/store"
 	"base-server/internal/waitlist/processor"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
@@ -712,6 +712,8 @@ func (h *Handler) HandleExportUsers(c *gin.Context) {
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"job_id":       jobID,
+		"campaign_id":  campaignID,
+		"account_id":   accountID,
 		"message":      "Export job created successfully",
 		"download_url": downloadURL,
 		"format":       req.Format,
