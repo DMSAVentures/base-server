@@ -1,11 +1,11 @@
 .PHONY: test test-setup test-teardown test-db-up test-db-down test-store test-verbose test-coverage
 
-# Test database configuration
+# Test database configuration - using existing Docker infrastructure
 TEST_DB_HOST ?= localhost
-TEST_DB_PORT ?= 5433
-TEST_DB_USER ?= postgres
-TEST_DB_PASSWORD ?= postgres
-TEST_DB_NAME ?= test_db
+TEST_DB_PORT ?= 5432
+TEST_DB_USER ?= base_user
+TEST_DB_PASSWORD ?= base_password
+TEST_DB_NAME ?= base_db
 
 # Export test database environment variables
 export TEST_DB_HOST
@@ -15,19 +15,17 @@ export TEST_DB_PASSWORD
 export TEST_DB_NAME
 export TEST_DB_TYPE ?= postgres
 
-# Start the test database
+# Start all services (database, kafka, migrations)
 test-db-up:
-	@echo "Starting test database..."
-	docker-compose -f docker-compose.test.yml up -d
-	@echo "Waiting for database to be ready..."
-	@sleep 3
-	@echo "Test database is ready!"
+	@echo "Starting all services (database, kafka, migrations)..."
+	docker compose -f docker-compose.services.yml up -d
+	@echo "Services started! Database migrations are automatically applied."
 
-# Stop the test database
+# Stop all services
 test-db-down:
-	@echo "Stopping test database..."
-	docker-compose -f docker-compose.test.yml down -v
-	@echo "Test database stopped!"
+	@echo "Stopping all services..."
+	docker compose -f docker-compose.services.yml down
+	@echo "Services stopped!"
 
 # Run all tests with test database
 test: test-db-up

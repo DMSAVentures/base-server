@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -62,10 +61,8 @@ func SetupTestDB(t *testing.T, dbType TestDBType) *TestDB {
 		t.Fatalf("failed to setup test database: %v", err)
 	}
 
-	// Run migrations
-	if err := runMigrations(db); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
-	}
+	// Migrations are handled by Flyway in docker-compose.services.yml
+	// No need to run migrations here
 
 	store := Store{db: db, logger: logger}
 
@@ -90,7 +87,7 @@ func setupPostgresDB(t *testing.T) (*sqlx.DB, error) {
 	dbPass := os.Getenv("TEST_DB_PASSWORD")
 	dbName := os.Getenv("TEST_DB_NAME")
 
-	// Use defaults if not set
+	// Use defaults if not set (matching docker-compose.services.yml)
 	if dbHost == "" {
 		dbHost = "localhost"
 	}
@@ -98,82 +95,33 @@ func setupPostgresDB(t *testing.T) (*sqlx.DB, error) {
 		dbPort = "5432"
 	}
 	if dbUser == "" {
-		dbUser = "postgres"
+		dbUser = "base_user"
 	}
 	if dbPass == "" {
-		dbPass = "postgres"
+		dbPass = "base_password"
 	}
 	if dbName == "" {
-		dbName = fmt.Sprintf("test_db_%d", time.Now().Unix())
+		dbName = "base_db"
 	}
 
-	// Create connection string
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/postgres?sslmode=disable",
-		dbUser, dbPass, dbHost, dbPort)
-
-	// Connect to postgres database to create test database
-	adminDB, err := sqlx.Open("pgx", connStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
-	}
-	defer adminDB.Close()
-
-	// Create test database
-	_, err = adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s", dbName))
-	if err != nil {
-		// If database already exists, drop it and recreate
-		if strings.Contains(err.Error(), "already exists") {
-			_, err = adminDB.Exec(fmt.Sprintf("DROP DATABASE %s", dbName))
-			if err != nil {
-				return nil, fmt.Errorf("failed to drop existing database: %w", err)
-			}
-			_, err = adminDB.Exec(fmt.Sprintf("CREATE DATABASE %s", dbName))
-			if err != nil {
-				return nil, fmt.Errorf("failed to create database after drop: %w", err)
-			}
-		} else {
-			return nil, fmt.Errorf("failed to create database: %w", err)
-		}
-	}
-
-	// Connect to the test database
-	testConnStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+	// Connect to the existing database
+	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
 		dbUser, dbPass, dbHost, dbPort, dbName)
 
-	db, err := sqlx.Open("pgx", testConnStr)
+	db, err := sqlx.Open("pgx", connStr)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to test database: %w", err)
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	// Verify connection
 	if err := db.Ping(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to ping test database: %w", err)
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Register cleanup
+	// Register cleanup to close connection
 	t.Cleanup(func() {
 		db.Close()
-		// Connect back to postgres to drop test database
-		adminDB, err := sqlx.Open("pgx", connStr)
-		if err != nil {
-			t.Logf("failed to connect to postgres for cleanup: %v", err)
-			return
-		}
-		defer adminDB.Close()
-
-		// Terminate existing connections
-		_, _ = adminDB.Exec(fmt.Sprintf(`
-			SELECT pg_terminate_backend(pg_stat_activity.pid)
-			FROM pg_stat_activity
-			WHERE pg_stat_activity.datname = '%s'
-			AND pid <> pg_backend_pid()`, dbName))
-
-		// Drop database
-		_, err = adminDB.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
-		if err != nil {
-			t.Logf("failed to drop test database: %v", err)
-		}
 	})
 
 	return db, nil
@@ -230,7 +178,6 @@ func (tdb *TestDB) Truncate(t *testing.T, tables ...string) {
 		tables = []string{
 			"webhook_deliveries",
 			"webhooks",
-			"fraud_detection",
 			"audit_log",
 			"api_keys",
 			"campaign_analytics",
@@ -259,7 +206,10 @@ func (tdb *TestDB) Truncate(t *testing.T, tables ...string) {
 	for _, table := range tables {
 		_, err := tdb.db.Exec(fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table))
 		if err != nil {
-			t.Fatalf("failed to truncate table %s: %v", table, err)
+			// Skip if table doesn't exist
+			if !strings.Contains(err.Error(), "does not exist") {
+				t.Fatalf("failed to truncate table %s: %v", table, err)
+			}
 		}
 	}
 }
