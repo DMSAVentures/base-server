@@ -23,7 +23,6 @@ import (
 	webhookConsumer "base-server/internal/webhooks/consumer"
 	webhookHandler "base-server/internal/webhooks/handler"
 	webhookProcessor "base-server/internal/webhooks/processor"
-	webhookProducer "base-server/internal/webhooks/producer"
 	webhookService "base-server/internal/webhooks/service"
 	webhookWorker "base-server/internal/webhooks/worker"
 	"context"
@@ -268,7 +267,6 @@ func main() {
 
 	// Initialize webhook services
 	webhookSvc := webhookService.New(store, logger)
-	eventProducer := webhookProducer.New(kafkaProducer, logger)
 	webhookProc := webhookProcessor.New(store, logger, webhookSvc)
 	webhookHdlr := webhookHandler.New(webhookProc, logger)
 
