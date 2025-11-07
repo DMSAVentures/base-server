@@ -136,10 +136,10 @@ func TestStore_GetStripeCustomerIDByUserExternalID(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name             string
-		setup            func(t *testing.T) uuid.UUID
-		wantStripeID     string
-		wantErr          bool
+		name         string
+		setup        func(t *testing.T) uuid.UUID
+		wantStripeID string
+		wantErr      bool
 	}{
 		{
 			name: "get stripe customer ID for user",
@@ -189,11 +189,11 @@ func TestStore_GetUserByStripeCustomerID(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name       string
-		setup      func(t *testing.T) (uuid.UUID, string)
-		stripeID   string
-		wantErr    bool
-		validate   func(t *testing.T, user User, expectedID uuid.UUID)
+		name     string
+		setup    func(t *testing.T) (uuid.UUID, string)
+		stripeID string
+		wantErr  bool
+		validate func(t *testing.T, user User, expectedID uuid.UUID)
 	}{
 		{
 			name: "get user by stripe customer ID",

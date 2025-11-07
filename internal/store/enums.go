@@ -109,12 +109,12 @@ const (
 
 // Email Template ENUMs
 const (
-	EmailTemplateTypeVerification  = "verification"
-	EmailTemplateTypeWelcome       = "welcome"
+	EmailTemplateTypeVerification   = "verification"
+	EmailTemplateTypeWelcome        = "welcome"
 	EmailTemplateTypePositionUpdate = "position_update"
-	EmailTemplateTypeRewardEarned  = "reward_earned"
-	EmailTemplateTypeMilestone     = "milestone"
-	EmailTemplateTypeCustom        = "custom"
+	EmailTemplateTypeRewardEarned   = "reward_earned"
+	EmailTemplateTypeMilestone      = "milestone"
+	EmailTemplateTypeCustom         = "custom"
 )
 
 // Email Log ENUMs

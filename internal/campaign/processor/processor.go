@@ -192,12 +192,6 @@ func (p *CampaignProcessor) UpdateCampaign(ctx context.Context, accountID, campa
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 	)
 
-	// Verify campaign exists and belongs to account
-	_, err := p.GetCampaign(ctx, accountID, campaignID)
-	if err != nil {
-		return store.Campaign{}, err
-	}
-
 	params := store.UpdateCampaignParams{
 		Name:             req.Name,
 		Description:      req.Description,
@@ -210,8 +204,11 @@ func (p *CampaignProcessor) UpdateCampaign(ctx context.Context, accountID, campa
 		MaxSignups:       req.MaxSignups,
 	}
 
-	campaign, err := p.store.UpdateCampaign(ctx, campaignID, params)
+	campaign, err := p.store.UpdateCampaign(ctx, accountID, campaignID, params)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return store.Campaign{}, ErrCampaignNotFound
+		}
 		p.logger.Error(ctx, "failed to update campaign", err)
 		return store.Campaign{}, err
 	}
@@ -233,14 +230,11 @@ func (p *CampaignProcessor) UpdateCampaignStatus(ctx context.Context, accountID,
 		return store.Campaign{}, ErrInvalidCampaignStatus
 	}
 
-	// Verify campaign exists and belongs to account
-	_, err := p.GetCampaign(ctx, accountID, campaignID)
+	campaign, err := p.store.UpdateCampaignStatus(ctx, accountID, campaignID, status)
 	if err != nil {
-		return store.Campaign{}, err
-	}
-
-	campaign, err := p.store.UpdateCampaignStatus(ctx, campaignID, status)
-	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return store.Campaign{}, ErrCampaignNotFound
+		}
 		p.logger.Error(ctx, "failed to update campaign status", err)
 		return store.Campaign{}, err
 	}
@@ -256,14 +250,11 @@ func (p *CampaignProcessor) DeleteCampaign(ctx context.Context, accountID, campa
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 	)
 
-	// Verify campaign exists and belongs to account
-	_, err := p.GetCampaign(ctx, accountID, campaignID)
+	err := p.store.DeleteCampaign(ctx, accountID, campaignID)
 	if err != nil {
-		return err
-	}
-
-	err = p.store.DeleteCampaign(ctx, campaignID)
-	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return ErrCampaignNotFound
+		}
 		p.logger.Error(ctx, "failed to delete campaign", err)
 		return err
 	}

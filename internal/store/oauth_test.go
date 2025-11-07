@@ -14,13 +14,13 @@ func TestStore_CreateUserOnGoogleSignIn(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name          string
-		googleUserID  string
-		email         string
-		firstName     string
-		lastName      string
-		wantErr       bool
-		validate      func(t *testing.T, user User)
+		name         string
+		googleUserID string
+		email        string
+		firstName    string
+		lastName     string
+		wantErr      bool
+		validate     func(t *testing.T, user User)
 	}{
 		{
 			name:         "successful google user creation",
@@ -183,11 +183,11 @@ func TestStore_GetOauthUserByEmail_MultipleProviders(t *testing.T) {
 	createTestOAuthAuth(t, testDB, authID2, "apple_456", "user@icloud.com", "Apple User", "apple")
 
 	tests := []struct {
-		name             string
-		email            string
-		wantProvider     string
-		wantExternalID   string
-		wantErr          bool
+		name           string
+		email          string
+		wantProvider   string
+		wantExternalID string
+		wantErr        bool
 	}{
 		{
 			name:           "get google oauth user",

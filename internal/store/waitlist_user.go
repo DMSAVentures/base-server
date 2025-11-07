@@ -11,39 +11,39 @@ import (
 
 // CreateWaitlistUserParams represents parameters for creating a waitlist user
 type CreateWaitlistUserParams struct {
-	CampaignID         uuid.UUID
-	Email              string
-	FirstName          *string
-	LastName           *string
-	ReferralCode       string
-	ReferredByID       *uuid.UUID
-	Position           int
-	OriginalPosition   int
-	Source             *string
-	UTMSource          *string
-	UTMMedium          *string
-	UTMCampaign        *string
-	UTMTerm            *string
-	UTMContent         *string
-	IPAddress          *string
-	UserAgent          *string
-	CountryCode        *string
-	City               *string
-	DeviceFingerprint  *string
-	Metadata           JSONB
-	MarketingConsent   bool
-	TermsAccepted      bool
-	VerificationToken  *string
+	CampaignID        uuid.UUID
+	Email             string
+	FirstName         *string
+	LastName          *string
+	ReferralCode      string
+	ReferredByID      *uuid.UUID
+	Position          int
+	OriginalPosition  int
+	Source            *string
+	UTMSource         *string
+	UTMMedium         *string
+	UTMCampaign       *string
+	UTMTerm           *string
+	UTMContent        *string
+	IPAddress         *string
+	UserAgent         *string
+	CountryCode       *string
+	City              *string
+	DeviceFingerprint *string
+	Metadata          JSONB
+	MarketingConsent  bool
+	TermsAccepted     bool
+	VerificationToken *string
 }
 
 // UpdateWaitlistUserParams represents parameters for updating a waitlist user
 type UpdateWaitlistUserParams struct {
-	FirstName   *string
-	LastName    *string
-	Status      *string
-	Position    *int
-	Points      *int
-	Metadata    JSONB
+	FirstName *string
+	LastName  *string
+	Status    *string
+	Position  *int
+	Points    *int
+	Metadata  JSONB
 }
 
 const sqlCreateWaitlistUser = `

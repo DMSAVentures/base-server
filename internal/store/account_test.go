@@ -480,10 +480,10 @@ func TestStore_UpdateAccountStripeCustomerID(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name       string
-		setup      func(t *testing.T) uuid.UUID
-		stripeID   string
-		wantErr    bool
+		name     string
+		setup    func(t *testing.T) uuid.UUID
+		stripeID string
+		wantErr  bool
 	}{
 		{
 			name: "update stripe customer ID",

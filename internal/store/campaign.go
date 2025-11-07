@@ -227,28 +227,29 @@ func (s *Store) ListCampaigns(ctx context.Context, params ListCampaignsParams) (
 
 const sqlUpdateCampaign = `
 UPDATE campaigns
-SET name = COALESCE($2, name),
-    description = COALESCE($3, description),
-    status = COALESCE($4, status),
-    launch_date = COALESCE($5, launch_date),
-    end_date = COALESCE($6, end_date),
-    form_config = COALESCE($7, form_config),
-    referral_config = COALESCE($8, referral_config),
-    email_config = COALESCE($9, email_config),
-    branding_config = COALESCE($10, branding_config),
-    privacy_policy_url = COALESCE($11, privacy_policy_url),
-    terms_url = COALESCE($12, terms_url),
-    max_signups = COALESCE($13, max_signups),
+SET name = COALESCE($3, name),
+    description = COALESCE($4, description),
+    status = COALESCE($5, status),
+    launch_date = COALESCE($6, launch_date),
+    end_date = COALESCE($7, end_date),
+    form_config = COALESCE($8, form_config),
+    referral_config = COALESCE($9, referral_config),
+    email_config = COALESCE($10, email_config),
+    branding_config = COALESCE($11, branding_config),
+    privacy_policy_url = COALESCE($12, privacy_policy_url),
+    terms_url = COALESCE($13, terms_url),
+    max_signups = COALESCE($14, max_signups),
     updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
 RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
 `
 
 // UpdateCampaign updates a campaign
-func (s *Store) UpdateCampaign(ctx context.Context, campaignID uuid.UUID, params UpdateCampaignParams) (Campaign, error) {
+func (s *Store) UpdateCampaign(ctx context.Context, accountID, campaignID uuid.UUID, params UpdateCampaignParams) (Campaign, error) {
 	var campaign Campaign
 	err := s.db.GetContext(ctx, &campaign, sqlUpdateCampaign,
 		campaignID,
+		accountID,
 		params.Name,
 		params.Description,
 		params.Status,
@@ -273,15 +274,15 @@ func (s *Store) UpdateCampaign(ctx context.Context, campaignID uuid.UUID, params
 
 const sqlUpdateCampaignStatus = `
 UPDATE campaigns
-SET status = $2, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+SET status = $3, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
 RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
 `
 
 // UpdateCampaignStatus updates a campaign's status
-func (s *Store) UpdateCampaignStatus(ctx context.Context, campaignID uuid.UUID, status string) (Campaign, error) {
+func (s *Store) UpdateCampaignStatus(ctx context.Context, accountID, campaignID uuid.UUID, status string) (Campaign, error) {
 	var campaign Campaign
-	err := s.db.GetContext(ctx, &campaign, sqlUpdateCampaignStatus, campaignID, status)
+	err := s.db.GetContext(ctx, &campaign, sqlUpdateCampaignStatus, campaignID, accountID, status)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Campaign{}, ErrNotFound
@@ -295,12 +296,12 @@ func (s *Store) UpdateCampaignStatus(ctx context.Context, campaignID uuid.UUID, 
 const sqlDeleteCampaign = `
 UPDATE campaigns
 SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = $1 AND deleted_at IS NULL
+WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
 `
 
 // DeleteCampaign soft deletes a campaign
-func (s *Store) DeleteCampaign(ctx context.Context, campaignID uuid.UUID) error {
-	res, err := s.db.ExecContext(ctx, sqlDeleteCampaign, campaignID)
+func (s *Store) DeleteCampaign(ctx context.Context, accountID, campaignID uuid.UUID) error {
+	res, err := s.db.ExecContext(ctx, sqlDeleteCampaign, campaignID, accountID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to delete campaign", err)
 		return fmt.Errorf("failed to delete campaign: %w", err)

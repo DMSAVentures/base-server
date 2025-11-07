@@ -26,17 +26,17 @@ func New(processor processor.CampaignProcessor, logger *observability.Logger) Ha
 
 // CreateCampaignRequest represents the HTTP request for creating a campaign
 type CreateCampaignRequest struct {
-	Name             string          `json:"name" binding:"required,min=1,max=255"`
-	Slug             string          `json:"slug" binding:"required,min=1,max=255"`
-	Description      *string         `json:"description,omitempty"`
-	Type             string          `json:"type" binding:"required,oneof=waitlist referral contest"`
-	FormConfig       *store.JSONB    `json:"form_config,omitempty"`
-	ReferralConfig   *store.JSONB    `json:"referral_config,omitempty"`
-	EmailConfig      *store.JSONB    `json:"email_config,omitempty"`
-	BrandingConfig   *store.JSONB    `json:"branding_config,omitempty"`
-	PrivacyPolicyURL *string         `json:"privacy_policy_url,omitempty"`
-	TermsURL         *string         `json:"terms_url,omitempty"`
-	MaxSignups       *int            `json:"max_signups,omitempty"`
+	Name             string       `json:"name" binding:"required,min=1,max=255"`
+	Slug             string       `json:"slug" binding:"required,min=1,max=255"`
+	Description      *string      `json:"description,omitempty"`
+	Type             string       `json:"type" binding:"required,oneof=waitlist referral contest"`
+	FormConfig       *store.JSONB `json:"form_config,omitempty"`
+	ReferralConfig   *store.JSONB `json:"referral_config,omitempty"`
+	EmailConfig      *store.JSONB `json:"email_config,omitempty"`
+	BrandingConfig   *store.JSONB `json:"branding_config,omitempty"`
+	PrivacyPolicyURL *string      `json:"privacy_policy_url,omitempty"`
+	TermsURL         *string      `json:"terms_url,omitempty"`
+	MaxSignups       *int         `json:"max_signups,omitempty"`
 }
 
 // UpdateCampaignRequest represents the HTTP request for updating a campaign
