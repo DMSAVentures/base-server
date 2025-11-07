@@ -235,7 +235,7 @@ func (s *WebhookService) deliverWebhook(ctx context.Context, webhook store.Webho
 	// Read response body (limit to 10KB)
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 10240))
 	if err != nil {
-		s.logger.Warn(ctx, "failed to read response body", err)
+		s.logger.Warn(ctx, "failed to read response body")
 		responseBody = ""
 	} else {
 		responseBody = string(bodyBytes)
