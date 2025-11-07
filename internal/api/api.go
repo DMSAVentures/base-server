@@ -6,6 +6,7 @@ import (
 	campaignHandler "base-server/internal/campaign/handler"
 	billingHandler "base-server/internal/money/billing/handler"
 	voiceCallHandler "base-server/internal/voicecall/handler"
+	waitlistHandler "base-server/internal/waitlist/handler"
 	webhookHandler "base-server/internal/webhooks/handler"
 	"net/http"
 
@@ -16,6 +17,7 @@ type API struct {
 	router           *gin.RouterGroup
 	authHandler      authHandler.Handler
 	campaignHandler  campaignHandler.Handler
+	waitlistHandler  waitlistHandler.Handler
 	billingHandler   billingHandler.Handler
 	aiHandler        aiHandler.Handler
 	voicecallHandler voiceCallHandler.Handler
@@ -23,11 +25,12 @@ type API struct {
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
+	waitlistHandler waitlistHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
 	return API{
 		router:           router,
 		authHandler:      authHandler,
 		campaignHandler:  campaignHandler,
+		waitlistHandler:  waitlistHandler,
 		billingHandler:   handler,
 		aiHandler:        aiHandler,
 		voicecallHandler: voicecallHandler,
@@ -84,6 +87,22 @@ func (a *API) RegisterRoutes() {
 			campaignsGroup.PUT("/:campaign_id", a.campaignHandler.HandleUpdateCampaign)
 			campaignsGroup.DELETE("/:campaign_id", a.campaignHandler.HandleDeleteCampaign)
 			campaignsGroup.PATCH("/:campaign_id/status", a.campaignHandler.HandleUpdateCampaignStatus)
+
+			// Waitlist Users routes
+			usersGroup := campaignsGroup.Group("/:campaign_id/users")
+			{
+				usersGroup.POST("", a.waitlistHandler.HandleSignupUser)
+				usersGroup.GET("", a.waitlistHandler.HandleListUsers)
+				usersGroup.POST("/search", a.waitlistHandler.HandleSearchUsers)
+				usersGroup.POST("/import", a.waitlistHandler.HandleImportUsers)
+				usersGroup.POST("/export", a.waitlistHandler.HandleExportUsers)
+
+				usersGroup.GET("/:user_id", a.waitlistHandler.HandleGetUser)
+				usersGroup.PUT("/:user_id", a.waitlistHandler.HandleUpdateUser)
+				usersGroup.DELETE("/:user_id", a.waitlistHandler.HandleDeleteUser)
+				usersGroup.POST("/:user_id/verify", a.waitlistHandler.HandleVerifyUser)
+				usersGroup.POST("/:user_id/resend-verification", a.waitlistHandler.HandleResendVerification)
+			}
 		}
 	}
 	apiGroup.GET("billing/plans", a.billingHandler.ListPrices)
