@@ -11,6 +11,8 @@ import (
 
 	aiHandler "base-server/internal/ai-capabilities/handler"
 	AICapabilities "base-server/internal/ai-capabilities/processor"
+	analyticsHandler "base-server/internal/analytics/handler"
+	analyticsProcessor "base-server/internal/analytics/processor"
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
 	campaignHandler "base-server/internal/campaign/handler"
@@ -53,6 +55,7 @@ type Dependencies struct {
 	VoiceCallHandler     voiceCallHandler.Handler
 	CampaignHandler      campaignHandler.Handler
 	WaitlistHandler      waitlistHandler.Handler
+	AnalyticsHandler     analyticsHandler.Handler
 	ReferralHandler      referralHandler.Handler
 	RewardHandler        rewardHandler.Handler
 	EmailTemplateHandler emailTemplateHandler.Handler
@@ -157,6 +160,10 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	// Initialize waitlist processor and handler
 	waitlistProc := waitlistProcessor.New(deps.Store, logger)
 	deps.WaitlistHandler = waitlistHandler.New(waitlistProc, logger, cfg.Services.WebAppURI)
+
+	// Initialize analytics processor and handler
+	analyticsProc := analyticsProcessor.New(deps.Store, logger)
+	deps.AnalyticsHandler = analyticsHandler.New(analyticsProc, logger)
 
 	// Initialize referral processor and handler
 	referralProc := referralProcessor.New(deps.Store, logger)

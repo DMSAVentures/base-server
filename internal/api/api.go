@@ -2,6 +2,7 @@ package api
 
 import (
 	aiHandler "base-server/internal/ai-capabilities/handler"
+	analyticsHandler "base-server/internal/analytics/handler"
 	authHandler "base-server/internal/auth/handler"
 	campaignHandler "base-server/internal/campaign/handler"
 	emailTemplateHandler "base-server/internal/emailtemplates/handler"
@@ -20,6 +21,7 @@ type API struct {
 	authHandler          authHandler.Handler
 	campaignHandler      campaignHandler.Handler
 	waitlistHandler      waitlistHandler.Handler
+	analyticsHandler     analyticsHandler.Handler
 	rewardHandler        rewardHandler.Handler
 	emailTemplateHandler emailTemplateHandler.Handler
 	billingHandler       billingHandler.Handler
@@ -29,12 +31,13 @@ type API struct {
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	waitlistHandler waitlistHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
+	waitlistHandler waitlistHandler.Handler, analyticsHandler analyticsHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
 	return API{
 		router:               router,
 		authHandler:          authHandler,
 		campaignHandler:      campaignHandler,
 		waitlistHandler:      waitlistHandler,
+		analyticsHandler:     analyticsHandler,
 		rewardHandler:        rewardHandler,
 		emailTemplateHandler: emailTemplateHandler,
 		billingHandler:       handler,
@@ -133,6 +136,17 @@ func (a *API) RegisterRoutes() {
 				emailTemplatesGroup.PUT("/:template_id", a.emailTemplateHandler.HandleUpdateEmailTemplate)
 				emailTemplatesGroup.DELETE("/:template_id", a.emailTemplateHandler.HandleDeleteEmailTemplate)
 				emailTemplatesGroup.POST("/:template_id/send-test", a.emailTemplateHandler.HandleSendTestEmail)
+			}
+
+			// Analytics routes
+			analyticsGroup := campaignsGroup.Group("/:campaign_id/analytics")
+			{
+				analyticsGroup.GET("/overview", a.analyticsHandler.HandleGetAnalyticsOverview)
+				analyticsGroup.GET("/conversions", a.analyticsHandler.HandleGetConversionAnalytics)
+				analyticsGroup.GET("/referrals", a.analyticsHandler.HandleGetReferralAnalytics)
+				analyticsGroup.GET("/time-series", a.analyticsHandler.HandleGetTimeSeriesAnalytics)
+				analyticsGroup.GET("/sources", a.analyticsHandler.HandleGetSourceAnalytics)
+				analyticsGroup.GET("/funnel", a.analyticsHandler.HandleGetFunnelAnalytics)
 			}
 		}
 	}
