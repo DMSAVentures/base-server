@@ -6,18 +6,23 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"base-server/internal/clients/kafka"
 	"base-server/internal/email"
 	"base-server/internal/jobs/consumer"
 	"base-server/internal/jobs/producer"
+	"base-server/internal/jobs/scheduler"
+	scheduledJobs "base-server/internal/jobs/scheduler/jobs"
 	"base-server/internal/jobs/workers"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 
 	"github.com/joho/godotenv"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -51,6 +56,20 @@ func main() {
 		kafkaConsumerGroup = "job-workers"
 	}
 
+	// Worker pool size
+	workerCountStr := os.Getenv("KAFKA_WORKER_POOL_SIZE")
+	workerCount := 10 // default
+	if workerCountStr != "" {
+		if parsed, err := strconv.Atoi(workerCountStr); err == nil && parsed > 0 {
+			workerCount = parsed
+		}
+	}
+
+	// Scheduler intervals
+	analyticsInterval := parseInterval(os.Getenv("ANALYTICS_INTERVAL"), 1*time.Hour)
+	fraudInterval := parseInterval(os.Getenv("FRAUD_DETECTION_INTERVAL"), 15*time.Minute)
+
+	// Database configuration
 	dbHost := os.Getenv("DB_HOST")
 	dbUsername := os.Getenv("DB_USERNAME")
 	dbPassword := os.Getenv("DB_PASSWORD")
@@ -80,7 +99,7 @@ func main() {
 	}, logger)
 	defer kafkaProducer.Close()
 
-	// Initialize job producer for workers that need to enqueue other jobs
+	// Initialize job producer
 	jobProducer := producer.New(kafkaProducer, logger)
 	_ = jobProducer // Will be used by workers in the future
 
@@ -95,25 +114,47 @@ func main() {
 	// Initialize workers
 	emailWorker := workers.NewEmailWorker(&dataStore, emailService, logger)
 	positionWorker := workers.NewPositionWorker(&dataStore, logger)
-	rewardWorker := workers.NewRewardWorker(&dataStore, emailService, nil, logger) // TODO: Pass job client
+	rewardWorker := workers.NewRewardWorker(&dataStore, emailService, nil, logger)
 	analyticsWorker := workers.NewAnalyticsWorker(&dataStore, logger)
 	fraudWorker := workers.NewFraudWorker(&dataStore, logger)
 
-	// Initialize job consumer with worker pool
-	workerCount := 10 // Number of concurrent workers
+	// Initialize event-driven job consumer (emails, position recalc, rewards)
 	jobConsumer := consumer.New(
 		kafkaConsumer,
 		emailWorker,
 		positionWorker,
 		rewardWorker,
-		analyticsWorker,
-		fraudWorker,
 		logger,
 		workerCount,
 	)
 
-	logger.Info(ctx, fmt.Sprintf("Kafka job worker server starting with %d workers on brokers: %v, topic: %s, group: %s",
-		workerCount, brokers, kafkaTopic, kafkaConsumerGroup))
+	// Initialize scheduler for cron-based jobs
+	jobScheduler := scheduler.New(logger)
+
+	// Register analytics aggregation job (runs hourly by default)
+	jobScheduler.Register(scheduledJobs.NewAnalyticsAggregationJob(
+		&dataStore,
+		logger,
+		analyticsInterval,
+	))
+
+	// Register fraud detection job (runs every 15 minutes by default)
+	jobScheduler.Register(scheduledJobs.NewFraudDetectionJob(
+		&dataStore,
+		fraudWorker,
+		logger,
+		fraudInterval,
+	))
+
+	logger.Info(ctx, fmt.Sprintf(`Kafka job worker server configuration:
+  - Event-driven jobs: %d concurrent workers
+  - Kafka brokers: %v
+  - Kafka topic: %s
+  - Consumer group: %s
+  - Analytics aggregation: every %s
+  - Fraud detection: every %s`,
+		workerCount, brokers, kafkaTopic, kafkaConsumerGroup,
+		analyticsInterval, fraudInterval))
 
 	// Handle graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -122,23 +163,37 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Start consumer in a goroutine
-	go func() {
-		if err := jobConsumer.Start(ctx); err != nil && err != context.Canceled {
-			logger.Error(ctx, "Job consumer error", err)
-			cancel()
-		}
-	}()
+	// Start both event-driven consumer and scheduler using errgroup
+	g, gCtx := errgroup.WithContext(ctx)
+
+	// Start event-driven job consumer
+	g.Go(func() error {
+		logger.Info(gCtx, "Starting event-driven job consumer...")
+		return jobConsumer.Start(gCtx)
+	})
+
+	// Start scheduler for cron-based jobs
+	g.Go(func() error {
+		logger.Info(gCtx, "Starting scheduled job scheduler...")
+		return jobScheduler.Start(gCtx)
+	})
 
 	logger.Info(ctx, "Kafka job worker server started successfully")
 
 	// Wait for shutdown signal
-	<-sigChan
-	logger.Info(ctx, "Received shutdown signal, stopping workers...")
+	select {
+	case <-sigChan:
+		logger.Info(ctx, "Received shutdown signal, stopping workers...")
+	case <-gCtx.Done():
+		logger.Info(ctx, "Context cancelled")
+	}
+
 	cancel()
 
-	// Give workers time to finish current jobs
-	logger.Info(ctx, "Waiting for workers to finish...")
+	// Wait for all goroutines to finish
+	if err := g.Wait(); err != nil && err != context.Canceled {
+		logger.Error(ctx, "Error during shutdown", err)
+	}
 
 	// Stop consumer
 	if err := jobConsumer.Stop(); err != nil {
@@ -146,4 +201,19 @@ func main() {
 	}
 
 	logger.Info(ctx, "Kafka job worker server stopped")
+}
+
+// parseInterval parses a duration string with fallback to default
+func parseInterval(intervalStr string, defaultInterval time.Duration) time.Duration {
+	if intervalStr == "" {
+		return defaultInterval
+	}
+
+	interval, err := time.ParseDuration(intervalStr)
+	if err != nil {
+		log.Printf("Warning: invalid interval '%s', using default %s", intervalStr, defaultInterval)
+		return defaultInterval
+	}
+
+	return interval
 }

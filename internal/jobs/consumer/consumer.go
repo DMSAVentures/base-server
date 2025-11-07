@@ -15,14 +15,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// JobConsumer handles consuming job events from Kafka
+// JobConsumer handles consuming event-driven job events from Kafka
+// Note: Scheduled jobs (analytics, fraud detection) are handled by the scheduler
 type JobConsumer struct {
 	kafkaConsumer  *kafka.Consumer
 	emailWorker    *workers.EmailWorker
 	positionWorker *workers.PositionWorker
 	rewardWorker   *workers.RewardWorker
-	analyticsWorker *workers.AnalyticsWorker
-	fraudWorker    *workers.FraudWorker
 	logger         *observability.Logger
 	workerCount    int
 }
@@ -33,8 +32,6 @@ func New(
 	emailWorker *workers.EmailWorker,
 	positionWorker *workers.PositionWorker,
 	rewardWorker *workers.RewardWorker,
-	analyticsWorker *workers.AnalyticsWorker,
-	fraudWorker *workers.FraudWorker,
 	logger *observability.Logger,
 	workerCount int,
 ) *JobConsumer {
@@ -43,14 +40,12 @@ func New(
 	}
 
 	return &JobConsumer{
-		kafkaConsumer:   kafkaConsumer,
-		emailWorker:     emailWorker,
-		positionWorker:  positionWorker,
-		rewardWorker:    rewardWorker,
-		analyticsWorker: analyticsWorker,
-		fraudWorker:     fraudWorker,
-		logger:          logger,
-		workerCount:     workerCount,
+		kafkaConsumer:  kafkaConsumer,
+		emailWorker:    emailWorker,
+		positionWorker: positionWorker,
+		rewardWorker:   rewardWorker,
+		logger:         logger,
+		workerCount:    workerCount,
 	}
 }
 
@@ -145,7 +140,7 @@ func (c *JobConsumer) processEvent(ctx context.Context, event kafka.EventMessage
 
 	c.logger.Info(ctx, fmt.Sprintf("Processing event %s", event.Type))
 
-	// Route based on event type
+	// Route based on event type (only event-driven jobs)
 	var err error
 	switch {
 	case strings.HasPrefix(event.Type, "job.email."):
@@ -154,12 +149,8 @@ func (c *JobConsumer) processEvent(ctx context.Context, event kafka.EventMessage
 		err = c.processPositionJob(ctx, event)
 	case event.Type == "job.reward.deliver":
 		err = c.processRewardJob(ctx, event)
-	case event.Type == "job.fraud.detect":
-		err = c.processFraudJob(ctx, event)
-	case event.Type == "job.analytics.aggregate":
-		err = c.processAnalyticsJob(ctx, event)
 	default:
-		c.logger.Warn(ctx, fmt.Sprintf("Unknown event type: %s", event.Type))
+		c.logger.Warn(ctx, fmt.Sprintf("Unknown event-driven job type: %s (fraud/analytics are scheduled)", event.Type))
 		return nil
 	}
 
@@ -250,61 +241,8 @@ func (c *JobConsumer) processRewardJob(ctx context.Context, event kafka.EventMes
 	return c.rewardWorker.ProcessRewardDelivery(ctx, payload)
 }
 
-// processFraudJob processes a fraud detection job
-func (c *JobConsumer) processFraudJob(ctx context.Context, event kafka.EventMessage) error {
-	var payload jobs.FraudDetectionJobPayload
-
-	dataBytes, err := json.Marshal(event.Data)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event data: %w", err)
-	}
-
-	var data map[string]interface{}
-	if err := json.Unmarshal(dataBytes, &data); err != nil {
-		return fmt.Errorf("failed to unmarshal event data: %w", err)
-	}
-
-	payload.CampaignID, _ = uuid.Parse(data["campaign_id"].(string))
-	payload.UserID, _ = uuid.Parse(data["user_id"].(string))
-
-	return c.fraudWorker.ProcessFraudDetection(ctx, payload)
-}
-
-// processAnalyticsJob processes an analytics aggregation job
-func (c *JobConsumer) processAnalyticsJob(ctx context.Context, event kafka.EventMessage) error {
-	var payload jobs.AnalyticsAggregationJobPayload
-
-	dataBytes, err := json.Marshal(event.Data)
-	if err != nil {
-		return fmt.Errorf("failed to marshal event data: %w", err)
-	}
-
-	var data map[string]interface{}
-	if err := json.Unmarshal(dataBytes, &data); err != nil {
-		return fmt.Errorf("failed to unmarshal event data: %w", err)
-	}
-
-	payload.CampaignID, _ = uuid.Parse(data["campaign_id"].(string))
-	payload.Granularity = data["granularity"].(string)
-
-	if startTime, ok := data["start_time"].(string); ok {
-		payload.StartTime, _ = parseRFC3339(startTime)
-	}
-
-	if endTime, ok := data["end_time"].(string); ok {
-		payload.EndTime, _ = parseRFC3339(endTime)
-	}
-
-	return c.analyticsWorker.ProcessAnalyticsAggregation(ctx, payload)
-}
-
 // Stop stops the consumer
 func (c *JobConsumer) Stop() error {
 	c.logger.Info(context.Background(), "Stopping job consumer")
 	return c.kafkaConsumer.Close()
-}
-
-// parseRFC3339 parses RFC3339 formatted time string
-func parseRFC3339(s string) (time.Time, error) {
-	return time.Parse(time.RFC3339, s)
 }
