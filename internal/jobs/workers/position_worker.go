@@ -113,7 +113,25 @@ func (w *PositionWorker) recalculateUserPosition(ctx context.Context, campaignID
 
 // recalculateAllPositions recalculates positions for all users in a campaign
 func (w *PositionWorker) recalculateAllPositions(ctx context.Context, campaignID uuid.UUID, pointsPerReferral int) error {
+	// Use advisory lock to prevent concurrent recalculations for the same campaign
+	// Lock ID is derived from campaign UUID to ensure campaign-specific locking
+	lockQuery := `SELECT pg_advisory_xact_lock(hashtext($1::text))`
+
+	// Start a transaction to hold the advisory lock
+	tx, err := w.store.DB().BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // Rollback releases lock if commit doesn't happen
+
+	// Acquire advisory lock for this campaign
+	_, err = tx.ExecContext(ctx, lockQuery, campaignID.String())
+	if err != nil {
+		return fmt.Errorf("failed to acquire advisory lock: %w", err)
+	}
+
 	// This query recalculates and updates all positions in one go using a CTE
+	// The advisory lock ensures no other worker processes this campaign concurrently
 	query := `
 		WITH ranked_users AS (
 			SELECT
@@ -132,9 +150,14 @@ func (w *PositionWorker) recalculateAllPositions(ctx context.Context, campaignID
 		WHERE wu.id = ru.id
 	`
 
-	_, err := w.store.DB().ExecContext(ctx, query, campaignID, pointsPerReferral)
+	_, err = tx.ExecContext(ctx, query, campaignID, pointsPerReferral)
 	if err != nil {
 		return fmt.Errorf("failed to execute position recalculation query: %w", err)
+	}
+
+	// Commit transaction (releases advisory lock)
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil

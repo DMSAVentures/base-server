@@ -145,6 +145,12 @@ User Action ──▶ App Emits Domain Event ──▶ Kafka ──▶ Multiple 
 - `referral.verified` → Recalculate leaderboard positions
   - Algorithm: `Position = Original Position - (Verified Referrals × Points Per Referral)`
 
+**Concurrency**: Uses **1 worker** (not 10) to prevent race conditions
+- Position recalculation requires reading entire campaign state, calculating new positions, and writing back
+- Multiple concurrent workers processing the same campaign would cause read-modify-write conflicts
+- Additional protection: PostgreSQL advisory locks ensure campaign-level serialization
+- Future scaling: Can scale horizontally by adding more consumer instances (each processes different partitions)
+
 ### Reward Consumer (reward-workers)
 **Subscribes to**: reward.earned
 
@@ -154,20 +160,25 @@ User Action ──▶ App Emits Domain Event ──▶ Kafka ──▶ Multiple 
 ## Kafka Fan-Out Pattern
 
 ```
-                    ┌──▶ email-workers (sends email)
+                    ┌──▶ email-workers (10 workers, sends email)
 user.signed_up  ───┤
                     └──▶ (future: analytics-workers)
 
-                    ┌──▶ email-workers (sends notification)
-referral.verified ─┼──▶ position-workers (recalculates positions)
+                    ┌──▶ email-workers (10 workers, sends notification)
+referral.verified ─┼──▶ position-workers (1 worker, recalculates positions)
                     └──▶ (future: analytics-workers)
 
-                    ┌──▶ email-workers (sends notification)
-reward.earned   ───┼──▶ reward-workers (delivers reward)
+                    ┌──▶ email-workers (10 workers, sends notification)
+reward.earned   ───┼──▶ reward-workers (10 workers, delivers reward)
                     └──▶ (future: analytics-workers)
 ```
 
 **Key Benefit**: Single event triggers multiple independent actions without coupling
+
+**Partitioning**: Events are partitioned by `campaign_id`
+- All events for the same campaign go to the same Kafka partition
+- Ensures ordering guarantees within a campaign
+- Enables horizontal scaling (add more consumer instances to process different campaigns)
 
 ## Environment Variables
 
@@ -369,6 +380,61 @@ kafka-consumer-groups --bootstrap-server $KAFKA_BROKERS \
 - Processing time (by event type and consumer)
 - Error rate (by event type and consumer)
 
+## Concurrency & Race Conditions
+
+### Worker Pool Sizing
+
+Different consumers have different concurrency requirements:
+
+**Email Consumer**: 10 workers (default)
+- Each email is independent
+- No shared state between emails
+- Safe to process concurrently
+
+**Reward Consumer**: 10 workers (default)
+- Each reward delivery is independent
+- Uses idempotency keys
+- Safe to process concurrently
+
+**Position Consumer**: 1 worker (fixed)
+- **CRITICAL**: Position recalculation has read-modify-write pattern
+- Multiple workers processing the same campaign would cause race conditions:
+  1. Worker 1 reads campaign state
+  2. Worker 2 reads campaign state (same snapshot)
+  3. Both calculate new positions
+  4. Worker 1 writes positions
+  5. Worker 2 writes positions (overwrites Worker 1's updates with stale data)
+- **Protection Layers**:
+  1. Single worker per consumer instance
+  2. PostgreSQL advisory locks (campaign-level serialization)
+  3. Kafka partitioning by campaign_id (ensures ordering)
+
+### Scaling Position Consumer
+
+To scale position recalculation:
+
+1. **Horizontal Scaling**: Add more consumer instances (each gets different Kafka partitions)
+   - Instance 1 processes campaigns on partitions 0-4
+   - Instance 2 processes campaigns on partitions 5-9
+   - Each instance still uses 1 worker
+
+2. **Partition Key**: Events are partitioned by campaign_id
+   - All events for Campaign A go to Partition 3
+   - All events for Campaign B go to Partition 7
+   - Different campaigns can be processed in parallel safely
+
+3. **Advisory Locks**: Extra safety if somehow multiple workers process same campaign
+   - `pg_advisory_xact_lock(hashtext(campaign_id))`
+   - Ensures only one transaction can recalculate positions for a campaign at a time
+
+### Idempotency
+
+All event handlers should be idempotent (safe to process the same event multiple times):
+
+**Email Consumer**: Uses email service's idempotency (deduplicate within time window)
+**Reward Consumer**: Checks delivery status before processing
+**Position Consumer**: Recalculates from source of truth (verified_referral_count), not incremental
+
 ## Troubleshooting
 
 ### Events Not Processing
@@ -381,10 +447,11 @@ kafka-consumer-groups --bootstrap-server $KAFKA_BROKERS \
 
 ### Slow Processing
 
-1. Increase worker pool size: `KAFKA_WORKER_POOL_SIZE=20`
-2. Scale horizontally (add more consumer instances)
+1. **For email/reward consumers**: Increase worker pool size: `KAFKA_WORKER_POOL_SIZE=20`
+2. **For position consumer**: Scale horizontally (add more consumer instances)
 3. Optimize event processing logic
 4. Check database performance (often bottleneck)
+5. Add more Kafka partitions for better parallelism
 
 ### Duplicate Processing
 

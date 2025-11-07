@@ -96,12 +96,14 @@ func main() {
 	emailConsumer := consumers.NewEmailConsumer(emailKafkaConsumer, emailWorker, logger, workerCount)
 
 	// Position consumer: subscribes to referral.verified
+	// CRITICAL: Use 1 worker to prevent race conditions during position recalculation
+	// Multiple workers processing the same campaign would cause read-modify-write conflicts
 	positionKafkaConsumer := kafka.NewConsumer(kafka.ConsumerConfig{
 		Brokers: brokers,
 		Topic:   kafkaTopic,
 		GroupID: "position-workers",
 	}, logger)
-	positionConsumer := consumers.NewPositionConsumer(positionKafkaConsumer, positionWorker, logger, workerCount)
+	positionConsumer := consumers.NewPositionConsumer(positionKafkaConsumer, positionWorker, logger, 1)
 
 	// Reward consumer: subscribes to reward.earned
 	rewardKafkaConsumer := kafka.NewConsumer(kafka.ConsumerConfig{
@@ -114,12 +116,11 @@ func main() {
 	logger.Info(ctx, fmt.Sprintf(`Kafka event consumer server configuration:
   - Domain events topic: %s
   - Kafka brokers: %v
-  - Worker pool size: %d per consumer
   - Consumer groups:
-    * email-workers (processes: user.*, referral.verified, reward.earned, campaign.*)
-    * position-workers (processes: referral.verified)
-    * reward-workers (processes: reward.earned)`,
-		kafkaTopic, brokers, workerCount))
+    * email-workers (%d workers): user.*, referral.verified, reward.earned, campaign.*
+    * position-workers (1 worker): referral.verified [single-threaded to prevent race conditions]
+    * reward-workers (%d workers): reward.earned`,
+		kafkaTopic, brokers, workerCount, workerCount))
 
 	// Handle graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
