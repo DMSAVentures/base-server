@@ -256,6 +256,7 @@ func NewClient(apiKey string, logger *observability.Logger) *Client {
 - **Google OAuth**: Authentication
 - **OpenAI/Gemini**: AI capabilities
 - **Twilio**: Voice and messaging
+- **Kafka**: Event streaming for webhook delivery (AWS MSK or local)
 
 ## Configuration
 
@@ -280,6 +281,11 @@ STRIPE_WEBHOOK_SECRET=
 RESEND_API_KEY=
 OPENAI_API_KEY=
 GOOGLE_AI_API_KEY=
+
+# Kafka (Event Streaming)
+KAFKA_BROKERS=                         # Comma-separated list (e.g., localhost:9092 or AWS MSK brokers)
+KAFKA_TOPIC=webhook-events             # Optional, defaults to 'webhook-events'
+KAFKA_CONSUMER_GROUP=webhook-consumers # Optional, defaults to 'webhook-consumers'
 
 # Application
 WEBAPP_URI=

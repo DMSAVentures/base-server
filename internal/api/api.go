@@ -6,6 +6,7 @@ import (
 	campaignHandler "base-server/internal/campaign/handler"
 	billingHandler "base-server/internal/money/billing/handler"
 	voiceCallHandler "base-server/internal/voicecall/handler"
+	webhookHandler "base-server/internal/webhooks/handler"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -18,10 +19,11 @@ type API struct {
 	billingHandler   billingHandler.Handler
 	aiHandler        aiHandler.Handler
 	voicecallHandler voiceCallHandler.Handler
+	webhookHandler   *webhookHandler.Handler
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler) API {
+	handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
 	return API{
 		router:           router,
 		authHandler:      authHandler,
@@ -29,6 +31,7 @@ func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandl
 		billingHandler:   handler,
 		aiHandler:        aiHandler,
 		voicecallHandler: voicecallHandler,
+		webhookHandler:   webhookHandler,
 	}
 }
 
@@ -56,6 +59,18 @@ func (a *API) RegisterRoutes() {
 		protectedGroup.GET("billing/checkout-session", a.billingHandler.GetCheckoutSession)
 		protectedGroup.POST("ai/conversation", a.aiHandler.HandleConversation)
 		protectedGroup.POST("ai/image/generate", a.aiHandler.HandleGenerateImage)
+
+		// Webhook management routes
+		webhookGroup := protectedGroup.Group("/webhooks")
+		{
+			webhookGroup.POST("", a.webhookHandler.HandleCreateWebhook)
+			webhookGroup.GET("", a.webhookHandler.HandleListWebhooks)
+			webhookGroup.GET("/:webhook_id", a.webhookHandler.HandleGetWebhook)
+			webhookGroup.PUT("/:webhook_id", a.webhookHandler.HandleUpdateWebhook)
+			webhookGroup.DELETE("/:webhook_id", a.webhookHandler.HandleDeleteWebhook)
+			webhookGroup.GET("/:webhook_id/deliveries", a.webhookHandler.HandleListWebhookDeliveries)
+			webhookGroup.POST("/:webhook_id/test", a.webhookHandler.HandleTestWebhook)
+		}
 	}
 
 	// Campaign API routes (v1)
