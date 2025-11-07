@@ -5,7 +5,6 @@ import (
 	authHandler "base-server/internal/auth/handler"
 	campaignHandler "base-server/internal/campaign/handler"
 	billingHandler "base-server/internal/money/billing/handler"
-	referralHandler "base-server/internal/referral/handler"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	waitlistHandler "base-server/internal/waitlist/handler"
 	webhookHandler "base-server/internal/webhooks/handler"
@@ -19,7 +18,6 @@ type API struct {
 	authHandler      authHandler.Handler
 	campaignHandler  campaignHandler.Handler
 	waitlistHandler  waitlistHandler.Handler
-	referralHandler  referralHandler.Handler
 	billingHandler   billingHandler.Handler
 	aiHandler        aiHandler.Handler
 	voicecallHandler voiceCallHandler.Handler
@@ -27,13 +25,12 @@ type API struct {
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	waitlistHandler waitlistHandler.Handler, referralHandler referralHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
+	waitlistHandler waitlistHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
 	return API{
 		router:           router,
 		authHandler:      authHandler,
 		campaignHandler:  campaignHandler,
 		waitlistHandler:  waitlistHandler,
-		referralHandler:  referralHandler,
 		billingHandler:   handler,
 		aiHandler:        aiHandler,
 		voicecallHandler: voicecallHandler,
@@ -105,17 +102,6 @@ func (a *API) RegisterRoutes() {
 				usersGroup.DELETE("/:user_id", a.waitlistHandler.HandleDeleteUser)
 				usersGroup.POST("/:user_id/verify", a.waitlistHandler.HandleVerifyUser)
 				usersGroup.POST("/:user_id/resend-verification", a.waitlistHandler.HandleResendVerification)
-
-				// Referral routes under users
-				usersGroup.GET("/:user_id/referrals", a.referralHandler.HandleGetUserReferrals)
-				usersGroup.GET("/:user_id/referral-link", a.referralHandler.HandleGetReferralLink)
-			}
-
-			// Referral routes at campaign level
-			referralsGroup := campaignsGroup.Group("/:campaign_id/referrals")
-			{
-				referralsGroup.GET("", a.referralHandler.HandleListReferrals)
-				referralsGroup.POST("/track", a.referralHandler.HandleTrackReferral)
 			}
 		}
 	}
