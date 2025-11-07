@@ -1,7 +1,17 @@
 # Fix for Missing webhook_deliveries Table
 
-## Problem
-The `webhook_deliveries` table is missing from your database because migration `V0016__add_webhooks.sql` hasn't been applied yet.
+## Root Cause
+The `webhook_deliveries` table is missing because migrations are blocked at V0014. The issue:
+
+1. **Migration V0015** (`add_analytics_tables.sql`) was failing due to missing TimescaleDB extension
+2. Since V0015 failed, **V0016** (`add_webhooks.sql`) and **V0017** never executed
+3. This caused the `webhook_deliveries` table (defined in V0016) to not be created
+
+## What Was Fixed
+- ✅ **V0015 migration** now gracefully handles missing TimescaleDB extension
+- ✅ Tables are created as regular PostgreSQL tables if TimescaleDB isn't available
+- ✅ Optional TimescaleDB support documented for users who want time-series optimizations
+- ✅ Migrations will now complete successfully through V0017
 
 ## Solution Options
 
@@ -135,3 +145,39 @@ After applying the migrations:
 - Migration file location: `migrations/V0016__add_webhooks.sql`
 - The migration creates both `webhooks` and `webhook_deliveries` tables
 - Make sure Kafka is also running if you need webhook event streaming (port 9092)
+
+## TimescaleDB (Optional)
+
+TimescaleDB provides optimized time-series storage for the `campaign_analytics` table. It's **optional** and the system works fine without it.
+
+### Why Use TimescaleDB?
+- Better performance for time-series queries
+- Automatic data compression
+- Optimized storage for time-based data
+- Useful for high-volume analytics workloads
+
+### How to Enable TimescaleDB
+
+1. **Using Docker Compose**: Edit `docker-compose.services.yml`:
+   ```yaml
+   db:
+     # Comment out the standard postgres image
+     # image: postgres:latest
+
+     # Uncomment the TimescaleDB image
+     image: timescale/timescaledb:latest-pg16
+   ```
+
+2. **Recreate the database container**:
+   ```bash
+   docker-compose -f docker-compose.services.yml down -v
+   docker-compose -f docker-compose.services.yml up -d
+   ```
+
+3. **Run migrations** - V0015 will automatically detect TimescaleDB and create hypertables
+
+### Do I Need TimescaleDB?
+- **No, if**: You have low-to-medium analytics volume or are just getting started
+- **Yes, if**: You expect high-volume time-series analytics queries or want optimal performance
+
+The migrations work with or without TimescaleDB thanks to the fallback logic in V0015.
