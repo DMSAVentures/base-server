@@ -24,3 +24,8 @@ func New(connectionString string, logger *observability.Logger) (Store, error) {
 	}
 	return Store{db: db, logger: logger}, nil
 }
+
+// DB returns the underlying database connection
+func (s *Store) DB() *sqlx.DB {
+	return s.db
+}
