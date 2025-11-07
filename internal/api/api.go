@@ -4,6 +4,7 @@ import (
 	aiHandler "base-server/internal/ai-capabilities/handler"
 	authHandler "base-server/internal/auth/handler"
 	campaignHandler "base-server/internal/campaign/handler"
+	emailTemplateHandler "base-server/internal/emailtemplates/handler"
 	billingHandler "base-server/internal/money/billing/handler"
 	rewardHandler "base-server/internal/rewards/handler"
 	voiceCallHandler "base-server/internal/voicecall/handler"
@@ -15,29 +16,31 @@ import (
 )
 
 type API struct {
-	router           *gin.RouterGroup
-	authHandler      authHandler.Handler
-	campaignHandler  campaignHandler.Handler
-	waitlistHandler  waitlistHandler.Handler
-	rewardHandler    rewardHandler.Handler
-	billingHandler   billingHandler.Handler
-	aiHandler        aiHandler.Handler
-	voicecallHandler voiceCallHandler.Handler
-	webhookHandler   *webhookHandler.Handler
+	router               *gin.RouterGroup
+	authHandler          authHandler.Handler
+	campaignHandler      campaignHandler.Handler
+	waitlistHandler      waitlistHandler.Handler
+	rewardHandler        rewardHandler.Handler
+	emailTemplateHandler emailTemplateHandler.Handler
+	billingHandler       billingHandler.Handler
+	aiHandler            aiHandler.Handler
+	voicecallHandler     voiceCallHandler.Handler
+	webhookHandler       *webhookHandler.Handler
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	waitlistHandler waitlistHandler.Handler, rewardHandler rewardHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
+	waitlistHandler waitlistHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
 	return API{
-		router:           router,
-		authHandler:      authHandler,
-		campaignHandler:  campaignHandler,
-		waitlistHandler:  waitlistHandler,
-		rewardHandler:    rewardHandler,
-		billingHandler:   handler,
-		aiHandler:        aiHandler,
-		voicecallHandler: voicecallHandler,
-		webhookHandler:   webhookHandler,
+		router:               router,
+		authHandler:          authHandler,
+		campaignHandler:      campaignHandler,
+		waitlistHandler:      waitlistHandler,
+		rewardHandler:        rewardHandler,
+		emailTemplateHandler: emailTemplateHandler,
+		billingHandler:       handler,
+		aiHandler:            aiHandler,
+		voicecallHandler:     voicecallHandler,
+		webhookHandler:       webhookHandler,
 	}
 }
 
@@ -119,6 +122,17 @@ func (a *API) RegisterRoutes() {
 				rewardsGroup.GET("/:reward_id", a.rewardHandler.HandleGetReward)
 				rewardsGroup.PUT("/:reward_id", a.rewardHandler.HandleUpdateReward)
 				rewardsGroup.DELETE("/:reward_id", a.rewardHandler.HandleDeleteReward)
+			}
+
+			// Email Templates routes
+			emailTemplatesGroup := campaignsGroup.Group("/:campaign_id/email-templates")
+			{
+				emailTemplatesGroup.POST("", a.emailTemplateHandler.HandleCreateEmailTemplate)
+				emailTemplatesGroup.GET("", a.emailTemplateHandler.HandleListEmailTemplates)
+				emailTemplatesGroup.GET("/:template_id", a.emailTemplateHandler.HandleGetEmailTemplate)
+				emailTemplatesGroup.PUT("/:template_id", a.emailTemplateHandler.HandleUpdateEmailTemplate)
+				emailTemplatesGroup.DELETE("/:template_id", a.emailTemplateHandler.HandleDeleteEmailTemplate)
+				emailTemplatesGroup.POST("/:template_id/send-test", a.emailTemplateHandler.HandleSendTestEmail)
 			}
 		}
 	}
