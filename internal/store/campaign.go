@@ -367,3 +367,21 @@ func (s *Store) IncrementCampaignReferrals(ctx context.Context, campaignID uuid.
 	}
 	return nil
 }
+
+const sqlGetAllActiveCampaigns = `
+SELECT id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
+FROM campaigns
+WHERE status = 'active' AND deleted_at IS NULL
+ORDER BY created_at DESC
+`
+
+// GetAllActiveCampaigns retrieves all active campaigns
+func (s *Store) GetAllActiveCampaigns(ctx context.Context) ([]Campaign, error) {
+	var campaigns []Campaign
+	err := s.db.SelectContext(ctx, &campaigns, sqlGetAllActiveCampaigns)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get all active campaigns", err)
+		return nil, fmt.Errorf("failed to get all active campaigns: %w", err)
+	}
+	return campaigns, nil
+}

@@ -1,0 +1,211 @@
+version: '3.8'
+
+services:
+  # Zookeeper - Required for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    hostname: zookeeper
+    container_name: waitlist-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
+    networks:
+      - waitlist-network
+
+  # Kafka Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    hostname: kafka
+    container_name: waitlist-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+
+      # Listener configuration
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+
+      # Replication settings for durability
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MIN_INSYNC_REPLICAS: 1
+
+      # Performance settings
+      KAFKA_NUM_NETWORK_THREADS: 8
+      KAFKA_NUM_IO_THREADS: 8
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
+
+      # Log settings
+      KAFKA_LOG_RETENTION_HOURS: 168  # 7 days default
+      KAFKA_LOG_RETENTION_BYTES: 1073741824  # 1GB per partition
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824  # 1GB
+      KAFKA_LOG_CLEANUP_POLICY: delete
+
+      # Group coordinator settings
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+
+      # Auto create topics
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+
+      # JMX for monitoring
+      KAFKA_JMX_PORT: 9093
+      KAFKA_JMX_HOSTNAME: localhost
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    networks:
+      - waitlist-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka UI for monitoring and management
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: waitlist-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9093
+      DYNAMIC_CONFIG_ENABLED: 'true'
+    networks:
+      - waitlist-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Optional: Kafka Schema Registry (for Avro/Protobuf schemas)
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    hostname: schema-registry
+    container_name: waitlist-schema-registry
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:29092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+    networks:
+      - waitlist-network
+    profiles:
+      - full  # Only start with --profile full
+
+  # Optional: Kafka Connect (for integrations)
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.5.0
+    hostname: kafka-connect
+    container_name: waitlist-kafka-connect
+    depends_on:
+      - kafka
+      - schema-registry
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: 'kafka:29092'
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: waitlist-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: waitlist-connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: waitlist-connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: waitlist-connect-status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+    networks:
+      - waitlist-network
+    profiles:
+      - full  # Only start with --profile full
+
+  # Kafka topic initializer - Creates topics on startup
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: waitlist-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      echo 'Waiting for Kafka to be ready...'
+      sleep 10
+
+      echo 'Creating topics...'
+
+      # High priority email topics (10 partitions, 1 replica for local dev)
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.email.verification --partitions 10 --replication-factor 1 --config retention.ms=604800000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.email.welcome --partitions 10 --replication-factor 1 --config retention.ms=604800000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.email.position-update --partitions 10 --replication-factor 1 --config retention.ms=604800000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.email.reward-earned --partitions 10 --replication-factor 1 --config retention.ms=604800000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.email.milestone --partitions 5 --replication-factor 1 --config retention.ms=604800000
+
+      # Reward delivery (critical - 30 day retention)
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.reward.delivery --partitions 10 --replication-factor 1 --config retention.ms=2592000000
+
+      # Medium priority topics (5 partitions)
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.position.recalculation --partitions 5 --replication-factor 1 --config retention.ms=604800000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.fraud.detection --partitions 5 --replication-factor 1 --config retention.ms=2592000000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.webhook.delivery --partitions 5 --replication-factor 1 --config retention.ms=604800000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.analytics.aggregation --partitions 3 --replication-factor 1 --config retention.ms=604800000
+
+      # Low priority topics (3 partitions)
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.email.tracking --partitions 3 --replication-factor 1 --config retention.ms=259200000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.data.export --partitions 2 --replication-factor 1 --config retention.ms=259200000
+
+      # Dead letter queue (1 year retention)
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.dlq --partitions 3 --replication-factor 1 --config retention.ms=31536000000
+
+      # Event sourcing topics (1 year retention)
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.events.user.signup --partitions 10 --replication-factor 1 --config retention.ms=31536000000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.events.user.verified --partitions 10 --replication-factor 1 --config retention.ms=31536000000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.events.referral.created --partitions 10 --replication-factor 1 --config retention.ms=31536000000
+      kafka-topics --create --if-not-exists --bootstrap-server kafka:29092 --topic waitlist.events.reward.earned --partitions 10 --replication-factor 1 --config retention.ms=31536000000
+
+      echo 'Topics created successfully!'
+
+      # List all topics
+      kafka-topics --list --bootstrap-server kafka:29092
+
+      echo 'Topic initialization complete!'
+      "
+    networks:
+      - waitlist-network
+
+networks:
+  waitlist-network:
+    driver: bridge
+
+volumes:
+  zookeeper-data:
+    driver: local
+  zookeeper-logs:
+    driver: local
+  kafka-data:
+    driver: local
