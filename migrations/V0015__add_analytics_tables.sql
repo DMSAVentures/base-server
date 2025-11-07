@@ -1,9 +1,7 @@
--- Install TimescaleDB extension for time-series analytics
--- Required for campaign_analytics hypertable
-CREATE EXTENSION IF NOT EXISTS timescaledb;
-
--- Campaign Analytics Table (Hypertable for TimescaleDB)
+-- Campaign Analytics Table
+-- Note: Can be migrated to TimescaleDB hypertable later for time-series optimization
 CREATE TABLE campaign_analytics (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     time TIMESTAMPTZ NOT NULL,
     campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
 
@@ -25,13 +23,13 @@ CREATE TABLE campaign_analytics (
     total_verified INTEGER NOT NULL DEFAULT 0,
     total_referrals INTEGER NOT NULL DEFAULT 0,
 
-    PRIMARY KEY (time, campaign_id)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    UNIQUE(time, campaign_id)
 );
 
--- Convert to hypertable for optimized time-series storage and queries
-SELECT create_hypertable('campaign_analytics', 'time', if_not_exists => TRUE);
-
 CREATE INDEX idx_campaign_analytics_campaign ON campaign_analytics(campaign_id, time DESC);
+CREATE INDEX idx_campaign_analytics_time ON campaign_analytics(time DESC);
 
 -- User Activity Logs Table
 CREATE TABLE user_activity_logs (
