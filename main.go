@@ -19,6 +19,10 @@ import (
 	"base-server/internal/store"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	voiceCallProcessor "base-server/internal/voicecall/processor"
+	webhookHandler "base-server/internal/webhooks/handler"
+	webhookProcessor "base-server/internal/webhooks/processor"
+	webhookService "base-server/internal/webhooks/service"
+	webhookWorker "base-server/internal/webhooks/worker"
 	"context"
 	"errors"
 	"fmt"
@@ -226,8 +230,17 @@ func main() {
 	newCampaignProcessor := campaignProcessor.New(store, logger)
 	newCampaignHandler := campaignHandler.New(newCampaignProcessor, logger)
 
-	api := apisetup.New(rootRouter, authHandler, newCampaignHandler, billingHandler, aiHandler, voicecallHandler)
+	// Initialize webhook service
+	webhookSvc := webhookService.New(store, logger)
+	webhookProc := webhookProcessor.New(store, logger, webhookSvc)
+	webhookHdlr := webhookHandler.New(webhookProc, logger)
+
+	api := apisetup.New(rootRouter, authHandler, newCampaignHandler, billingHandler, aiHandler, voicecallHandler, webhookHdlr)
 	api.RegisterRoutes()
+
+	// Start webhook retry worker (runs every 30 seconds)
+	webhookWkr := webhookWorker.New(webhookSvc, logger, 30*time.Second)
+	go webhookWkr.Start(ctx)
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", parsedServerPort),
@@ -252,11 +265,14 @@ func main() {
 	<-quit
 	logger.Info(ctx, "Shutting down server...")
 
+	// Stop webhook worker
+	webhookWkr.Stop()
+
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		logger.Fatal(ctx, "Server forced to shutdown:", err)
 	}
 
