@@ -63,6 +63,7 @@ func (s *Server) Setup() {
 		s.deps.AuthHandler,
 		s.deps.CampaignHandler,
 		s.deps.WaitlistHandler,
+		s.deps.ReferralHandler,
 		s.deps.RewardHandler,
 		s.deps.BillingHandler,
 		s.deps.AIHandler,

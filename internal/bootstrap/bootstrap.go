@@ -23,6 +23,8 @@ import (
 	billingProcessor "base-server/internal/money/billing/processor"
 	"base-server/internal/money/products"
 	"base-server/internal/money/subscriptions"
+	referralHandler "base-server/internal/referral/handler"
+	referralProcessor "base-server/internal/referral/processor"
 	rewardHandler "base-server/internal/rewards/handler"
 	rewardProcessor "base-server/internal/rewards/processor"
 	voiceCallHandler "base-server/internal/voicecall/handler"
@@ -49,6 +51,7 @@ type Dependencies struct {
 	VoiceCallHandler voiceCallHandler.Handler
 	CampaignHandler  campaignHandler.Handler
 	WaitlistHandler  waitlistHandler.Handler
+	ReferralHandler  referralHandler.Handler
 	RewardHandler    rewardHandler.Handler
 	WebhookHandler   *webhookHandler.Handler
 
@@ -151,6 +154,10 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	// Initialize waitlist processor and handler
 	waitlistProc := waitlistProcessor.New(deps.Store, logger)
 	deps.WaitlistHandler = waitlistHandler.New(waitlistProc, logger, cfg.Services.WebAppURI)
+
+	// Initialize referral processor and handler
+	referralProc := referralProcessor.New(deps.Store, logger)
+	deps.ReferralHandler = referralHandler.New(referralProc, logger, cfg.Services.WebAppURI)
 
 	// Initialize rewards processor and handler
 	rewardProc := rewardProcessor.New(deps.Store, logger)
