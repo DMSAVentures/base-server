@@ -2,7 +2,7 @@
 
 ## If You're Stuck at Migration V0014 or V0015
 
-Your migrations failed because V0015 required TimescaleDB which wasn't installed. This has been fixed.
+Your migrations failed because V0015 had a TimescaleDB dependency. This has been fixed - V0015 now uses standard PostgreSQL.
 
 ### Quick Recovery Steps
 
@@ -83,10 +83,10 @@ You should see:
 
 ### What Changed?
 
-The fix makes TimescaleDB **optional** in migration V0015:
+Migration V0015 has been simplified:
 
-- ✅ Migration V0015 now works with standard PostgreSQL
-- ✅ Tables are created as regular tables if TimescaleDB isn't available
+- ✅ Removed TimescaleDB dependency entirely
+- ✅ Uses standard PostgreSQL tables only
 - ✅ V0016 and V0017 can now proceed
 - ✅ `webhook_deliveries` table will be created
 
@@ -102,8 +102,6 @@ The fix makes TimescaleDB **optional** in migration V0015:
    ```
 
 2. **Verify no errors**: Check logs for "relation does not exist" errors - they should be gone
-
-3. **Optional**: If you want TimescaleDB optimizations, see [MIGRATION_FIX.md](MIGRATION_FIX.md#timescaledb-optional)
 
 ## Troubleshooting
 
