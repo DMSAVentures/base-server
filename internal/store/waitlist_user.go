@@ -437,3 +437,211 @@ func (s *Store) GetWaitlistUserByVerificationToken(ctx context.Context, token st
 	}
 	return user, nil
 }
+
+// SearchWaitlistUsersParams represents parameters for searching waitlist users
+type SearchWaitlistUsersParams struct {
+	CampaignID    uuid.UUID
+	Query         *string
+	Statuses      []string
+	Verified      *bool
+	MinReferrals  *int
+	DateFrom      *string
+	DateTo        *string
+	SortBy        string
+	SortOrder     string
+	Limit         int
+	Offset        int
+}
+
+// SearchWaitlistUsers performs advanced search with filters
+func (s *Store) SearchWaitlistUsers(ctx context.Context, params SearchWaitlistUsersParams) ([]WaitlistUser, error) {
+	query := `SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+	FROM waitlist_users
+	WHERE campaign_id = $1 AND deleted_at IS NULL`
+
+	args := []interface{}{params.CampaignID}
+	argCount := 1
+
+	// Add search query filter
+	if params.Query != nil && *params.Query != "" {
+		argCount++
+		query += fmt.Sprintf(" AND (email ILIKE $%d OR first_name ILIKE $%d OR last_name ILIKE $%d)", argCount, argCount, argCount)
+		searchPattern := "%" + *params.Query + "%"
+		args = append(args, searchPattern)
+	}
+
+	// Add status filter
+	if len(params.Statuses) > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND status = ANY($%d)", argCount)
+		args = append(args, params.Statuses)
+	}
+
+	// Add verified filter
+	if params.Verified != nil {
+		argCount++
+		query += fmt.Sprintf(" AND email_verified = $%d", argCount)
+		args = append(args, *params.Verified)
+	}
+
+	// Add min referrals filter
+	if params.MinReferrals != nil {
+		argCount++
+		query += fmt.Sprintf(" AND verified_referral_count >= $%d", argCount)
+		args = append(args, *params.MinReferrals)
+	}
+
+	// Add date range filters
+	if params.DateFrom != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at >= $%d", argCount)
+		args = append(args, *params.DateFrom)
+	}
+
+	if params.DateTo != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at <= $%d", argCount)
+		args = append(args, *params.DateTo)
+	}
+
+	// Add sorting
+	sortBy := "position"
+	if params.SortBy != "" {
+		sortBy = params.SortBy
+	}
+
+	sortOrder := "ASC"
+	if params.SortOrder == "desc" {
+		sortOrder = "DESC"
+	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
+
+	// Add pagination
+	argCount++
+	query += fmt.Sprintf(" LIMIT $%d", argCount)
+	args = append(args, params.Limit)
+
+	argCount++
+	query += fmt.Sprintf(" OFFSET $%d", argCount)
+	args = append(args, params.Offset)
+
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, query, args...)
+	if err != nil {
+		s.logger.Error(ctx, "failed to search waitlist users", err)
+		return nil, fmt.Errorf("failed to search waitlist users: %w", err)
+	}
+
+	return users, nil
+}
+
+// CountWaitlistUsersByStatus counts users by status for a campaign
+func (s *Store) CountWaitlistUsersByStatus(ctx context.Context, campaignID uuid.UUID, status string) (int, error) {
+	query := `SELECT COUNT(*) FROM waitlist_users WHERE campaign_id = $1 AND status = $2 AND deleted_at IS NULL`
+	var count int
+	err := s.db.GetContext(ctx, &count, query, campaignID, status)
+	if err != nil {
+		s.logger.Error(ctx, "failed to count waitlist users by status", err)
+		return 0, fmt.Errorf("failed to count waitlist users by status: %w", err)
+	}
+	return count, nil
+}
+
+// GetWaitlistUsersByCampaignWithFilters retrieves users with advanced filtering and sorting
+type ListWaitlistUsersWithFiltersParams struct {
+	CampaignID uuid.UUID
+	Status     *string
+	Verified   *bool
+	SortBy     string
+	SortOrder  string
+	Limit      int
+	Offset     int
+}
+
+// GetWaitlistUsersByCampaignWithFilters retrieves waitlist users with filters and sorting
+func (s *Store) GetWaitlistUsersByCampaignWithFilters(ctx context.Context, params ListWaitlistUsersWithFiltersParams) ([]WaitlistUser, error) {
+	query := `SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+	FROM waitlist_users
+	WHERE campaign_id = $1 AND deleted_at IS NULL`
+
+	args := []interface{}{params.CampaignID}
+	argCount := 1
+
+	// Add status filter
+	if params.Status != nil {
+		argCount++
+		query += fmt.Sprintf(" AND status = $%d", argCount)
+		args = append(args, *params.Status)
+	}
+
+	// Add verified filter
+	if params.Verified != nil {
+		argCount++
+		query += fmt.Sprintf(" AND email_verified = $%d", argCount)
+		args = append(args, *params.Verified)
+	}
+
+	// Add sorting
+	sortBy := "position"
+	validSortFields := map[string]bool{
+		"position":       true,
+		"created_at":     true,
+		"referral_count": true,
+	}
+	if params.SortBy != "" && validSortFields[params.SortBy] {
+		sortBy = params.SortBy
+	}
+
+	sortOrder := "ASC"
+	if params.SortOrder == "desc" {
+		sortOrder = "DESC"
+	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
+
+	// Add pagination
+	argCount++
+	query += fmt.Sprintf(" LIMIT $%d", argCount)
+	args = append(args, params.Limit)
+
+	argCount++
+	query += fmt.Sprintf(" OFFSET $%d", argCount)
+	args = append(args, params.Offset)
+
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, query, args...)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get waitlist users with filters", err)
+		return nil, fmt.Errorf("failed to get waitlist users with filters: %w", err)
+	}
+
+	return users, nil
+}
+
+// CountWaitlistUsersWithFilters counts users matching the filter criteria
+func (s *Store) CountWaitlistUsersWithFilters(ctx context.Context, campaignID uuid.UUID, status *string, verified *bool) (int, error) {
+	query := `SELECT COUNT(*) FROM waitlist_users WHERE campaign_id = $1 AND deleted_at IS NULL`
+	args := []interface{}{campaignID}
+	argCount := 1
+
+	if status != nil {
+		argCount++
+		query += fmt.Sprintf(" AND status = $%d", argCount)
+		args = append(args, *status)
+	}
+
+	if verified != nil {
+		argCount++
+		query += fmt.Sprintf(" AND email_verified = $%d", argCount)
+		args = append(args, *verified)
+	}
+
+	var count int
+	err := s.db.GetContext(ctx, &count, query, args...)
+	if err != nil {
+		s.logger.Error(ctx, "failed to count waitlist users with filters", err)
+		return 0, fmt.Errorf("failed to count waitlist users with filters: %w", err)
+	}
+	return count, nil
+}

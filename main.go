@@ -20,6 +20,8 @@ import (
 	"base-server/internal/store"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	voiceCallProcessor "base-server/internal/voicecall/processor"
+	waitlistHandler "base-server/internal/waitlist/handler"
+	waitlistProcessor "base-server/internal/waitlist/processor"
 	webhookConsumer "base-server/internal/webhooks/consumer"
 	webhookHandler "base-server/internal/webhooks/handler"
 	webhookProcessor "base-server/internal/webhooks/processor"
@@ -250,6 +252,10 @@ func main() {
 	newCampaignProcessor := campaignProcessor.New(store, logger)
 	newCampaignHandler := campaignHandler.New(newCampaignProcessor, logger)
 
+	// Initialize waitlist processor and handler
+	newWaitlistProcessor := waitlistProcessor.New(store, logger)
+	newWaitlistHandler := waitlistHandler.New(newWaitlistProcessor, logger, webAppURL)
+
 	// Initialize Kafka
 	brokerList := strings.Split(kafkaBrokers, ",")
 	kafkaProducer := kafkaClient.NewProducer(kafkaClient.ProducerConfig{
@@ -273,7 +279,7 @@ func main() {
 	// Initialize webhook event consumer with worker pool
 	eventConsumer := webhookConsumer.New(kafkaConsumer, webhookSvc, logger, 10)
 
-	api := apisetup.New(rootRouter, authHandler, newCampaignHandler, billingHandler, aiHandler, voicecallHandler, webhookHdlr)
+	api := apisetup.New(rootRouter, authHandler, newCampaignHandler, newWaitlistHandler, billingHandler, aiHandler, voicecallHandler, webhookHdlr)
 	api.RegisterRoutes()
 
 	// Start webhook event consumer (processes events from Kafka)

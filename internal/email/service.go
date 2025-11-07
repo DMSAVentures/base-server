@@ -26,11 +26,16 @@ type EmailService struct {
 
 // TemplateData represents the data that can be used in templates
 type TemplateData struct {
-	FirstName      string
-	Email          string
-	ResetLink      string
-	SubscriptionID string
-	PlanName       string
+	FirstName        string
+	Email            string
+	ResetLink        string
+	SubscriptionID   string
+	PlanName         string
+	VerificationLink string
+	Position         int
+	ReferralLink     string
+	ReferralCount    int
+	CampaignName     string
 	// Add more fields as needed
 }
 
@@ -68,6 +73,50 @@ func New(mailClient *mail.ResendClient, defaultSender string, logger *observabil
 					<p>Thank you for subscribing to our {{.PlanName}} plan.</p>
 					<p>Your subscription is now active and you have full access to all features included in this plan.</p>
 					<p>If you have any questions about your subscription, please contact our support team.</p>
+				</body>
+			</html>
+			`,
+			"waitlist_verification": `
+			<html>
+				<body>
+					<h1>Verify Your Email</h1>
+					<p>Hi {{.FirstName}},</p>
+					<p>Thank you for joining the {{.CampaignName}} waitlist! You're currently at position <strong>#{{.Position}}</strong>.</p>
+					<p>Please verify your email address to secure your spot:</p>
+					<p><a href="{{.VerificationLink}}" style="background-color: #2563EB; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Email</a></p>
+					<p>Your unique referral link:</p>
+					<p><a href="{{.ReferralLink}}">{{.ReferralLink}}</a></p>
+					<p>Share this link to move up the waitlist!</p>
+					<p>If you didn't sign up for this waitlist, you can safely ignore this email.</p>
+				</body>
+			</html>
+			`,
+			"waitlist_welcome": `
+			<html>
+				<body>
+					<h1>Welcome to the Waitlist!</h1>
+					<p>Hi {{.FirstName}},</p>
+					<p>You've successfully joined the {{.CampaignName}} waitlist!</p>
+					<p>Your current position: <strong>#{{.Position}}</strong></p>
+					<p>Want to move up? Share your unique referral link:</p>
+					<p><a href="{{.ReferralLink}}" style="background-color: #2563EB; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">{{.ReferralLink}}</a></p>
+					<p>For every person who joins through your link, you'll move up the waitlist!</p>
+					<p>Current referrals: <strong>{{.ReferralCount}}</strong></p>
+					<p>We'll notify you when it's your turn. Stay tuned!</p>
+				</body>
+			</html>
+			`,
+			"waitlist_position_update": `
+			<html>
+				<body>
+					<h1>Your Position Has Changed!</h1>
+					<p>Hi {{.FirstName}},</p>
+					<p>Great news! Your position on the {{.CampaignName}} waitlist has improved!</p>
+					<p>New position: <strong>#{{.Position}}</strong></p>
+					<p>Total referrals: <strong>{{.ReferralCount}}</strong></p>
+					<p>Keep sharing your referral link to move up even faster:</p>
+					<p><a href="{{.ReferralLink}}">{{.ReferralLink}}</a></p>
+					<p>Thanks for spreading the word!</p>
 				</body>
 			</html>
 			`,
@@ -232,6 +281,109 @@ func (s *EmailService) SendEmailWithTemplate(ctx context.Context, to, subject, t
 	_, err = s.mailClient.SendEmail(ctx, s.defaultSender, to, subject, htmlContent)
 	if err != nil {
 		s.logger.Error(ctx, fmt.Sprintf("failed to send %s email", templateName), err)
+		return fmt.Errorf("%w: %s", ErrSendingEmail, err.Error())
+	}
+
+	return nil
+}
+
+// SendWaitlistVerificationEmail sends a verification email for waitlist signup
+func (s *EmailService) SendWaitlistVerificationEmail(ctx context.Context, to, firstName, campaignName, verificationLink, referralLink string, position int) error {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "email_type", Value: "waitlist_verification"},
+		observability.Field{Key: "recipient", Value: to},
+		observability.Field{Key: "campaign", Value: campaignName},
+	)
+
+	subject := fmt.Sprintf("Verify your email - You're #%d on the %s waitlist", position, campaignName)
+
+	data := TemplateData{
+		FirstName:        firstName,
+		Email:            to,
+		CampaignName:     campaignName,
+		VerificationLink: verificationLink,
+		ReferralLink:     referralLink,
+		Position:         position,
+	}
+
+	htmlContent, err := s.renderTemplate("waitlist_verification", data)
+	if err != nil {
+		s.logger.Error(ctx, "failed to render waitlist verification email template", err)
+		return fmt.Errorf("%w: %s", ErrEmptyTemplate, err.Error())
+	}
+
+	_, err = s.mailClient.SendEmail(ctx, s.defaultSender, to, subject, htmlContent)
+	if err != nil {
+		s.logger.Error(ctx, "failed to send waitlist verification email", err)
+		return fmt.Errorf("%w: %s", ErrSendingEmail, err.Error())
+	}
+
+	return nil
+}
+
+// SendWaitlistWelcomeEmail sends a welcome email after joining the waitlist
+func (s *EmailService) SendWaitlistWelcomeEmail(ctx context.Context, to, firstName, campaignName, referralLink string, position, referralCount int) error {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "email_type", Value: "waitlist_welcome"},
+		observability.Field{Key: "recipient", Value: to},
+		observability.Field{Key: "campaign", Value: campaignName},
+	)
+
+	subject := fmt.Sprintf("Welcome to the %s waitlist!", campaignName)
+
+	data := TemplateData{
+		FirstName:     firstName,
+		Email:         to,
+		CampaignName:  campaignName,
+		ReferralLink:  referralLink,
+		Position:      position,
+		ReferralCount: referralCount,
+	}
+
+	htmlContent, err := s.renderTemplate("waitlist_welcome", data)
+	if err != nil {
+		s.logger.Error(ctx, "failed to render waitlist welcome email template", err)
+		return fmt.Errorf("%w: %s", ErrEmptyTemplate, err.Error())
+	}
+
+	_, err = s.mailClient.SendEmail(ctx, s.defaultSender, to, subject, htmlContent)
+	if err != nil {
+		s.logger.Error(ctx, "failed to send waitlist welcome email", err)
+		return fmt.Errorf("%w: %s", ErrSendingEmail, err.Error())
+	}
+
+	return nil
+}
+
+// SendWaitlistPositionUpdateEmail sends an email when a user's position improves
+func (s *EmailService) SendWaitlistPositionUpdateEmail(ctx context.Context, to, firstName, campaignName, referralLink string, newPosition, referralCount int) error {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "email_type", Value: "waitlist_position_update"},
+		observability.Field{Key: "recipient", Value: to},
+		observability.Field{Key: "campaign", Value: campaignName},
+		observability.Field{Key: "new_position", Value: newPosition},
+	)
+
+	subject := fmt.Sprintf("You moved up to position #%d on %s!", newPosition, campaignName)
+
+	data := TemplateData{
+		FirstName:     firstName,
+		Email:         to,
+		CampaignName:  campaignName,
+		ReferralLink:  referralLink,
+		Position:      newPosition,
+		ReferralCount: referralCount,
+	}
+
+	htmlContent, err := s.renderTemplate("waitlist_position_update", data)
+	if err != nil {
+		s.logger.Error(ctx, "failed to render waitlist position update email template", err)
+		return fmt.Errorf("%w: %s", ErrEmptyTemplate, err.Error())
+	}
+
+	_, err = s.mailClient.SendEmail(ctx, s.defaultSender, to, subject, htmlContent)
+	if err != nil {
+		s.logger.Error(ctx, "failed to send waitlist position update email", err)
 		return fmt.Errorf("%w: %s", ErrSendingEmail, err.Error())
 	}
 
