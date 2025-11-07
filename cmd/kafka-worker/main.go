@@ -12,13 +12,13 @@ import (
 
 	"base-server/internal/clients/kafka"
 	"base-server/internal/email"
-	"base-server/internal/jobs/consumer"
-	"base-server/internal/jobs/producer"
+	"base-server/internal/events/consumers"
 	"base-server/internal/jobs/workers"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 
 	"github.com/joho/godotenv"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -33,23 +33,18 @@ func main() {
 	logger := observability.NewLogger()
 	ctx := context.Background()
 
-	logger.Info(ctx, "Starting Kafka background job worker server...")
+	logger.Info(ctx, "Starting Kafka event consumer server...")
 
-	// Get configuration from environment
+	// Get Kafka configuration from environment
 	kafkaBrokers := os.Getenv("KAFKA_BROKERS")
 	if kafkaBrokers == "" {
 		kafkaBrokers = "localhost:9092"
 	}
 	brokers := strings.Split(kafkaBrokers, ",")
 
-	kafkaTopic := os.Getenv("KAFKA_JOB_TOPIC")
+	kafkaTopic := os.Getenv("KAFKA_TOPIC")
 	if kafkaTopic == "" {
-		kafkaTopic = "job-events"
-	}
-
-	kafkaConsumerGroup := os.Getenv("KAFKA_JOB_CONSUMER_GROUP")
-	if kafkaConsumerGroup == "" {
-		kafkaConsumerGroup = "job-workers"
+		kafkaTopic = "domain-events"
 	}
 
 	// Worker pool size
@@ -84,46 +79,47 @@ func main() {
 	// Initialize email service
 	emailService := email.NewService(logger)
 
-	// Initialize Kafka producer
-	kafkaProducer := kafka.NewProducer(kafka.ProducerConfig{
-		Brokers: brokers,
-		Topic:   kafkaTopic,
-	}, logger)
-	defer kafkaProducer.Close()
-
-	// Initialize job producer
-	jobProducer := producer.New(kafkaProducer, logger)
-	_ = jobProducer // Will be used by workers in the future
-
-	// Initialize Kafka consumer
-	kafkaConsumer := kafka.NewConsumer(kafka.ConsumerConfig{
-		Brokers: brokers,
-		Topic:   kafkaTopic,
-		GroupID: kafkaConsumerGroup,
-	}, logger)
-	defer kafkaConsumer.Close()
-
-	// Initialize workers
+	// Initialize workers (shared across consumers)
 	emailWorker := workers.NewEmailWorker(&dataStore, emailService, logger)
 	positionWorker := workers.NewPositionWorker(&dataStore, logger)
 	rewardWorker := workers.NewRewardWorker(&dataStore, emailService, nil, logger)
 
-	// Initialize event-driven job consumer (emails, position recalc, rewards)
-	jobConsumer := consumer.New(
-		kafkaConsumer,
-		emailWorker,
-		positionWorker,
-		rewardWorker,
-		logger,
-		workerCount,
-	)
+	// Create separate Kafka consumers for each concern
+	// Each consumer group processes the same events independently (Kafka fan-out)
 
-	logger.Info(ctx, fmt.Sprintf(`Kafka job worker server configuration:
-  - Event-driven jobs: %d concurrent workers
+	// Email consumer: subscribes to user.*, referral.verified, reward.earned, campaign.*
+	emailKafkaConsumer := kafka.NewConsumer(kafka.ConsumerConfig{
+		Brokers: brokers,
+		Topic:   kafkaTopic,
+		GroupID: "email-workers",
+	}, logger)
+	emailConsumer := consumers.NewEmailConsumer(emailKafkaConsumer, emailWorker, logger, workerCount)
+
+	// Position consumer: subscribes to referral.verified
+	positionKafkaConsumer := kafka.NewConsumer(kafka.ConsumerConfig{
+		Brokers: brokers,
+		Topic:   kafkaTopic,
+		GroupID: "position-workers",
+	}, logger)
+	positionConsumer := consumers.NewPositionConsumer(positionKafkaConsumer, positionWorker, logger, workerCount)
+
+	// Reward consumer: subscribes to reward.earned
+	rewardKafkaConsumer := kafka.NewConsumer(kafka.ConsumerConfig{
+		Brokers: brokers,
+		Topic:   kafkaTopic,
+		GroupID: "reward-workers",
+	}, logger)
+	rewardConsumer := consumers.NewRewardConsumer(rewardKafkaConsumer, rewardWorker, logger, workerCount)
+
+	logger.Info(ctx, fmt.Sprintf(`Kafka event consumer server configuration:
+  - Domain events topic: %s
   - Kafka brokers: %v
-  - Kafka topic: %s
-  - Consumer group: %s`,
-		workerCount, brokers, kafkaTopic, kafkaConsumerGroup))
+  - Worker pool size: %d per consumer
+  - Consumer groups:
+    * email-workers (processes: user.*, referral.verified, reward.earned, campaign.*)
+    * position-workers (processes: referral.verified)
+    * reward-workers (processes: reward.earned)`,
+		kafkaTopic, brokers, workerCount))
 
 	// Handle graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -132,29 +128,64 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Start event-driven job consumer
-	go func() {
-		logger.Info(ctx, "Starting event-driven job consumer...")
-		if err := jobConsumer.Start(ctx); err != nil && err != context.Canceled {
-			logger.Error(ctx, "Job consumer error", err)
-			cancel()
+	// Start all consumers concurrently using errgroup
+	g, gCtx := errgroup.WithContext(ctx)
+
+	// Start email consumer
+	g.Go(func() error {
+		logger.Info(gCtx, "Starting email consumer...")
+		if err := emailConsumer.Start(gCtx); err != nil && err != context.Canceled {
+			logger.Error(gCtx, "Email consumer error", err)
+			return err
 		}
+		return nil
+	})
+
+	// Start position consumer
+	g.Go(func() error {
+		logger.Info(gCtx, "Starting position consumer...")
+		if err := positionConsumer.Start(gCtx); err != nil && err != context.Canceled {
+			logger.Error(gCtx, "Position consumer error", err)
+			return err
+		}
+		return nil
+	})
+
+	// Start reward consumer
+	g.Go(func() error {
+		logger.Info(gCtx, "Starting reward consumer...")
+		if err := rewardConsumer.Start(gCtx); err != nil && err != context.Canceled {
+			logger.Error(gCtx, "Reward consumer error", err)
+			return err
+		}
+		return nil
+	})
+
+	logger.Info(ctx, "Kafka event consumer server started successfully")
+
+	// Wait for shutdown signal or error
+	go func() {
+		<-sigChan
+		logger.Info(ctx, "Received shutdown signal, stopping consumers...")
+		cancel()
 	}()
 
-	logger.Info(ctx, "Kafka job worker server started successfully")
-
-	// Wait for shutdown signal
-	<-sigChan
-	logger.Info(ctx, "Received shutdown signal, stopping workers...")
-	cancel()
-
-	// Give workers time to finish current jobs
-	logger.Info(ctx, "Waiting for workers to finish...")
-
-	// Stop consumer
-	if err := jobConsumer.Stop(); err != nil {
-		logger.Error(ctx, "Error stopping job consumer", err)
+	// Wait for all consumers to finish
+	if err := g.Wait(); err != nil {
+		logger.Error(ctx, "Consumer group error", err)
 	}
 
-	logger.Info(ctx, "Kafka job worker server stopped")
+	// Stop all consumers
+	logger.Info(ctx, "Stopping all consumers...")
+	if err := emailConsumer.Stop(); err != nil {
+		logger.Error(ctx, "Error stopping email consumer", err)
+	}
+	if err := positionConsumer.Stop(); err != nil {
+		logger.Error(ctx, "Error stopping position consumer", err)
+	}
+	if err := rewardConsumer.Stop(); err != nil {
+		logger.Error(ctx, "Error stopping reward consumer", err)
+	}
+
+	logger.Info(ctx, "Kafka event consumer server stopped")
 }
