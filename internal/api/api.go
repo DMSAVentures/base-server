@@ -5,6 +5,7 @@ import (
 	authHandler "base-server/internal/auth/handler"
 	campaignHandler "base-server/internal/campaign/handler"
 	billingHandler "base-server/internal/money/billing/handler"
+	rewardHandler "base-server/internal/rewards/handler"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	waitlistHandler "base-server/internal/waitlist/handler"
 	webhookHandler "base-server/internal/webhooks/handler"
@@ -18,6 +19,7 @@ type API struct {
 	authHandler      authHandler.Handler
 	campaignHandler  campaignHandler.Handler
 	waitlistHandler  waitlistHandler.Handler
+	rewardHandler    rewardHandler.Handler
 	billingHandler   billingHandler.Handler
 	aiHandler        aiHandler.Handler
 	voicecallHandler voiceCallHandler.Handler
@@ -25,12 +27,13 @@ type API struct {
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	waitlistHandler waitlistHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
+	waitlistHandler waitlistHandler.Handler, rewardHandler rewardHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
 	return API{
 		router:           router,
 		authHandler:      authHandler,
 		campaignHandler:  campaignHandler,
 		waitlistHandler:  waitlistHandler,
+		rewardHandler:    rewardHandler,
 		billingHandler:   handler,
 		aiHandler:        aiHandler,
 		voicecallHandler: voicecallHandler,
@@ -102,6 +105,20 @@ func (a *API) RegisterRoutes() {
 				usersGroup.DELETE("/:user_id", a.waitlistHandler.HandleDeleteUser)
 				usersGroup.POST("/:user_id/verify", a.waitlistHandler.HandleVerifyUser)
 				usersGroup.POST("/:user_id/resend-verification", a.waitlistHandler.HandleResendVerification)
+
+				// User Rewards routes
+				usersGroup.POST("/:user_id/rewards", a.rewardHandler.HandleGrantReward)
+				usersGroup.GET("/:user_id/rewards", a.rewardHandler.HandleGetUserRewards)
+			}
+
+			// Rewards routes
+			rewardsGroup := campaignsGroup.Group("/:campaign_id/rewards")
+			{
+				rewardsGroup.POST("", a.rewardHandler.HandleCreateReward)
+				rewardsGroup.GET("", a.rewardHandler.HandleListRewards)
+				rewardsGroup.GET("/:reward_id", a.rewardHandler.HandleGetReward)
+				rewardsGroup.PUT("/:reward_id", a.rewardHandler.HandleUpdateReward)
+				rewardsGroup.DELETE("/:reward_id", a.rewardHandler.HandleDeleteReward)
 			}
 		}
 	}

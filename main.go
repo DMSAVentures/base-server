@@ -43,4 +43,6 @@ func main() {
 	if err := srv.WaitForShutdown(ctx); err != nil {
 		logger.Fatal(ctx, "Server shutdown error", err)
 	}
+
+	logger.Info(ctx, "Server exiting")
 }
