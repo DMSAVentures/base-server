@@ -31,14 +31,23 @@ func NewEmailWorker(store *store.Store, emailService email.Service, logger *obse
 	}
 }
 
-// ProcessEmailTask processes an email task
+// ProcessEmailJob processes an email job (for Kafka)
+func (w *EmailWorker) ProcessEmailJob(ctx context.Context, payload jobs.EmailJobPayload) error {
+	return w.processEmail(ctx, payload)
+}
+
+// ProcessEmailTask processes an email task (for Asynq)
 func (w *EmailWorker) ProcessEmailTask(ctx context.Context, task *asynq.Task) error {
 	var payload jobs.EmailJobPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		w.logger.Error(ctx, "failed to unmarshal email job payload", err)
 		return fmt.Errorf("failed to unmarshal email job payload: %w", err)
 	}
+	return w.processEmail(ctx, payload)
+}
 
+// processEmail contains the core email sending logic
+func (w *EmailWorker) processEmail(ctx context.Context, payload jobs.EmailJobPayload) error {
 	// Get user
 	user, err := w.store.GetWaitlistUserByID(ctx, payload.UserID)
 	if err != nil {

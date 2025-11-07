@@ -28,14 +28,23 @@ func NewAnalyticsWorker(store *store.Store, logger *observability.Logger) *Analy
 	}
 }
 
-// ProcessAnalyticsAggregationTask processes an analytics aggregation task
+// ProcessAnalyticsAggregation processes an analytics aggregation job (for Kafka)
+func (w *AnalyticsWorker) ProcessAnalyticsAggregation(ctx context.Context, payload jobs.AnalyticsAggregationJobPayload) error {
+	return w.processAnalyticsAggregation(ctx, payload)
+}
+
+// ProcessAnalyticsAggregationTask processes an analytics aggregation task (for Asynq)
 func (w *AnalyticsWorker) ProcessAnalyticsAggregationTask(ctx context.Context, task *asynq.Task) error {
 	var payload jobs.AnalyticsAggregationJobPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		w.logger.Error(ctx, "failed to unmarshal analytics aggregation job payload", err)
 		return fmt.Errorf("failed to unmarshal analytics aggregation job payload: %w", err)
 	}
+	return w.processAnalyticsAggregation(ctx, payload)
+}
 
+// processAnalyticsAggregation contains the core analytics aggregation logic
+func (w *AnalyticsWorker) processAnalyticsAggregation(ctx context.Context, payload jobs.AnalyticsAggregationJobPayload) error {
 	// Get campaign to ensure it exists
 	campaign, err := w.store.GetCampaignByID(ctx, payload.CampaignID)
 	if err != nil {

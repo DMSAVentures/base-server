@@ -32,14 +32,23 @@ func NewRewardWorker(store *store.Store, emailService email.Service, jobClient *
 	}
 }
 
-// ProcessRewardDeliveryTask processes a reward delivery task
+// ProcessRewardDelivery processes a reward delivery job (for Kafka)
+func (w *RewardWorker) ProcessRewardDelivery(ctx context.Context, payload jobs.RewardDeliveryJobPayload) error {
+	return w.processRewardDelivery(ctx, payload)
+}
+
+// ProcessRewardDeliveryTask processes a reward delivery task (for Asynq)
 func (w *RewardWorker) ProcessRewardDeliveryTask(ctx context.Context, task *asynq.Task) error {
 	var payload jobs.RewardDeliveryJobPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		w.logger.Error(ctx, "failed to unmarshal reward delivery job payload", err)
 		return fmt.Errorf("failed to unmarshal reward delivery job payload: %w", err)
 	}
+	return w.processRewardDelivery(ctx, payload)
+}
 
+// processRewardDelivery contains the core reward delivery logic
+func (w *RewardWorker) processRewardDelivery(ctx context.Context, payload jobs.RewardDeliveryJobPayload) error {
 	// Get user reward
 	var userReward store.UserReward
 	userRewards, err := w.store.GetPendingUserRewards(ctx, 1000) // Get batch of pending rewards

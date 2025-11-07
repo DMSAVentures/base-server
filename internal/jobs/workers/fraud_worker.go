@@ -28,14 +28,23 @@ func NewFraudWorker(store *store.Store, logger *observability.Logger) *FraudWork
 	}
 }
 
-// ProcessFraudDetectionTask processes a fraud detection task
+// ProcessFraudDetection processes a fraud detection job (for Kafka)
+func (w *FraudWorker) ProcessFraudDetection(ctx context.Context, payload jobs.FraudDetectionJobPayload) error {
+	return w.processFraudDetection(ctx, payload)
+}
+
+// ProcessFraudDetectionTask processes a fraud detection task (for Asynq)
 func (w *FraudWorker) ProcessFraudDetectionTask(ctx context.Context, task *asynq.Task) error {
 	var payload jobs.FraudDetectionJobPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		w.logger.Error(ctx, "failed to unmarshal fraud detection job payload", err)
 		return fmt.Errorf("failed to unmarshal fraud detection job payload: %w", err)
 	}
+	return w.processFraudDetection(ctx, payload)
+}
 
+// processFraudDetection contains the core fraud detection logic
+func (w *FraudWorker) processFraudDetection(ctx context.Context, payload jobs.FraudDetectionJobPayload) error {
 	// Get user
 	user, err := w.store.GetWaitlistUserByID(ctx, payload.UserID)
 	if err != nil {

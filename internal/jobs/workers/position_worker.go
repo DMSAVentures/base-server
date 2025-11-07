@@ -27,14 +27,23 @@ func NewPositionWorker(store *store.Store, logger *observability.Logger) *Positi
 	}
 }
 
-// ProcessPositionRecalcTask processes a position recalculation task
+// ProcessPositionRecalc processes a position recalculation job (for Kafka)
+func (w *PositionWorker) ProcessPositionRecalc(ctx context.Context, payload jobs.PositionRecalcJobPayload) error {
+	return w.processPositionRecalc(ctx, payload)
+}
+
+// ProcessPositionRecalcTask processes a position recalculation task (for Asynq)
 func (w *PositionWorker) ProcessPositionRecalcTask(ctx context.Context, task *asynq.Task) error {
 	var payload jobs.PositionRecalcJobPayload
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
 		w.logger.Error(ctx, "failed to unmarshal position recalc job payload", err)
 		return fmt.Errorf("failed to unmarshal position recalc job payload: %w", err)
 	}
+	return w.processPositionRecalc(ctx, payload)
+}
 
+// processPositionRecalc contains the core position recalculation logic
+func (w *PositionWorker) processPositionRecalc(ctx context.Context, payload jobs.PositionRecalcJobPayload) error {
 	// Get campaign to check referral config
 	campaign, err := w.store.GetCampaignByID(ctx, payload.CampaignID)
 	if err != nil {
