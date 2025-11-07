@@ -19,6 +19,8 @@ import (
 	kafkaClient "base-server/internal/clients/kafka"
 	"base-server/internal/clients/mail"
 	"base-server/internal/email"
+	emailTemplateHandler "base-server/internal/emailtemplates/handler"
+	emailTemplateProcessor "base-server/internal/emailtemplates/processor"
 	billingHandler "base-server/internal/money/billing/handler"
 	billingProcessor "base-server/internal/money/billing/processor"
 	"base-server/internal/money/products"
@@ -45,15 +47,16 @@ type Dependencies struct {
 	Logger *observability.Logger
 
 	// Handlers
-	AuthHandler      handler.Handler
-	BillingHandler   billingHandler.Handler
-	AIHandler        aiHandler.Handler
-	VoiceCallHandler voiceCallHandler.Handler
-	CampaignHandler  campaignHandler.Handler
-	WaitlistHandler  waitlistHandler.Handler
-	ReferralHandler  referralHandler.Handler
-	RewardHandler    rewardHandler.Handler
-	WebhookHandler   *webhookHandler.Handler
+	AuthHandler          handler.Handler
+	BillingHandler       billingHandler.Handler
+	AIHandler            aiHandler.Handler
+	VoiceCallHandler     voiceCallHandler.Handler
+	CampaignHandler      campaignHandler.Handler
+	WaitlistHandler      waitlistHandler.Handler
+	ReferralHandler      referralHandler.Handler
+	RewardHandler        rewardHandler.Handler
+	EmailTemplateHandler emailTemplateHandler.Handler
+	WebhookHandler       *webhookHandler.Handler
 
 	// Background workers
 	WebhookConsumer *webhookConsumer.EventConsumer
@@ -162,6 +165,10 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	// Initialize rewards processor and handler
 	rewardProc := rewardProcessor.New(deps.Store, logger)
 	deps.RewardHandler = rewardHandler.New(rewardProc, logger)
+
+	// Initialize email template processor and handler
+	emailTemplateProc := emailTemplateProcessor.New(deps.Store, emailService, logger)
+	deps.EmailTemplateHandler = emailTemplateHandler.New(emailTemplateProc, logger)
 
 	// Initialize webhook services
 	webhookSvc := webhookService.New(deps.Store, logger)
