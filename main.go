@@ -9,6 +9,7 @@ import (
 	campaignHandler "base-server/internal/campaign/handler"
 	campaignProcessor "base-server/internal/campaign/processor"
 	"base-server/internal/clients/googleoauth"
+	kafkaClient "base-server/internal/clients/kafka"
 	"base-server/internal/clients/mail"
 	"base-server/internal/email"
 	billingHandler "base-server/internal/money/billing/handler"
@@ -19,8 +20,10 @@ import (
 	"base-server/internal/store"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	voiceCallProcessor "base-server/internal/voicecall/processor"
+	webhookConsumer "base-server/internal/webhooks/consumer"
 	webhookHandler "base-server/internal/webhooks/handler"
 	webhookProcessor "base-server/internal/webhooks/processor"
+	webhookProducer "base-server/internal/webhooks/producer"
 	webhookService "base-server/internal/webhooks/service"
 	webhookWorker "base-server/internal/webhooks/worker"
 	"context"
@@ -30,6 +33,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -156,6 +160,23 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Get Kafka configuration from environment
+	kafkaBrokers := os.Getenv("KAFKA_BROKERS")
+	if kafkaBrokers == "" {
+		logger.Error(ctx, "KAFKA_BROKERS is not set", ErrEmptyEnvironmentVariable)
+		os.Exit(1)
+	}
+
+	kafkaTopic := os.Getenv("KAFKA_TOPIC")
+	if kafkaTopic == "" {
+		kafkaTopic = "webhook-events" // Default topic
+	}
+
+	kafkaConsumerGroup := os.Getenv("KAFKA_CONSUMER_GROUP")
+	if kafkaConsumerGroup == "" {
+		kafkaConsumerGroup = "webhook-consumers" // Default consumer group
+	}
+
 	// Init open ai
 	openAiAPIKey := os.Getenv("OPENAI_API_KEY")
 	if openAiAPIKey == "" {
@@ -230,15 +251,42 @@ func main() {
 	newCampaignProcessor := campaignProcessor.New(store, logger)
 	newCampaignHandler := campaignHandler.New(newCampaignProcessor, logger)
 
-	// Initialize webhook service
+	// Initialize Kafka
+	brokerList := strings.Split(kafkaBrokers, ",")
+	kafkaProducer := kafkaClient.NewProducer(kafkaClient.ProducerConfig{
+		Brokers: brokerList,
+		Topic:   kafkaTopic,
+	}, logger)
+	defer kafkaProducer.Close()
+
+	kafkaConsumer := kafkaClient.NewConsumer(kafkaClient.ConsumerConfig{
+		Brokers: brokerList,
+		Topic:   kafkaTopic,
+		GroupID: kafkaConsumerGroup,
+	}, logger)
+	defer kafkaConsumer.Close()
+
+	// Initialize webhook services
 	webhookSvc := webhookService.New(store, logger)
+	eventProducer := webhookProducer.New(kafkaProducer, logger)
 	webhookProc := webhookProcessor.New(store, logger, webhookSvc)
 	webhookHdlr := webhookHandler.New(webhookProc, logger)
+
+	// Initialize webhook event consumer with worker pool
+	eventConsumer := webhookConsumer.New(kafkaConsumer, webhookSvc, logger, 10)
 
 	api := apisetup.New(rootRouter, authHandler, newCampaignHandler, billingHandler, aiHandler, voicecallHandler, webhookHdlr)
 	api.RegisterRoutes()
 
-	// Start webhook retry worker (runs every 30 seconds)
+	// Start webhook event consumer (processes events from Kafka)
+	go func() {
+		err := eventConsumer.Start(ctx)
+		if err != nil {
+			logger.Error(ctx, "webhook event consumer stopped with error", err)
+		}
+	}()
+
+	// Start webhook retry worker (runs every 30 seconds for failed deliveries)
 	webhookWkr := webhookWorker.New(webhookSvc, logger, 30*time.Second)
 	go webhookWkr.Start(ctx)
 
@@ -265,8 +313,9 @@ func main() {
 	<-quit
 	logger.Info(ctx, "Shutting down server...")
 
-	// Stop webhook worker
+	// Stop webhook worker and consumer
 	webhookWkr.Stop()
+	eventConsumer.Stop()
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling

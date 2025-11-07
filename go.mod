@@ -16,6 +16,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/openai/openai-go v1.12.0
 	github.com/resendlabs/resend-go v1.7.0
+	github.com/segmentio/kafka-go v0.4.49
 	github.com/stripe/stripe-go/v79 v79.12.0
 	github.com/twilio/twilio-go v1.25.1
 	go.uber.org/zap v1.27.0

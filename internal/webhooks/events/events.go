@@ -2,7 +2,7 @@ package events
 
 import (
 	"base-server/internal/observability"
-	"base-server/internal/webhooks/service"
+	"base-server/internal/webhooks/producer"
 	"context"
 
 	"github.com/google/uuid"
@@ -43,15 +43,15 @@ const (
 
 // EventDispatcher provides convenience methods for dispatching webhook events
 type EventDispatcher struct {
-	webhookService *service.WebhookService
-	logger         *observability.Logger
+	eventProducer *producer.EventProducer
+	logger        *observability.Logger
 }
 
 // NewEventDispatcher creates a new EventDispatcher
-func NewEventDispatcher(webhookService *service.WebhookService, logger *observability.Logger) *EventDispatcher {
+func NewEventDispatcher(eventProducer *producer.EventProducer, logger *observability.Logger) *EventDispatcher {
 	return &EventDispatcher{
-		webhookService: webhookService,
-		logger:         logger,
+		eventProducer: eventProducer,
+		logger:        logger,
 	}
 }
 
@@ -62,7 +62,7 @@ func (d *EventDispatcher) DispatchUserCreated(ctx context.Context, accountID, ca
 		"user":        userData,
 	}
 
-	err := d.webhookService.DispatchEvent(ctx, accountID, &campaignID, EventUserCreated, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventUserCreated, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch user.created event", err)
 	}
@@ -75,7 +75,7 @@ func (d *EventDispatcher) DispatchUserVerified(ctx context.Context, accountID, c
 		"user":        userData,
 	}
 
-	err := d.webhookService.DispatchEvent(ctx, accountID, &campaignID, EventUserVerified, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventUserVerified, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch user.verified event", err)
 	}
@@ -90,7 +90,7 @@ func (d *EventDispatcher) DispatchUserPositionChanged(ctx context.Context, accou
 		"new_position": newPosition,
 	}
 
-	err := d.webhookService.DispatchEvent(ctx, accountID, &campaignID, EventUserPositionChanged, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventUserPositionChanged, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch user.position_changed event", err)
 	}
@@ -103,7 +103,7 @@ func (d *EventDispatcher) DispatchReferralCreated(ctx context.Context, accountID
 		"referral":    referralData,
 	}
 
-	err := d.webhookService.DispatchEvent(ctx, accountID, &campaignID, EventReferralCreated, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventReferralCreated, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch referral.created event", err)
 	}
@@ -116,7 +116,7 @@ func (d *EventDispatcher) DispatchReferralVerified(ctx context.Context, accountI
 		"referral":    referralData,
 	}
 
-	err := d.webhookService.DispatchEvent(ctx, accountID, &campaignID, EventReferralVerified, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventReferralVerified, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch referral.verified event", err)
 	}
@@ -129,7 +129,7 @@ func (d *EventDispatcher) DispatchRewardEarned(ctx context.Context, accountID, c
 		"reward":      rewardData,
 	}
 
-	err := d.webhookService.DispatchEvent(ctx, accountID, &campaignID, EventRewardEarned, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventRewardEarned, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch reward.earned event", err)
 	}
@@ -143,7 +143,7 @@ func (d *EventDispatcher) DispatchCampaignMilestone(ctx context.Context, account
 		"total_signups": totalSignups,
 	}
 
-	err := d.webhookService.DispatchEvent(ctx, accountID, &campaignID, EventCampaignMilestone, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventCampaignMilestone, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch campaign.milestone event", err)
 	}
@@ -156,7 +156,7 @@ func (d *EventDispatcher) DispatchEmailSent(ctx context.Context, accountID, camp
 		"email":       emailData,
 	}
 
-	err := d.webhookService.DispatchEvent(ctx, accountID, &campaignID, EventEmailSent, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventEmailSent, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch email.sent event", err)
 	}
@@ -169,7 +169,7 @@ func (d *EventDispatcher) DispatchEmailDelivered(ctx context.Context, accountID,
 		"email":       emailData,
 	}
 
-	err := d.webhookService.DispatchEvent(ctx, accountID, &campaignID, EventEmailDelivered, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventEmailDelivered, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch email.delivered event", err)
 	}
