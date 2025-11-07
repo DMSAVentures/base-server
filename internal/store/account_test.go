@@ -642,7 +642,7 @@ func TestStore_GetTeamMembersByAccountID(t *testing.T) {
 				testDB.Store.CreateTeamMember(ctx, CreateTeamMemberParams{
 					AccountID:   account.ID,
 					UserID:      member2.ID,
-					Role:        "member",
+					Role:        "viewer",
 					Permissions: JSONB{},
 				})
 				return account.ID
@@ -696,7 +696,7 @@ func TestStore_DeleteTeamMember(t *testing.T) {
 				testDB.Store.CreateTeamMember(ctx, CreateTeamMemberParams{
 					AccountID:   account.ID,
 					UserID:      member.ID,
-					Role:        "member",
+					Role:        "editor",
 					Permissions: JSONB{},
 				})
 				return account.ID, member.ID
