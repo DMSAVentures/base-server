@@ -174,13 +174,15 @@ func (tdb *TestDB) Truncate(t *testing.T, tables ...string) {
 	t.Helper()
 
 	if len(tables) == 0 {
-		// Truncate all tables
+		// Truncate all tables (in reverse dependency order)
 		tables = []string{
 			"webhook_deliveries",
 			"webhooks",
-			"audit_log",
+			"fraud_detections",
+			"audit_logs",
 			"api_keys",
 			"campaign_analytics",
+			"user_activity_logs",
 			"email_logs",
 			"email_templates",
 			"user_rewards",
@@ -191,11 +193,15 @@ func (tdb *TestDB) Truncate(t *testing.T, tables ...string) {
 			"team_members",
 			"accounts",
 			"usage_logs",
+			"messages",
 			"conversations",
-			"payment_methods",
+			"payment_method",
 			"subscriptions",
 			"prices",
 			"products",
+			"plan_feature_limits",
+			"limits",
+			"features",
 			"oauth_auth",
 			"email_auth",
 			"user_auth",

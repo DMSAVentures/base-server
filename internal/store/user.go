@@ -32,11 +32,22 @@ SET stripe_customer_id = $1
 WHERE id = $2`
 
 func (s *Store) UpdateStripeCustomerIDByUserID(ctx context.Context, userID uuid.UUID, stripeCustomerID string) error {
-	_, err := s.db.ExecContext(ctx, sqlUpdateStripeCustomerIDByUserID, stripeCustomerID, userID)
+	result, err := s.db.ExecContext(ctx, sqlUpdateStripeCustomerIDByUserID, stripeCustomerID, userID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to update stripe customer ID by user ID", err)
 		return fmt.Errorf("failed to update stripe customer ID by user ID: %w", err)
 	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		s.logger.Error(ctx, "failed to get rows affected", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
 	return nil
 }
 

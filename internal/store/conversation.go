@@ -103,10 +103,21 @@ UPDATE conversations SET title = $1 WHERE id = $2
 
 func (s *Store) UpdateConversationTitleByConversationID(ctx context.Context, conversationID uuid.UUID,
 	title string) error {
-	_, err := s.db.ExecContext(ctx, sqlUpdateConversationTitleByConversationID, title, conversationID)
+	result, err := s.db.ExecContext(ctx, sqlUpdateConversationTitleByConversationID, title, conversationID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to update conversation title", err)
 		return fmt.Errorf("failed to update conversation title: %w", err)
 	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		s.logger.Error(ctx, "failed to get rows affected", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
 	return nil
 }

@@ -70,10 +70,21 @@ WHERE conversation_id = $2
 `
 
 func (s *Store) UpdateUsageTokensByConversationID(ctx context.Context, conversationID uuid.UUID, delta int) error {
-	_, err := s.db.ExecContext(ctx, sqlUpdateUsageTokensByConversationID, delta, conversationID)
+	result, err := s.db.ExecContext(ctx, sqlUpdateUsageTokensByConversationID, delta, conversationID)
 	if err != nil {
 		s.logger.Error(ctx, "failed to increment usage tokens", err)
 		return fmt.Errorf("failed to increment usage tokens: %w", err)
 	}
-	return err
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		s.logger.Error(ctx, "failed to get rows affected", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+
+	return nil
 }

@@ -206,6 +206,53 @@ func (s Store) GetUserByExternalID(ctx context.Context, externalID uuid.UUID) (U
 }
 ```
 
+### Update/Delete Operations Pattern
+**IMPORTANT:** All UPDATE and DELETE operations MUST check rows affected and return `ErrNotFound` if no rows were modified.
+
+```go
+func (s *Store) UpdateSomething(ctx context.Context, id uuid.UUID, value string) error {
+    result, err := s.db.ExecContext(ctx, sqlUpdateSomething, value, id)
+    if err != nil {
+        s.logger.Error(ctx, "failed to update something", err)
+        return fmt.Errorf("failed to update something: %w", err)
+    }
+
+    rowsAffected, err := result.RowsAffected()
+    if err != nil {
+        s.logger.Error(ctx, "failed to get rows affected", err)
+        return fmt.Errorf("failed to get rows affected: %w", err)
+    }
+
+    if rowsAffected == 0 {
+        return ErrNotFound
+    }
+
+    return nil
+}
+
+func (s *Store) DeleteSomething(ctx context.Context, id uuid.UUID) error {
+    result, err := s.db.ExecContext(ctx, sqlDeleteSomething, id)
+    if err != nil {
+        s.logger.Error(ctx, "failed to delete something", err)
+        return fmt.Errorf("failed to delete something: %w", err)
+    }
+
+    rowsAffected, err := result.RowsAffected()
+    if err != nil {
+        s.logger.Error(ctx, "failed to get rows affected", err)
+        return fmt.Errorf("failed to get rows affected: %w", err)
+    }
+
+    if rowsAffected == 0 {
+        return ErrNotFound
+    }
+
+    return nil
+}
+```
+
+**Exception:** Operations that are idempotent by design (e.g., incrementing counters, adding to sets) may skip the rows affected check if the operation can safely succeed on non-existent records.
+
 ### Migration Format
 Use Flyway-compatible SQL migrations:
 - Filename: `V{version}__{description}.sql`
