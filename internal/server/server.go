@@ -43,7 +43,7 @@ func (s *Server) Setup() {
 	// Configure CORS
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowCredentials = true
-	corsConfig.AllowMethods = []string{"GET", "POST", "OPTIONS", "DELETE"}
+	corsConfig.AllowMethods = []string{"GET", "PUT", "PATCH", "POST", "OPTIONS", "DELETE"}
 	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Last-Event-ID", "Cache-Control", "Connection", "Accept", "Transfer-Encoding"}
 	corsConfig.AllowOrigins = []string{s.config.Services.WebAppURI}
 
