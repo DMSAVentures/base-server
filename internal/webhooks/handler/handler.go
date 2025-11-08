@@ -121,6 +121,11 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 			return
 		}
 
+		// Ensure webhooks is never null - return empty array instead
+		if webhooks == nil {
+			webhooks = []store.Webhook{}
+		}
+
 		c.JSON(http.StatusOK, webhooks)
 		return
 	}
@@ -131,6 +136,11 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 		h.logger.Error(ctx, "failed to get webhooks", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Ensure webhooks is never null - return empty array instead
+	if webhooks == nil {
+		webhooks = []store.Webhook{}
 	}
 
 	c.JSON(http.StatusOK, webhooks)

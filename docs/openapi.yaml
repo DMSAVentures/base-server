@@ -836,6 +836,7 @@ paths:
             application/json:
               schema:
                 type: array
+                description: Array of rewards. Returns empty array [] if no rewards found, never null.
                 items:
                   $ref: '#/components/schemas/Reward'
         '401':
@@ -1043,6 +1044,7 @@ paths:
             application/json:
               schema:
                 type: array
+                description: Array of email templates. Returns empty array [] if no templates found, never null.
                 items:
                   $ref: '#/components/schemas/EmailTemplate'
         '401':
@@ -1499,11 +1501,12 @@ paths:
             format: uuid
       responses:
         '200':
-          description: List of webhooks
+          description: List of webhooks. Returns empty array [] if no webhooks found, never null.
           content:
             application/json:
               schema:
                 type: array
+                description: Array of webhooks
                 items:
                   $ref: '#/components/schemas/Webhook'
         '401':
@@ -2769,6 +2772,7 @@ components:
       properties:
         campaigns:
           type: array
+          description: Array of campaigns. Returns empty array [] if no campaigns found, never null.
           items:
             $ref: '#/components/schemas/Campaign'
         pagination:
@@ -2779,6 +2783,7 @@ components:
       properties:
         users:
           type: array
+          description: Array of waitlist users. Returns empty array [] if no users found, never null.
           items:
             $ref: '#/components/schemas/WaitlistUser'
         total_count:
@@ -2795,6 +2800,7 @@ components:
       properties:
         referrals:
           type: array
+          description: Array of referrals. Returns empty array [] if no referrals found, never null.
           items:
             $ref: '#/components/schemas/Referral'
         pagination:
@@ -2805,6 +2811,7 @@ components:
       properties:
         deliveries:
           type: array
+          description: Array of webhook deliveries. Returns empty array [] if no deliveries found, never null.
           items:
             $ref: '#/components/schemas/WebhookDelivery'
         pagination:

@@ -3,6 +3,7 @@ package handler
 import (
 	"base-server/internal/emailtemplates/processor"
 	"base-server/internal/observability"
+	"base-server/internal/store"
 	"errors"
 	"net/http"
 
@@ -147,6 +148,11 @@ func (h *Handler) HandleListEmailTemplates(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Ensure templates is never null - return empty array instead
+	if templates == nil {
+		templates = []store.EmailTemplate{}
 	}
 
 	c.JSON(http.StatusOK, templates)

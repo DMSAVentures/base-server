@@ -190,8 +190,14 @@ func (h *Handler) HandleListCampaigns(c *gin.Context) {
 		return
 	}
 
+	// Ensure campaigns is never null - return empty array instead
+	campaigns := result.Campaigns
+	if campaigns == nil {
+		campaigns = []store.Campaign{}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"campaigns": result.Campaigns,
+		"campaigns": campaigns,
 		"pagination": gin.H{
 			"total_count": result.TotalCount,
 			"page":        result.Page,

@@ -3,6 +3,7 @@ package handler
 import (
 	"base-server/internal/observability"
 	"base-server/internal/referral/processor"
+	"base-server/internal/store"
 	"net/http"
 	"strconv"
 
@@ -72,6 +73,11 @@ func (h *Handler) HandleListReferrals(c *gin.Context) {
 		h.logger.Error(ctx, "failed to list referrals", err)
 		h.handleProcessorError(c, err)
 		return
+	}
+
+	// Ensure referrals is never null - return empty array instead
+	if response.Referrals == nil {
+		response.Referrals = []store.Referral{}
 	}
 
 	c.JSON(http.StatusOK, response)
