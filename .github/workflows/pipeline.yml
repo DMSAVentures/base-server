@@ -14,18 +14,102 @@ jobs:
   build-and-test:
     name: Build and Test Golang Project
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+
       - name: Install dependencies
-        run: go get .
+        run: go mod download
+
+      - name: Create test environment file
+        run: |
+          cat > env.local << EOF
+          # Database
+          DB_HOST=localhost
+          DB_USERNAME=base_user
+          DB_PASSWORD=base_password
+          DB_NAME=base_db
+
+          # Authentication
+          JWT_SECRET=test-jwt-secret-key-for-github-actions
+          GOOGLE_CLIENT_ID=test-google-client-id
+          GOOGLE_CLIENT_SECRET=test-google-client-secret
+          GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
+
+          # Services (test/dummy values)
+          STRIPE_SECRET_KEY=sk_test_dummy_key
+          STRIPE_WEBHOOK_SECRET=whsec_test_dummy_secret
+          RESEND_API_KEY=re_test_dummy_key
+          OPENAI_API_KEY=sk-test-dummy-openai-key
+          GOOGLE_AI_API_KEY=test-dummy-google-ai-key
+          DEFAULT_EMAIL_SENDER_ADDRESS=test@example.com
+          WEBAPP_URI=http://localhost:3000
+
+          # Kafka
+          KAFKA_BROKERS=localhost:9092
+          KAFKA_TOPIC=webhook-events
+          KAFKA_CONSUMER_GROUP=webhook-consumers
+
+          # Server
+          SERVER_PORT=8080
+          EOF
+
+      - name: Start services with docker-compose
+        run: docker compose -f docker-compose.services.yml up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for PostgreSQL to be ready..."
+          timeout 60 bash -c 'until docker compose -f docker-compose.services.yml exec -T db pg_isready -U base_user -d base_db; do sleep 2; done'
+          echo "Waiting for migrations to complete..."
+          docker compose -f docker-compose.services.yml logs flyway
+          echo "Waiting for Kafka to be ready..."
+          sleep 10
+          docker compose -f docker-compose.services.yml exec -T kafka kafka-topics --bootstrap-server localhost:9092 --list || echo "Kafka not fully ready yet"
+          timeout 60 bash -c 'until docker compose -f docker-compose.services.yml exec -T kafka kafka-broker-api-versions --bootstrap-server localhost:9092 2>/dev/null; do sleep 2; done'
+
       - name: Build the application
-        run: go build -v .
-      - name: Run tests
-        run: go test -v .
+        run: go build -v ./...
+
+      - name: Run unit tests
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic -short ./...
+
+      - name: Start API server in background
+        run: |
+          ./base-server &
+          echo $! > server.pid
+          # Wait for server to be ready
+          timeout 30 bash -c 'until curl -s http://localhost:8080/health > /dev/null; do sleep 1; done'
+
+      - name: Run integration tests
+        env:
+          TEST_API_HOST: localhost
+          TEST_API_PORT: 8080
+          TEST_DB_HOST: localhost
+          TEST_DB_PORT: 5432
+          TEST_DB_USER: base_user
+          TEST_DB_PASS: base_password
+          TEST_DB_NAME: base_db
+        run: go test -v -race -tags=integration ./tests/...
+
+      - name: Stop API server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+          fi
+
+      - name: Display test coverage
+        run: go tool cover -func=coverage.out
+
+      - name: Stop services
+        if: always()
+        run: docker compose -f docker-compose.services.yml down -v
 
   prepare-ecr:
     name: Prepare ECR Repository
