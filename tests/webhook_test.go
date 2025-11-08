@@ -570,9 +570,10 @@ func TestAPI_Webhook_GetDeliveries(t *testing.T) {
 				var response map[string]interface{}
 				parseJSONResponse(t, body, &response)
 
+				// Deliveries should always be an array (empty array if no deliveries)
 				deliveries, ok := response["deliveries"].([]interface{})
 				if !ok {
-					t.Fatal("Expected 'deliveries' array in response")
+					t.Fatalf("Expected 'deliveries' to be an array, got: %T", response["deliveries"])
 				}
 
 				// May be empty if no deliveries yet
@@ -596,9 +597,12 @@ func TestAPI_Webhook_GetDeliveries(t *testing.T) {
 				var response map[string]interface{}
 				parseJSONResponse(t, body, &response)
 
-				if response["deliveries"] == nil {
-					t.Error("Expected 'deliveries' in response")
+				// Deliveries should always be an array (never null)
+				if _, ok := response["deliveries"].([]interface{}); !ok {
+					t.Errorf("Expected 'deliveries' to be an array, got: %T", response["deliveries"])
 				}
+
+				// Check that pagination exists
 				if response["pagination"] == nil {
 					t.Error("Expected 'pagination' in response")
 				}

@@ -267,6 +267,11 @@ func (h *Handler) HandleListWebhookDeliveries(c *gin.Context) {
 		return
 	}
 
+	// Ensure deliveries is never null - return empty array instead
+	if deliveries == nil {
+		deliveries = []store.WebhookDelivery{}
+	}
+
 	page := (offset / limit) + 1
 	c.JSON(http.StatusOK, gin.H{
 		"deliveries": deliveries,

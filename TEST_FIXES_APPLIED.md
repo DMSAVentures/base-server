@@ -194,6 +194,52 @@ mockServerURL := fmt.Sprintf("http://%s/webhook", listener.Addr().String())
 
 ---
 
+### 7. Webhook Handler: Empty Array Instead of Null
+
+**File**: `internal/webhooks/handler/handler.go:270-273`
+
+**Issue**: API was returning `null` for empty deliveries array instead of `[]`
+
+**Root Cause**: In Go, when a slice is `nil`, JSON marshaling serializes it as `null`. This is poor API design - collections should always be arrays (empty `[]` if no items).
+
+**Before**:
+```json
+{
+  "deliveries": null,
+  "pagination": {...}
+}
+```
+
+**After**:
+```json
+{
+  "deliveries": [],
+  "pagination": {...}
+}
+```
+
+**Fix**: Added nil check to ensure empty array is returned:
+```go
+deliveries, err := h.processor.GetWebhookDeliveries(ctx, webhookID, limit, offset)
+if err != nil {
+    // ... error handling
+}
+
+// Ensure deliveries is never null - return empty array instead
+if deliveries == nil {
+    deliveries = []store.WebhookDelivery{}
+}
+
+c.JSON(http.StatusOK, gin.H{
+    "deliveries": deliveries,  // Always an array, never null
+    "pagination": gin.H{...},
+})
+```
+
+**Best Practice**: Collections in REST APIs should always be arrays, even when empty. `null` should only be used for optional single values, not for collections.
+
+---
+
 ## Test Results Summary
 
 ### Before Fixes
@@ -202,11 +248,11 @@ mockServerURL := fmt.Sprintf("http://%s/webhook", listener.Addr().String())
 - **Webhook tests**: 17/20 passing (85%)
 - **Overall**: 72/86 tests passing (84%)
 
-### After Fixes (Expected)
+### After Fixes
 - **Auth tests**: 21/21 passing (100%)
 - **Campaign tests**: 45/45 passing (100%)
 - **Webhook tests**: 20/20 passing (100%)
-- **Overall**: 86/86 tests passing (100%)
+- **Overall**: 86/86 tests passing (100%) ✅
 
 ## Files Modified
 

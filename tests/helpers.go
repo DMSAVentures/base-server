@@ -202,3 +202,12 @@ func waitForCondition(t *testing.T, timeout time.Duration, condition func() bool
 	}
 	t.Fatalf("Timeout waiting for condition: %s", errorMsg)
 }
+
+// getKeys returns the keys from a map for debugging
+func getKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
