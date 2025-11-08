@@ -1,14 +1,15 @@
 # Testing Guide
 
-This document describes how to run unit tests for the base-server project, specifically for the store layer.
+This document describes how to run tests for the base-server project, including both store layer tests and API integration tests.
 
 ## Overview
 
-The test suite uses:
-- **PostgreSQL** (via Docker) for testing database operations
+The test suite includes:
+- **Store Layer Tests**: Database operations and models
+- **API Integration Tests**: End-to-end HTTP API testing
 - **Table-driven tests** for comprehensive coverage
 - **Real database migrations** to ensure schema compatibility
-- **Isolated test databases** for each test run
+- **PostgreSQL & Kafka** (via Docker) for testing infrastructure
 
 ## Prerequisites
 
@@ -18,104 +19,156 @@ The test suite uses:
 
 ## Quick Start
 
-### Using Make (Recommended)
+### Store Tests (No Server Required)
 
-The easiest way to run tests is using the provided Makefile:
+Run database/store layer tests:
 
 ```bash
+# Start test infrastructure (database, Kafka)
+make test-db-up
+
 # Run all store tests
 make test
-
-# Run tests without verbose output
-make test-quiet
 
 # Run tests with coverage report
 make test-coverage
 
 # Run a specific test
 make test-one TEST=TestStore_CreateUser
+
+# Stop test infrastructure
+make test-db-down
+```
+
+### API Integration Tests (Requires Running Server)
+
+Run end-to-end API tests:
+
+**Terminal 1** - Start the server:
+```bash
+make test-db-up
+go run main.go
+```
+
+**Terminal 2** - Run API tests:
+```bash
+make test-api
+```
+
+When done:
+```bash
+make test-db-down
 ```
 
 ### Manual Setup
 
 If you prefer to run tests manually:
 
-1. **Start the test database:**
+1. **Start test infrastructure:**
 ```bash
-docker-compose -f docker-compose.test.yml up -d
+docker compose -f docker-compose.services.yml up -d
 ```
 
 2. **Set environment variables:**
 ```bash
+# Database
 export TEST_DB_HOST=localhost
-export TEST_DB_PORT=5433
-export TEST_DB_USER=postgres
-export TEST_DB_PASSWORD=postgres
-export TEST_DB_TYPE=postgres
+export TEST_DB_PORT=5432
+export TEST_DB_USER=base_user
+export TEST_DB_PASSWORD=base_password
+export TEST_DB_NAME=base_db
+
+# API (for API tests)
+export TEST_API_HOST=localhost
+export TEST_API_PORT=8080
 ```
 
 3. **Run tests:**
 ```bash
+# Store tests
 go test ./internal/store/... -v
+
+# API tests (requires server running)
+go test -v -tags=integration ./tests/...
 ```
 
-4. **Stop the test database:**
+4. **Stop test infrastructure:**
 ```bash
-docker-compose -f docker-compose.test.yml down -v
+docker compose -f docker-compose.services.yml down
 ```
 
 ## Test Structure
 
-### Test Files
+### Store Layer Tests
 
-- `internal/store/testhelper.go` - Test infrastructure and utilities
-- `internal/store/emailauth_test.go` - Email authentication tests
-- `internal/store/oauth_test.go` - OAuth authentication tests
-- `internal/store/user_test.go` - User management tests
-- `internal/store/account_test.go` - Account CRUD tests
-- `internal/store/subscription_test.go` - Subscription management tests
+Located in `internal/store/`:
+- `testhelper.go` - Test infrastructure and utilities
+- `emailauth_test.go` - Email authentication tests
+- `oauth_test.go` - OAuth authentication tests
+- `user_test.go` - User management tests
+- `account_test.go` - Account CRUD tests
+- `subscription_test.go` - Subscription management tests
 
-### Test Database
+### API Integration Tests
 
-The test suite uses a PostgreSQL database running in Docker on port 5433 (to avoid conflicts with development databases on port 5432).
+Located in `tests/`:
+- `helpers.go` - Common test utilities and HTTP helpers
+- `health_test.go` - Health check endpoint tests
+- `auth_test.go` - Authentication API tests (20+ tests)
+- `campaign_test.go` - Campaign management API tests (35+ tests)
+- `webhook_test.go` - Webhook management API tests (25+ tests)
+- `README.md` - Detailed API testing documentation
 
-Each test run:
-1. Creates a new test database with a unique name
-2. Runs all migrations to set up the schema
-3. Executes the tests
-4. Cleans up and drops the test database
+### Test Infrastructure
+
+The test suite uses:
+- **PostgreSQL** database running in Docker (port 5432)
+- **Kafka** broker for event streaming (port 9092)
+- **Flyway** for automatic database migrations
+- Real HTTP requests to test the full API stack
 
 ## Running Tests
 
-### All Tests
+### Available Test Commands
 
-Run all store tests with verbose output:
+| Command | Description |
+|---------|-------------|
+| `make test` | Run all store tests with database |
+| `make test-api` | Run API integration tests (requires server) |
+| `make test-integration` | Run all integration tests (store + API) |
+| `make test-all` | Run all tests (unit + integration) |
+| `make test-coverage` | Run tests with coverage report |
+| `make test-store` | Run store tests only |
+| `make test-db-up` | Start test infrastructure |
+| `make test-db-down` | Stop test infrastructure |
+
+### Store Layer Tests
+
+Run all store tests:
 ```bash
 make test
 ```
 
-Or using go directly:
+Run specific store test:
 ```bash
-go test ./internal/store/... -v
+make test-one TEST=TestStore_CreateUser
 ```
 
-### Specific Test File
+### API Integration Tests
 
-Run tests from a specific file:
+Run all API tests (requires server running):
 ```bash
-go test ./internal/store -run TestStore_CreateUser -v
+make test-api
 ```
 
-### Specific Test Case
-
-Run a specific test case:
+Run specific API test:
 ```bash
-make test-one TEST=TestStore_CreateAccount
+go test -v -tags=integration ./tests -run TestAPI_Auth_EmailSignup
 ```
 
-Or:
+Run specific test file:
 ```bash
-go test ./internal/store -run TestStore_CreateAccount/create_account_with_all_fields -v
+go test -v -tags=integration ./tests/auth_test.go ./tests/helpers.go
 ```
 
 ### With Coverage
@@ -127,42 +180,40 @@ make test-coverage
 
 This creates `coverage.html` which you can open in your browser.
 
-### Watch Mode
-
-Run tests automatically when files change (requires [watchexec](https://github.com/watchexec/watchexec)):
-```bash
-make test-watch
-```
-
 ## Test Configuration
 
 ### Environment Variables
 
-The test suite respects the following environment variables:
+#### Database Configuration
 
 - `TEST_DB_HOST` - Database host (default: localhost)
-- `TEST_DB_PORT` - Database port (default: 5433)
-- `TEST_DB_USER` - Database user (default: postgres)
-- `TEST_DB_PASSWORD` - Database password (default: postgres)
-- `TEST_DB_NAME` - Database name prefix (default: test_db)
+- `TEST_DB_PORT` - Database port (default: 5432)
+- `TEST_DB_USER` - Database user (default: base_user)
+- `TEST_DB_PASSWORD` - Database password (default: base_password)
+- `TEST_DB_NAME` - Database name (default: base_db)
 - `TEST_DB_TYPE` - Database type (default: postgres)
 
-### Custom Database
+#### API Test Configuration
 
-To use a different PostgreSQL instance:
+- `TEST_API_HOST` - API server host (default: localhost)
+- `TEST_API_PORT` - API server port (default: 8080)
+
+### Custom Configuration
+
+Run tests with custom configuration:
 ```bash
-export TEST_DB_HOST=custom-host
-export TEST_DB_PORT=5432
-export TEST_DB_USER=testuser
-export TEST_DB_PASSWORD=testpass
-go test ./internal/store/... -v
+# Custom API port
+TEST_API_PORT=9000 make test-api
+
+# Custom database
+TEST_DB_HOST=custom-host TEST_DB_PORT=5433 make test
 ```
 
 ## Writing Tests
 
-### Table-Driven Tests
+### Store Layer Tests
 
-All tests follow the table-driven pattern:
+All store tests follow the table-driven pattern:
 
 ```go
 func TestStore_SomeFunction(t *testing.T) {
@@ -227,7 +278,7 @@ The `testhelper.go` provides utilities:
 - `testDB.MustExec(t, query, args...)` - Execute SQL
 - `testDB.WithContext()` - Get test context
 
-### Helper Functions
+### Store Helper Functions
 
 Create helper functions for common test data:
 
@@ -240,6 +291,90 @@ func createTestUser(t *testing.T, testDB *TestDB, firstName, lastName string) (U
     return user, err
 }
 ```
+
+### API Integration Tests
+
+API tests use the `//go:build integration` tag and follow a similar table-driven pattern:
+
+```go
+//go:build integration
+// +build integration
+
+package tests
+
+import (
+    "net/http"
+    "testing"
+)
+
+func TestAPI_YourFeature(t *testing.T) {
+    token := createAuthenticatedUser(t)
+
+    tests := []struct {
+        name           string
+        request        map[string]interface{}
+        expectedStatus int
+        validateFunc   func(t *testing.T, body []byte)
+    }{
+        {
+            name: "success case",
+            request: map[string]interface{}{
+                "field": "value",
+            },
+            expectedStatus: http.StatusOK,
+            validateFunc: func(t *testing.T, body []byte) {
+                var response map[string]interface{}
+                parseJSONResponse(t, body, &response)
+                // Add assertions
+            },
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            resp, body := makeAuthenticatedRequest(t, http.MethodPost, "/api/path", tt.request, token)
+            assertStatusCode(t, resp, tt.expectedStatus)
+
+            if tt.validateFunc != nil {
+                tt.validateFunc(t, body)
+            }
+        })
+    }
+}
+```
+
+### API Test Helper Functions
+
+The `tests/helpers.go` provides utilities for API testing:
+
+**HTTP Request Helpers:**
+- `makeRequest(t, method, path, body, headers)` - Unauthenticated request
+- `makeAuthenticatedRequest(t, method, path, body, token)` - Authenticated request
+- `parseJSONResponse(t, body, &target)` - Parse JSON response
+- `assertStatusCode(t, resp, expectedStatus)` - Assert status code
+
+**Test Data Helpers:**
+- `createAuthenticatedUser(t)` - Create user and return JWT token
+- `generateTestEmail()` - Generate unique email address
+- `generateTestCampaignSlug()` - Generate unique campaign slug
+
+**Example Usage:**
+
+```go
+// Create authenticated user
+token := createAuthenticatedUser(t)
+
+// Make authenticated request
+resp, body := makeAuthenticatedRequest(t, http.MethodGet, "/api/protected/user", nil, token)
+
+// Assert response
+assertStatusCode(t, resp, http.StatusOK)
+
+var user map[string]interface{}
+parseJSONResponse(t, body, &user)
+```
+
+For detailed API testing documentation, see [tests/README.md](tests/README.md).
 
 ## Best Practices
 
