@@ -48,10 +48,14 @@ func TestAPI_Campaign_Create(t *testing.T) {
 		{
 			name: "create waitlist campaign successfully",
 			request: map[string]interface{}{
-				"name":        "Test Waitlist Campaign",
-				"slug":        generateTestCampaignSlug(),
-				"description": "A test waitlist campaign",
-				"type":        "waitlist",
+				"name":             "Test Waitlist Campaign",
+				"slug":             generateTestCampaignSlug(),
+				"description":      "A test waitlist campaign",
+				"type":             "waitlist",
+				"form_config":      map[string]interface{}{},
+				"referral_config":  map[string]interface{}{},
+				"email_config":     map[string]interface{}{},
+				"branding_config":  map[string]interface{}{},
 			},
 			expectedStatus: http.StatusCreated,
 			validateFunc: func(t *testing.T, body []byte) {
@@ -75,9 +79,13 @@ func TestAPI_Campaign_Create(t *testing.T) {
 		{
 			name: "create referral campaign successfully",
 			request: map[string]interface{}{
-				"name": "Test Referral Campaign",
-				"slug": generateTestCampaignSlug(),
-				"type": "referral",
+				"name":            "Test Referral Campaign",
+				"slug":            generateTestCampaignSlug(),
+				"type":            "referral",
+				"form_config":     map[string]interface{}{},
+				"referral_config": map[string]interface{}{},
+				"email_config":    map[string]interface{}{},
+				"branding_config": map[string]interface{}{},
 			},
 			expectedStatus: http.StatusCreated,
 			validateFunc: func(t *testing.T, body []byte) {
@@ -92,9 +100,13 @@ func TestAPI_Campaign_Create(t *testing.T) {
 		{
 			name: "create contest campaign successfully",
 			request: map[string]interface{}{
-				"name": "Test Contest Campaign",
-				"slug": generateTestCampaignSlug(),
-				"type": "contest",
+				"name":            "Test Contest Campaign",
+				"slug":            generateTestCampaignSlug(),
+				"type":            "contest",
+				"form_config":     map[string]interface{}{},
+				"referral_config": map[string]interface{}{},
+				"email_config":    map[string]interface{}{},
+				"branding_config": map[string]interface{}{},
 			},
 			expectedStatus: http.StatusCreated,
 			validateFunc: func(t *testing.T, body []byte) {
@@ -116,6 +128,10 @@ func TestAPI_Campaign_Create(t *testing.T) {
 				"privacy_policy_url": "https://example.com/privacy",
 				"terms_url":          "https://example.com/terms",
 				"max_signups":        1000,
+				"form_config":        map[string]interface{}{},
+				"referral_config":    map[string]interface{}{},
+				"email_config":       map[string]interface{}{},
+				"branding_config":    map[string]interface{}{},
 			},
 			expectedStatus: http.StatusCreated,
 			validateFunc: func(t *testing.T, body []byte) {
@@ -214,9 +230,13 @@ func TestAPI_Campaign_List(t *testing.T) {
 	// Create a few test campaigns
 	for i := 0; i < 3; i++ {
 		req := map[string]interface{}{
-			"name": fmt.Sprintf("List Test Campaign %d", i),
-			"slug": generateTestCampaignSlug(),
-			"type": "waitlist",
+			"name":            fmt.Sprintf("List Test Campaign %d", i),
+			"slug":            generateTestCampaignSlug(),
+			"type":            "waitlist",
+			"form_config":     map[string]interface{}{},
+			"referral_config": map[string]interface{}{},
+			"email_config":    map[string]interface{}{},
+			"branding_config": map[string]interface{}{},
 		}
 		makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", req, token)
 	}
@@ -249,7 +269,7 @@ func TestAPI_Campaign_List(t *testing.T) {
 					t.Fatal("Expected 'pagination' object in response")
 				}
 
-				if pagination["page"] == nil || pagination["limit"] == nil {
+				if pagination["page"] == nil || pagination["page_size"] == nil {
 					t.Error("Expected pagination details")
 				}
 			},
@@ -334,9 +354,13 @@ func TestAPI_Campaign_GetByID(t *testing.T) {
 
 	// Create a test campaign
 	createReq := map[string]interface{}{
-		"name": "Get By ID Test Campaign",
-		"slug": generateTestCampaignSlug(),
-		"type": "waitlist",
+		"name":            "Get By ID Test Campaign",
+		"slug":            generateTestCampaignSlug(),
+		"type":            "waitlist",
+		"form_config":     map[string]interface{}{},
+		"referral_config": map[string]interface{}{},
+		"email_config":    map[string]interface{}{},
+		"branding_config": map[string]interface{}{},
 	}
 	createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", createReq, token)
 	if createResp.StatusCode != http.StatusCreated {
@@ -413,9 +437,13 @@ func TestAPI_Campaign_Update(t *testing.T) {
 
 	// Create a test campaign
 	createReq := map[string]interface{}{
-		"name": "Update Test Campaign",
-		"slug": generateTestCampaignSlug(),
-		"type": "waitlist",
+		"name":            "Update Test Campaign",
+		"slug":            generateTestCampaignSlug(),
+		"type":            "waitlist",
+		"form_config":     map[string]interface{}{},
+		"referral_config": map[string]interface{}{},
+		"email_config":    map[string]interface{}{},
+		"branding_config": map[string]interface{}{},
 	}
 	createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", createReq, token)
 	if createResp.StatusCode != http.StatusCreated {
@@ -520,9 +548,13 @@ func TestAPI_Campaign_UpdateStatus(t *testing.T) {
 
 	// Create a test campaign
 	createReq := map[string]interface{}{
-		"name": "Status Update Test Campaign",
-		"slug": generateTestCampaignSlug(),
-		"type": "waitlist",
+		"name":            "Status Update Test Campaign",
+		"slug":            generateTestCampaignSlug(),
+		"type":            "waitlist",
+		"form_config":     map[string]interface{}{},
+		"referral_config": map[string]interface{}{},
+		"email_config":    map[string]interface{}{},
+		"branding_config": map[string]interface{}{},
 	}
 	createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", createReq, token)
 	if createResp.StatusCode != http.StatusCreated {
@@ -644,9 +676,13 @@ func TestAPI_Campaign_Delete(t *testing.T) {
 			name: "delete campaign successfully",
 			setupFunc: func() string {
 				req := map[string]interface{}{
-					"name": "Delete Test Campaign",
-					"slug": generateTestCampaignSlug(),
-					"type": "waitlist",
+					"name":            "Delete Test Campaign",
+					"slug":            generateTestCampaignSlug(),
+					"type":            "waitlist",
+					"form_config":     map[string]interface{}{},
+					"referral_config": map[string]interface{}{},
+					"email_config":    map[string]interface{}{},
+					"branding_config": map[string]interface{}{},
 				}
 				resp, body := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", req, token)
 				if resp.StatusCode != http.StatusCreated {

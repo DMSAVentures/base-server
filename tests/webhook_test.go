@@ -5,12 +5,31 @@ package tests
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"testing"
 )
 
 func TestAPI_Webhook_Create(t *testing.T) {
 	token := createAuthenticatedUser(t)
+
+	// Create a campaign for testing webhook with campaign_id
+	campaignReq := map[string]interface{}{
+		"name":            "Webhook Test Campaign",
+		"slug":            generateTestCampaignSlug(),
+		"type":            "waitlist",
+		"form_config":     map[string]interface{}{},
+		"referral_config": map[string]interface{}{},
+		"email_config":    map[string]interface{}{},
+		"branding_config": map[string]interface{}{},
+	}
+	campaignResp, campaignBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", campaignReq, token)
+	if campaignResp.StatusCode != http.StatusCreated {
+		t.Fatalf("Failed to create test campaign: %s", string(campaignBody))
+	}
+	var campaignData map[string]interface{}
+	parseJSONResponse(t, campaignBody, &campaignData)
+	testCampaignID := campaignData["id"].(string)
 
 	tests := []struct {
 		name           string
@@ -22,7 +41,7 @@ func TestAPI_Webhook_Create(t *testing.T) {
 			name: "create webhook successfully",
 			request: map[string]interface{}{
 				"url":    "https://example.com/webhook",
-				"events": []string{"user.signup", "user.verified"},
+				"events": []string{"user.created", "user.verified"},
 			},
 			expectedStatus: http.StatusCreated,
 			validateFunc: func(t *testing.T, body []byte) {
@@ -56,8 +75,8 @@ func TestAPI_Webhook_Create(t *testing.T) {
 			name: "create webhook with campaign ID",
 			request: map[string]interface{}{
 				"url":         "https://example.com/webhook",
-				"events":      []string{"user.signup"},
-				"campaign_id": "00000000-0000-0000-0000-000000000001",
+				"events":      []string{"user.created"},
+				"campaign_id": testCampaignID,
 			},
 			expectedStatus: http.StatusCreated,
 			validateFunc: func(t *testing.T, body []byte) {
@@ -78,7 +97,7 @@ func TestAPI_Webhook_Create(t *testing.T) {
 			name: "create webhook with retry configuration",
 			request: map[string]interface{}{
 				"url":           "https://example.com/webhook",
-				"events":        []string{"user.signup"},
+				"events":        []string{"user.created"},
 				"retry_enabled": true,
 				"max_retries":   5,
 			},
@@ -100,7 +119,7 @@ func TestAPI_Webhook_Create(t *testing.T) {
 		{
 			name: "create fails without URL",
 			request: map[string]interface{}{
-				"events": []string{"user.signup"},
+				"events": []string{"user.created"},
 			},
 			expectedStatus: http.StatusBadRequest,
 			validateFunc: func(t *testing.T, body []byte) {
@@ -144,7 +163,7 @@ func TestAPI_Webhook_Create(t *testing.T) {
 			name: "create fails with invalid URL",
 			request: map[string]interface{}{
 				"url":    "not-a-valid-url",
-				"events": []string{"user.signup"},
+				"events": []string{"user.created"},
 			},
 			expectedStatus: http.StatusBadRequest,
 			validateFunc: func(t *testing.T, body []byte) {
@@ -176,7 +195,7 @@ func TestAPI_Webhook_List(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		req := map[string]interface{}{
 			"url":    fmt.Sprintf("https://example.com/webhook-%d", i),
-			"events": []string{"user.signup"},
+			"events": []string{"user.created"},
 		}
 		makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", req, token)
 	}
@@ -252,7 +271,7 @@ func TestAPI_Webhook_GetByID(t *testing.T) {
 	// Create a test webhook
 	createReq := map[string]interface{}{
 		"url":    "https://example.com/get-test",
-		"events": []string{"user.signup", "user.verified"},
+		"events": []string{"user.created", "user.verified"},
 	}
 	createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", createReq, token)
 	if createResp.StatusCode != http.StatusCreated {
@@ -336,7 +355,7 @@ func TestAPI_Webhook_Update(t *testing.T) {
 	// Create a test webhook
 	createReq := map[string]interface{}{
 		"url":    "https://example.com/update-test",
-		"events": []string{"user.signup"},
+		"events": []string{"user.created"},
 	}
 	createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", createReq, token)
 	if createResp.StatusCode != http.StatusCreated {
@@ -372,7 +391,7 @@ func TestAPI_Webhook_Update(t *testing.T) {
 		{
 			name: "update webhook events",
 			request: map[string]interface{}{
-				"events": []string{"user.signup", "user.verified", "reward.earned"},
+				"events": []string{"user.created", "user.verified", "reward.earned"},
 			},
 			expectedStatus: http.StatusOK,
 			validateFunc: func(t *testing.T, body []byte) {
@@ -420,7 +439,7 @@ func TestAPI_Webhook_Update(t *testing.T) {
 			name: "update multiple fields",
 			request: map[string]interface{}{
 				"url":           "https://example.com/multi-update",
-				"events":        []string{"user.signup"},
+				"events":        []string{"user.created"},
 				"retry_enabled": false,
 			},
 			expectedStatus: http.StatusOK,
@@ -466,7 +485,7 @@ func TestAPI_Webhook_Delete(t *testing.T) {
 			setupFunc: func() string {
 				req := map[string]interface{}{
 					"url":    "https://example.com/delete-test",
-					"events": []string{"user.signup"},
+					"events": []string{"user.created"},
 				}
 				resp, body := makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", req, token)
 				if resp.StatusCode != http.StatusCreated {
@@ -525,7 +544,7 @@ func TestAPI_Webhook_GetDeliveries(t *testing.T) {
 	// Create a test webhook
 	createReq := map[string]interface{}{
 		"url":    "https://example.com/deliveries-test",
-		"events": []string{"user.signup"},
+		"events": []string{"user.created"},
 	}
 	createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", createReq, token)
 	if createResp.StatusCode != http.StatusCreated {
@@ -603,10 +622,37 @@ func TestAPI_Webhook_GetDeliveries(t *testing.T) {
 func TestAPI_Webhook_TestWebhook(t *testing.T) {
 	token := createAuthenticatedUser(t)
 
-	// Create a test webhook
+	// Start a mock webhook server to receive webhook deliveries
+	deliveryReceived := make(chan bool, 2)
+	mockServer := http.NewServeMux()
+	mockServer.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
+		// Successfully receive the webhook
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"received"}`))
+		deliveryReceived <- true
+	})
+
+	server := &http.Server{
+		Addr:    "127.0.0.1:0", // Random port
+		Handler: mockServer,
+	}
+
+	// Start server in background
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		t.Fatalf("Failed to start mock webhook server: %v", err)
+	}
+	defer listener.Close()
+
+	go server.Serve(listener)
+
+	// Get the actual port
+	mockServerURL := fmt.Sprintf("http://%s/webhook", listener.Addr().String())
+
+	// Create a test webhook pointing to our mock server
 	createReq := map[string]interface{}{
-		"url":    "https://example.com/test-webhook",
-		"events": []string{"user.signup", "user.verified"},
+		"url":    mockServerURL,
+		"events": []string{"user.created", "user.verified"},
 	}
 	createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", createReq, token)
 	if createResp.StatusCode != http.StatusCreated {
@@ -627,7 +673,7 @@ func TestAPI_Webhook_TestWebhook(t *testing.T) {
 		{
 			name: "test webhook with valid event",
 			request: map[string]interface{}{
-				"event_type": "user.signup",
+				"event_type": "user.created",
 			},
 			expectedStatus: http.StatusOK,
 			validateFunc: func(t *testing.T, body []byte) {

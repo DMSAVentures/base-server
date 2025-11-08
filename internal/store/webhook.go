@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 )
 
 // CreateWebhookParams represents parameters for creating a webhook
@@ -36,7 +35,7 @@ func (s *Store) CreateWebhook(ctx context.Context, params CreateWebhookParams) (
 		params.CampaignID,
 		params.URL,
 		params.Secret,
-		pq.Array(params.Events),
+		StringArray(params.Events),
 		params.RetryEnabled,
 		params.MaxRetries)
 	if err != nil {
@@ -128,7 +127,7 @@ func (s *Store) UpdateWebhook(ctx context.Context, webhookID uuid.UUID, params U
 	var webhook Webhook
 	var eventsArray interface{}
 	if params.Events != nil {
-		eventsArray = pq.Array(params.Events)
+		eventsArray = StringArray(params.Events)
 	}
 
 	err := s.db.GetContext(ctx, &webhook, sqlUpdateWebhook,

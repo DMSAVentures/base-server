@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 )
 
 // CreateAPIKeyParams represents parameters for creating an API key
@@ -37,7 +36,7 @@ func (s *Store) CreateAPIKey(ctx context.Context, params CreateAPIKeyParams) (AP
 		params.Name,
 		params.KeyHash,
 		params.KeyPrefix,
-		pq.Array(params.Scopes),
+		StringArray(params.Scopes),
 		params.RateLimitTier,
 		params.ExpiresAt,
 		params.CreatedBy)

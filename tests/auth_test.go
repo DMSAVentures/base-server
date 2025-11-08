@@ -28,17 +28,15 @@ func TestAPI_Auth_EmailSignup(t *testing.T) {
 				var user map[string]interface{}
 				parseJSONResponse(t, body, &user)
 
-				if user["id"] == nil {
-					t.Error("Expected user ID in response")
-				}
+				// Note: SignedUpUser struct has first_name, last_name, email (no id)
 				if user["email"] == nil {
 					t.Error("Expected email in response")
 				}
 				if user["first_name"] != "John" {
-					t.Error("Expected first_name to be 'John'")
+					t.Errorf("Expected first_name to be 'John', got %v", user["first_name"])
 				}
 				if user["last_name"] != "Doe" {
-					t.Error("Expected last_name to be 'Doe'")
+					t.Errorf("Expected last_name to be 'Doe', got %v", user["last_name"])
 				}
 			},
 		},
@@ -336,14 +334,15 @@ func TestAPI_Auth_GetUserInfo(t *testing.T) {
 				var user map[string]interface{}
 				parseJSONResponse(t, body, &user)
 
-				if user["id"] == nil {
-					t.Error("Expected user ID in response")
-				}
-				if user["email"] != testEmail {
-					t.Errorf("Expected email %s, got %v", testEmail, user["email"])
+				// Note: The processor.User struct has external_id, first_name, last_name (not id)
+				if user["external_id"] == nil {
+					t.Error("Expected external_id in response")
 				}
 				if user["first_name"] != "GetUser" {
-					t.Error("Expected first_name to be 'GetUser'")
+					t.Errorf("Expected first_name to be 'GetUser', got %v", user["first_name"])
+				}
+				if user["last_name"] != "Test" {
+					t.Errorf("Expected last_name to be 'Test', got %v", user["last_name"])
 				}
 			},
 		},

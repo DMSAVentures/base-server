@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -37,10 +39,69 @@ func (j *JSONB) Scan(value interface{}) error {
 		return errors.New("incompatible type for JSONB")
 	}
 
+	// Handle empty or null JSON
+	if len(bytes) == 0 || string(bytes) == "null" {
+		*j = make(JSONB)
+		return nil
+	}
+
 	result := make(JSONB)
 	err := json.Unmarshal(bytes, &result)
+	if err != nil {
+		return err
+	}
 	*j = result
-	return err
+	return nil
+}
+
+// StringArray is a custom type for PostgreSQL text[] arrays
+type StringArray []string
+
+// Value implements the driver.Valuer interface for StringArray
+func (a StringArray) Value() (driver.Value, error) {
+	if a == nil {
+		return nil, nil
+	}
+	if len(a) == 0 {
+		return "{}", nil
+	}
+	// PostgreSQL array format: {item1,item2,item3}
+	return "{" + strings.Join(a, ",") + "}", nil
+}
+
+// Scan implements the sql.Scanner interface for StringArray
+func (a *StringArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = nil
+		return nil
+	}
+
+	var str string
+	switch v := value.(type) {
+	case []byte:
+		str = string(v)
+	case string:
+		str = v
+	default:
+		return fmt.Errorf("unsupported type for StringArray: %T", value)
+	}
+
+	// Handle empty array
+	if str == "" || str == "{}" {
+		*a = []string{}
+		return nil
+	}
+
+	// Remove curly braces and split
+	str = strings.Trim(str, "{}")
+	if str == "" {
+		*a = []string{}
+		return nil
+	}
+
+	// Split by comma
+	*a = strings.Split(str, ",")
+	return nil
 }
 
 // Account represents a customer account
@@ -326,7 +387,7 @@ type Webhook struct {
 	URL    string `db:"url" json:"url"`
 	Secret string `db:"secret" json:"-"`
 
-	Events []string `db:"events" json:"events"`
+	Events StringArray `db:"events" json:"events"`
 
 	Status string `db:"status" json:"status"`
 
@@ -378,7 +439,7 @@ type APIKey struct {
 	KeyHash   string `db:"key_hash" json:"-"`
 	KeyPrefix string `db:"key_prefix" json:"key_prefix"`
 
-	Scopes []string `db:"scopes" json:"scopes"`
+	Scopes StringArray `db:"scopes" json:"scopes"`
 
 	RateLimitTier string `db:"rate_limit_tier" json:"rate_limit_tier"`
 

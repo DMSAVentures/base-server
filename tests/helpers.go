@@ -5,7 +5,6 @@ package tests
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -169,33 +168,8 @@ func assertResponseHeader(t *testing.T, resp *http.Response, key, expected strin
 	}
 }
 
-// createTestUser creates a test user in the database and returns the user object
-func createTestUser(t *testing.T, s store.Store) store.User {
-	ctx := context.Background()
-
-	user := store.User{
-		FirstName:    "Test",
-		LastName:     "User",
-		Email:        fmt.Sprintf("test-%s@example.com", uuid.New().String()[:8]),
-		PasswordHash: "$2a$10$test.hash.password", // Pre-hashed password
-	}
-
-	createdUser, err := s.CreateUser(ctx, user)
-	if err != nil {
-		t.Fatalf("Failed to create test user: %v", err)
-	}
-
-	return createdUser
-}
-
-// cleanupTestUser deletes a test user from the database
-func cleanupTestUser(t *testing.T, s store.Store, userID uuid.UUID) {
-	ctx := context.Background()
-	err := s.DeleteUser(ctx, userID)
-	if err != nil {
-		t.Logf("Warning: Failed to cleanup test user %s: %v", userID, err)
-	}
-}
+// Note: We don't need createTestUser or cleanupTestUser helpers since
+// the API tests create users through the signup endpoint which is more realistic
 
 // extractCookie extracts a cookie value from the response by name
 func extractCookie(resp *http.Response, name string) string {

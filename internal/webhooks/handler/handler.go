@@ -2,7 +2,9 @@ package handler
 
 import (
 	"base-server/internal/observability"
+	"base-server/internal/store"
 	"base-server/internal/webhooks/processor"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -218,6 +220,10 @@ func (h *Handler) HandleDeleteWebhook(c *gin.Context) {
 	err = h.processor.DeleteWebhook(ctx, webhookID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to delete webhook", err)
+		if errors.Is(err, store.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "webhook not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -261,9 +267,11 @@ func (h *Handler) HandleListWebhookDeliveries(c *gin.Context) {
 		return
 	}
 
+	page := (offset / limit) + 1
 	c.JSON(http.StatusOK, gin.H{
 		"deliveries": deliveries,
 		"pagination": gin.H{
+			"page":   page,
 			"limit":  limit,
 			"offset": offset,
 		},
