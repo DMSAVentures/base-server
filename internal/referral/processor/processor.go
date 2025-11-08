@@ -86,6 +86,11 @@ func (p *ReferralProcessor) ListReferrals(ctx context.Context, accountID, campai
 		return ListReferralsResponse{}, err
 	}
 
+	// Ensure referrals is never null - return empty array instead
+	if referrals == nil {
+		referrals = []store.Referral{}
+	}
+
 	// Get total count
 	totalCount, err := p.store.CountReferralsByCampaignWithStatusFilter(ctx, campaignID, req.Status)
 	if err != nil {

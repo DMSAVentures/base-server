@@ -2,7 +2,6 @@ package handler
 
 import (
 	"base-server/internal/observability"
-	"base-server/internal/store"
 	"base-server/internal/waitlist/processor"
 	"context"
 	"encoding/csv"
@@ -210,11 +209,6 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-
-	// Ensure users is never null - return empty array instead
-	if response.Users == nil {
-		response.Users = []store.WaitlistUser{}
 	}
 
 	c.JSON(http.StatusOK, response)

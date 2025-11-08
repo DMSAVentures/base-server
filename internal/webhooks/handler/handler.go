@@ -121,11 +121,6 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 			return
 		}
 
-		// Ensure webhooks is never null - return empty array instead
-		if webhooks == nil {
-			webhooks = []store.Webhook{}
-		}
-
 		c.JSON(http.StatusOK, webhooks)
 		return
 	}
@@ -136,11 +131,6 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 		h.logger.Error(ctx, "failed to get webhooks", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-
-	// Ensure webhooks is never null - return empty array instead
-	if webhooks == nil {
-		webhooks = []store.Webhook{}
 	}
 
 	c.JSON(http.StatusOK, webhooks)
@@ -275,11 +265,6 @@ func (h *Handler) HandleListWebhookDeliveries(c *gin.Context) {
 		h.logger.Error(ctx, "failed to get webhook deliveries", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-
-	// Ensure deliveries is never null - return empty array instead
-	if deliveries == nil {
-		deliveries = []store.WebhookDelivery{}
 	}
 
 	page := (offset / limit) + 1

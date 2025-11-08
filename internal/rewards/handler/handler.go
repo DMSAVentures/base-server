@@ -171,11 +171,6 @@ func (h *Handler) HandleListRewards(c *gin.Context) {
 		return
 	}
 
-	// Return empty array instead of null
-	if rewards == nil {
-		rewards = []store.Reward{}
-	}
-
 	c.JSON(http.StatusOK, rewards)
 }
 

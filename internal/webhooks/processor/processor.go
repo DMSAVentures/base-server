@@ -153,6 +153,10 @@ func (p *WebhookProcessor) GetWebhooksByAccount(ctx context.Context, accountID u
 		p.logger.Error(ctx, "failed to get webhooks", err)
 		return nil, fmt.Errorf("failed to get webhooks: %w", err)
 	}
+	// Ensure webhooks is never null - return empty array instead
+	if webhooks == nil {
+		webhooks = []store.Webhook{}
+	}
 	return webhooks, nil
 }
 
@@ -162,6 +166,10 @@ func (p *WebhookProcessor) GetWebhooksByCampaign(ctx context.Context, campaignID
 	if err != nil {
 		p.logger.Error(ctx, "failed to get webhooks for campaign", err)
 		return nil, fmt.Errorf("failed to get webhooks for campaign: %w", err)
+	}
+	// Ensure webhooks is never null - return empty array instead
+	if webhooks == nil {
+		webhooks = []store.Webhook{}
 	}
 	return webhooks, nil
 }
@@ -187,6 +195,10 @@ func (p *WebhookProcessor) GetWebhookDeliveries(ctx context.Context, webhookID u
 	if err != nil {
 		p.logger.Error(ctx, "failed to get webhook deliveries", err)
 		return nil, fmt.Errorf("failed to get webhook deliveries: %w", err)
+	}
+	// Ensure deliveries is never null - return empty array instead
+	if deliveries == nil {
+		deliveries = []store.WebhookDelivery{}
 	}
 	return deliveries, nil
 }

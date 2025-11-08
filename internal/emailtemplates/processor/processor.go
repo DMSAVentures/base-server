@@ -187,6 +187,11 @@ func (p *EmailTemplateProcessor) ListEmailTemplates(ctx context.Context, account
 		return nil, err
 	}
 
+	// Ensure templates is never null - return empty array instead
+	if templates == nil {
+		templates = []store.EmailTemplate{}
+	}
+
 	// Filter by type if specified
 	if templateType != nil {
 		filtered := []store.EmailTemplate{}

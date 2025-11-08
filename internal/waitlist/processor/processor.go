@@ -269,6 +269,11 @@ func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID
 		return ListUsersResponse{}, err
 	}
 
+	// Ensure users is never null - return empty array instead
+	if users == nil {
+		users = []store.WaitlistUser{}
+	}
+
 	// Get total count
 	totalCount, err := p.store.CountWaitlistUsersWithFilters(ctx, campaignID, req.Status, req.Verified)
 	if err != nil {

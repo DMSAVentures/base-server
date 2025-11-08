@@ -167,6 +167,11 @@ func (p *CampaignProcessor) ListCampaigns(ctx context.Context, accountID uuid.UU
 		return store.ListCampaignsResult{}, err
 	}
 
+	// Ensure campaigns is never null - return empty array instead
+	if result.Campaigns == nil {
+		result.Campaigns = []store.Campaign{}
+	}
+
 	return result, nil
 }
 

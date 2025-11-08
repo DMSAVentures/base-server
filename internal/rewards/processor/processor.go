@@ -150,6 +150,11 @@ func (p *RewardProcessor) ListRewards(ctx context.Context, campaignID uuid.UUID)
 		return nil, err
 	}
 
+	// Ensure rewards is never null - return empty array instead
+	if rewards == nil {
+		rewards = []store.Reward{}
+	}
+
 	return rewards, nil
 }
 
