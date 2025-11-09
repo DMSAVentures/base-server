@@ -72,7 +72,7 @@ func (h *Handler) HandleCreateReward(c *gin.Context) {
 
 	var req CreateRewardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -136,7 +136,7 @@ func (h *Handler) HandleCreateReward(c *gin.Context) {
 
 	reward, err := h.processor.CreateReward(ctx, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -158,7 +158,7 @@ func (h *Handler) HandleListRewards(c *gin.Context) {
 
 	rewards, err := h.processor.ListRewards(ctx, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -189,7 +189,7 @@ func (h *Handler) HandleGetReward(c *gin.Context) {
 
 	reward, err := h.processor.GetReward(ctx, campaignID, rewardID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -220,7 +220,7 @@ func (h *Handler) HandleUpdateReward(c *gin.Context) {
 
 	var req UpdateRewardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -242,7 +242,7 @@ func (h *Handler) HandleUpdateReward(c *gin.Context) {
 
 	reward, err := h.processor.UpdateReward(ctx, campaignID, rewardID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -273,7 +273,7 @@ func (h *Handler) HandleDeleteReward(c *gin.Context) {
 
 	err = h.processor.DeleteReward(ctx, campaignID, rewardID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -304,7 +304,7 @@ func (h *Handler) HandleGrantReward(c *gin.Context) {
 
 	var req GrantRewardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -315,7 +315,7 @@ func (h *Handler) HandleGrantReward(c *gin.Context) {
 
 	userReward, err := h.processor.GrantReward(ctx, campaignID, userID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -346,7 +346,7 @@ func (h *Handler) HandleGetUserRewards(c *gin.Context) {
 
 	rewards, err := h.processor.GetUserRewards(ctx, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

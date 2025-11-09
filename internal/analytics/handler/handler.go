@@ -30,7 +30,7 @@ func (h *Handler) HandleGetAnalyticsOverview(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -53,7 +53,7 @@ func (h *Handler) HandleGetAnalyticsOverview(c *gin.Context) {
 	// Get analytics overview
 	overview, err := h.processor.GetAnalyticsOverview(ctx, accountID, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -67,7 +67,7 @@ func (h *Handler) HandleGetConversionAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *Handler) HandleGetConversionAnalytics(c *gin.Context) {
 	// Get conversion analytics
 	conversions, err := h.processor.GetConversionAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -126,7 +126,7 @@ func (h *Handler) HandleGetReferralAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -171,7 +171,7 @@ func (h *Handler) HandleGetReferralAnalytics(c *gin.Context) {
 	// Get referral analytics
 	referrals, err := h.processor.GetReferralAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -185,7 +185,7 @@ func (h *Handler) HandleGetTimeSeriesAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -233,7 +233,7 @@ func (h *Handler) HandleGetTimeSeriesAnalytics(c *gin.Context) {
 	// Get time series analytics
 	timeSeries, err := h.processor.GetTimeSeriesAnalytics(ctx, accountID, campaignID, dateFrom, dateTo, granularity)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -247,7 +247,7 @@ func (h *Handler) HandleGetSourceAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -292,7 +292,7 @@ func (h *Handler) HandleGetSourceAnalytics(c *gin.Context) {
 	// Get source analytics
 	sources, err := h.processor.GetSourceAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -306,7 +306,7 @@ func (h *Handler) HandleGetFunnelAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -351,7 +351,7 @@ func (h *Handler) HandleGetFunnelAnalytics(c *gin.Context) {
 	// Get funnel analytics
 	funnel, err := h.processor.GetFunnelAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

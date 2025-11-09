@@ -40,7 +40,7 @@ func (h *Handler) HandleCreateEmailTemplate(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -62,7 +62,7 @@ func (h *Handler) HandleCreateEmailTemplate(c *gin.Context) {
 
 	var req CreateEmailTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -78,7 +78,7 @@ func (h *Handler) HandleCreateEmailTemplate(c *gin.Context) {
 
 	template, err := h.processor.CreateEmailTemplate(ctx, accountID, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -92,7 +92,7 @@ func (h *Handler) HandleListEmailTemplates(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *Handler) HandleListEmailTemplates(c *gin.Context) {
 
 	templates, err := h.processor.ListEmailTemplates(ctx, accountID, campaignID, templateType)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *Handler) HandleGetEmailTemplate(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -165,7 +165,7 @@ func (h *Handler) HandleGetEmailTemplate(c *gin.Context) {
 
 	template, err := h.processor.GetEmailTemplate(ctx, accountID, campaignID, templateID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -189,7 +189,7 @@ func (h *Handler) HandleUpdateEmailTemplate(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -220,7 +220,7 @@ func (h *Handler) HandleUpdateEmailTemplate(c *gin.Context) {
 
 	var req UpdateEmailTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -235,7 +235,7 @@ func (h *Handler) HandleUpdateEmailTemplate(c *gin.Context) {
 
 	template, err := h.processor.UpdateEmailTemplate(ctx, accountID, campaignID, templateID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -249,7 +249,7 @@ func (h *Handler) HandleDeleteEmailTemplate(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -280,7 +280,7 @@ func (h *Handler) HandleDeleteEmailTemplate(c *gin.Context) {
 
 	err = h.processor.DeleteEmailTemplate(ctx, accountID, campaignID, templateID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -300,7 +300,7 @@ func (h *Handler) HandleSendTestEmail(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -331,7 +331,7 @@ func (h *Handler) HandleSendTestEmail(c *gin.Context) {
 
 	var req SendTestEmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -342,7 +342,7 @@ func (h *Handler) HandleSendTestEmail(c *gin.Context) {
 
 	err = h.processor.SendTestEmail(ctx, accountID, campaignID, templateID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

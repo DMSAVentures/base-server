@@ -44,7 +44,7 @@ func (h *Handler) HandleAnswerPhone(c *gin.Context) {
 
 	twimlResult, err := twiml.Voice([]twiml.Element{say, connect})
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	} else {
 		h.logger.Info(c.Request.Context(), fmt.Sprintf("TwiML Response: %s", twimlResult))

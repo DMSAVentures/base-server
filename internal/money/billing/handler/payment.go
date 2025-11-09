@@ -17,7 +17,7 @@ func (h *Handler) HandleUpdatePaymentMethod(c *gin.Context) {
 
 	clientSecret, err := h.processor.SetupPaymentMethodUpdateIntent(ctx, parsedUserID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

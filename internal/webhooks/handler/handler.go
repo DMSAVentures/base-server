@@ -51,7 +51,7 @@ func (h *Handler) HandleCreateWebhook(c *gin.Context) {
 
 	var req CreateWebhookRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -82,7 +82,7 @@ func (h *Handler) HandleCreateWebhook(c *gin.Context) {
 		MaxRetries:   req.MaxRetries,
 	})
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -113,7 +113,7 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 
 		webhooks, err := h.processor.GetWebhooksByCampaign(ctx, campaignID)
 		if err != nil {
-			apierrors.RespondWithError(c, h.logger, err)
+			apierrors.RespondWithError(c, err)
 			return
 		}
 
@@ -124,7 +124,7 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 	// Get all webhooks for account
 	webhooks, err := h.processor.GetWebhooksByAccount(ctx, parsedAccountID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -146,7 +146,7 @@ func (h *Handler) HandleGetWebhook(c *gin.Context) {
 
 	webhook, err := h.processor.GetWebhook(ctx, webhookID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -177,7 +177,7 @@ func (h *Handler) HandleUpdateWebhook(c *gin.Context) {
 
 	var req UpdateWebhookRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -189,7 +189,7 @@ func (h *Handler) HandleUpdateWebhook(c *gin.Context) {
 		MaxRetries:   req.MaxRetries,
 	})
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -211,7 +211,7 @@ func (h *Handler) HandleDeleteWebhook(c *gin.Context) {
 
 	err = h.processor.DeleteWebhook(ctx, webhookID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -249,7 +249,7 @@ func (h *Handler) HandleListWebhookDeliveries(c *gin.Context) {
 
 	deliveries, err := h.processor.GetWebhookDeliveries(ctx, webhookID, limit, offset)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -284,7 +284,7 @@ func (h *Handler) HandleTestWebhook(c *gin.Context) {
 
 	err = h.processor.TestWebhook(ctx, webhookID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

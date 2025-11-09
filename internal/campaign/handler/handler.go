@@ -66,19 +66,19 @@ func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("Account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
 		return
 	}
 
 	var req CreateCampaignRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -116,7 +116,7 @@ func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 
 	campaign, err := h.processor.CreateCampaign(ctx, accountID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -130,13 +130,13 @@ func (h *Handler) HandleListCampaigns(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("Account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
 		return
 	}
 
@@ -167,7 +167,7 @@ func (h *Handler) HandleListCampaigns(c *gin.Context) {
 
 	result, err := h.processor.ListCampaigns(ctx, accountID, status, campaignType, page, limit)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -189,13 +189,13 @@ func (h *Handler) HandleGetCampaign(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("Account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
 		return
 	}
 
@@ -203,13 +203,13 @@ func (h *Handler) HandleGetCampaign(c *gin.Context) {
 	campaignIDStr := c.Param("campaign_id")
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
 		return
 	}
 
 	campaign, err := h.processor.GetCampaign(ctx, accountID, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -223,13 +223,13 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("Account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
 		return
 	}
 
@@ -237,13 +237,13 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 	campaignIDStr := c.Param("campaign_id")
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
 		return
 	}
 
 	var req UpdateCampaignRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -272,7 +272,7 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 
 	campaign, err := h.processor.UpdateCampaign(ctx, accountID, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -286,13 +286,13 @@ func (h *Handler) HandleDeleteCampaign(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("Account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
 		return
 	}
 
@@ -300,13 +300,13 @@ func (h *Handler) HandleDeleteCampaign(c *gin.Context) {
 	campaignIDStr := c.Param("campaign_id")
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
 		return
 	}
 
 	err = h.processor.DeleteCampaign(ctx, accountID, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -320,13 +320,13 @@ func (h *Handler) HandleUpdateCampaignStatus(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("Account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
 		return
 	}
 
@@ -334,19 +334,19 @@ func (h *Handler) HandleUpdateCampaignStatus(c *gin.Context) {
 	campaignIDStr := c.Param("campaign_id")
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
 		return
 	}
 
 	var req UpdateCampaignStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
 	campaign, err := h.processor.UpdateCampaignStatus(ctx, accountID, campaignID, req.Status)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

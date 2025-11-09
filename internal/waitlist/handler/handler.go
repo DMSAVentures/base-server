@@ -61,7 +61,7 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 
 	var req SignupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -88,7 +88,7 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 
 	response, err := h.processor.SignupUser(ctx, campaignID, processorReq, h.baseURL)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -162,7 +162,7 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 
 	response, err := h.processor.ListUsers(ctx, accountID, campaignID, req)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -176,7 +176,7 @@ func (h *Handler) HandleGetUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -207,7 +207,7 @@ func (h *Handler) HandleGetUser(c *gin.Context) {
 
 	user, err := h.processor.GetUser(ctx, accountID, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -229,7 +229,7 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -260,7 +260,7 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 
 	var req UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -273,7 +273,7 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 
 	user, err := h.processor.UpdateUser(ctx, accountID, campaignID, userID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -287,7 +287,7 @@ func (h *Handler) HandleDeleteUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -318,7 +318,7 @@ func (h *Handler) HandleDeleteUser(c *gin.Context) {
 
 	err = h.processor.DeleteUser(ctx, accountID, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -342,7 +342,7 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -364,7 +364,7 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 
 	var req SearchUsersRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -396,7 +396,7 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 
 	response, err := h.processor.SearchUsers(ctx, accountID, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -410,7 +410,7 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -457,7 +457,7 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	}
 
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -602,7 +602,7 @@ func (h *Handler) HandleExportUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -624,7 +624,7 @@ func (h *Handler) HandleExportUsers(c *gin.Context) {
 
 	var req ExportUsersRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -654,7 +654,7 @@ func (h *Handler) HandleVerifyUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -685,7 +685,7 @@ func (h *Handler) HandleVerifyUser(c *gin.Context) {
 
 	err = h.processor.VerifyUser(ctx, accountID, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -701,7 +701,7 @@ func (h *Handler) HandleResendVerification(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -732,7 +732,7 @@ func (h *Handler) HandleResendVerification(c *gin.Context) {
 
 	_, err = h.processor.ResendVerificationToken(ctx, accountID, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

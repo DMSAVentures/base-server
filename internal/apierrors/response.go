@@ -9,6 +9,9 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+// Package-level logger that uses context for observability
+var logger = observability.NewLogger()
+
 // ErrorResponse is the JSON structure returned to API clients for errors
 type ErrorResponse struct {
 	Error string `json:"error"`          // User-friendly error message
@@ -20,16 +23,16 @@ type ErrorResponse struct {
 //
 // It performs the following:
 // 1. Converts the error to an APIError (using MapError if necessary)
-// 2. Logs the error with full internal details for debugging
+// 2. Logs the error with full internal details for debugging (uses context for observability)
 // 3. Sends a sanitized error response to the client
 //
 // Example usage:
 //
 //	if err != nil {
-//	    apierrors.RespondWithError(c, h.logger, err)
+//	    apierrors.RespondWithError(c, err)
 //	    return
 //	}
-func RespondWithError(c *gin.Context, logger *observability.Logger, err error) {
+func RespondWithError(c *gin.Context, err error) {
 	if err == nil {
 		return
 	}
@@ -40,6 +43,7 @@ func RespondWithError(c *gin.Context, logger *observability.Logger, err error) {
 	apiErr := MapError(err)
 
 	// Log with full internal details for debugging
+	// The logger automatically uses observability fields from context
 	if apiErr.Internal != nil {
 		logger.Error(ctx, apiErr.Message, apiErr.Internal)
 	} else {
@@ -62,10 +66,10 @@ func RespondWithError(c *gin.Context, logger *observability.Logger, err error) {
 //
 //	var req SomeRequest
 //	if err := c.ShouldBindJSON(&req); err != nil {
-//	    apierrors.RespondWithValidationError(c, h.logger, err)
+//	    apierrors.RespondWithValidationError(c, err)
 //	    return
 //	}
-func RespondWithValidationError(c *gin.Context, logger *observability.Logger, err error) {
+func RespondWithValidationError(c *gin.Context, err error) {
 	if err == nil {
 		return
 	}

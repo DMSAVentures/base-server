@@ -16,25 +16,25 @@ func (h *Handler) HandleGenerateImage(c *gin.Context) {
 
 	userID, ok := c.Get("User-ID")
 	if !ok {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("User ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("User ID not found in context"))
 		return
 	}
 
 	parsedUserID, err := uuid.Parse(userID.(string))
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid user ID format"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid user ID format"))
 		return
 	}
 	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID.String()})
 
 	var req CreateConversationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
 	if req.Message == "" {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Message is required"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Message is required"))
 		return
 	}
 
@@ -42,7 +42,7 @@ func (h *Handler) HandleGenerateImage(c *gin.Context) {
 	flusher, ok := w.(http.Flusher)
 
 	if !ok {
-		apierrors.RespondWithError(c, h.logger, apierrors.InternalError(nil))
+		apierrors.RespondWithError(c, apierrors.InternalError(nil))
 		return
 	}
 
@@ -64,13 +64,13 @@ func (h *Handler) HandleGenerateImage(c *gin.Context) {
 		ctx = observability.WithFields(ctx, observability.Field{Key: "conversation_id", Value: req.ConversationID.String()})
 		responseChan, err = h.aiCapabilities.ContinueImageGenerationConversation(ctx, parsedUserID, req.ConversationID, req.Message)
 		if err != nil {
-			apierrors.RespondWithError(c, h.logger, err)
+			apierrors.RespondWithError(c, err)
 			return
 		}
 	} else {
 		responseChan, err = h.aiCapabilities.CreateImageGenerationConversation(ctx, parsedUserID, req.Message)
 		if err != nil {
-			apierrors.RespondWithError(c, h.logger, err)
+			apierrors.RespondWithError(c, err)
 			return
 		}
 	}

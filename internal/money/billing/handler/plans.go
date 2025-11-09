@@ -12,7 +12,7 @@ func (h *Handler) ListPrices(c *gin.Context) {
 
 	prices, err := h.processor.ListPrices(ctx)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

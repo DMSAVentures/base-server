@@ -31,7 +31,7 @@ func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req CreatePaymentIntentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -41,7 +41,7 @@ func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
 
 	clientSecret, err := h.processor.CreateStripePaymentIntent(ctx, req.Items)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -53,7 +53,7 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -63,7 +63,7 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 
 	clientSecret, err := h.processor.CreateSubscriptionIntent(ctx, parsedUserID, req.PriceID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -80,7 +80,7 @@ func (h *Handler) HandleCancelSubscription(c *gin.Context) {
 
 	err := h.processor.CancelSubscription(ctx, parsedUserID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -96,13 +96,13 @@ func (h *Handler) HandleCreateCheckoutSession(c *gin.Context) {
 
 	var req CreateCheckoutSessionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
 	session, err := h.processor.CreateCheckoutSession(ctx, parsedUserID, req.PriceID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -114,13 +114,13 @@ func (h *Handler) GetCheckoutSession(c *gin.Context) {
 	ctx := c.Request.Context()
 	sessionID := c.Query("session_id")
 	if sessionID == "" {
-		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "session_id is required"))
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "session_id is required"))
 		return
 	}
 
 	session, err := h.processor.GetCheckoutSession(ctx, sessionID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -137,7 +137,7 @@ func (h *Handler) HandleGetSubscription(c *gin.Context) {
 
 	sub, err := h.processor.GetActiveSubscription(ctx, parsedUserID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -154,7 +154,7 @@ func (h *Handler) HandleCreateCustomerPortal(c *gin.Context) {
 
 	sessionURL, err := h.processor.CreateCustomerPortal(ctx, parsedUserID)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

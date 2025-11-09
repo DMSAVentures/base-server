@@ -32,7 +32,7 @@ func (h *Handler) HandleListReferrals(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *Handler) HandleListReferrals(c *gin.Context) {
 
 	response, err := h.processor.ListReferrals(ctx, accountID, campaignID, req)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *Handler) HandleTrackReferral(c *gin.Context) {
 
 	var req TrackReferralRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, h.logger, err)
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *Handler) HandleTrackReferral(c *gin.Context) {
 
 	response, err := h.processor.TrackReferral(ctx, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -126,7 +126,7 @@ func (h *Handler) HandleGetUserReferrals(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -166,7 +166,7 @@ func (h *Handler) HandleGetUserReferrals(c *gin.Context) {
 
 	response, err := h.processor.GetUserReferrals(ctx, accountID, campaignID, userID, req)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *Handler) HandleGetReferralLink(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -211,7 +211,7 @@ func (h *Handler) HandleGetReferralLink(c *gin.Context) {
 
 	response, err := h.processor.GetReferralLink(ctx, accountID, campaignID, userID, h.baseURL)
 	if err != nil {
-		apierrors.RespondWithError(c, h.logger, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
