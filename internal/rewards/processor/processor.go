@@ -23,11 +23,11 @@ var (
 )
 
 type RewardProcessor struct {
-	store  store.Store
+	store  RewardStore
 	logger *observability.Logger
 }
 
-func New(store store.Store, logger *observability.Logger) RewardProcessor {
+func New(store RewardStore, logger *observability.Logger) RewardProcessor {
 	return RewardProcessor{
 		store:  store,
 		logger: logger,

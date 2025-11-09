@@ -223,14 +223,14 @@ func (s *Store) ListCampaigns(ctx context.Context, params ListCampaignsParams) (
 	// Add filters
 	if params.Status != nil {
 		argCount++
-		query += fmt.Sprintf(" AND status = $%d", argCount)
+		query += fmt.Sprintf(" AND c.status = $%d", argCount)
 		countQuery += fmt.Sprintf(" AND status = $%d", argCount)
 		args = append(args, *params.Status)
 	}
 
 	if params.Type != nil {
 		argCount++
-		query += fmt.Sprintf(" AND type = $%d", argCount)
+		query += fmt.Sprintf(" AND c.type = $%d", argCount)
 		countQuery += fmt.Sprintf(" AND type = $%d", argCount)
 		args = append(args, *params.Type)
 	}

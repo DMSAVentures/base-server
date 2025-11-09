@@ -1,11 +1,7 @@
 package processor
 
 import (
-	"base-server/internal/email"
-	"base-server/internal/money/products"
-	"base-server/internal/money/subscriptions"
 	"base-server/internal/observability"
-	"base-server/internal/store"
 	"context"
 	"errors"
 
@@ -20,10 +16,10 @@ type BillingProcessor struct {
 	WebhookSecret       string
 	webhostURL          string
 	logger              *observability.Logger
-	store               store.Store
-	productService      products.ProductService
-	subscriptionService subscriptions.SubscriptionService
-	emailService        *email.EmailService
+	store               BillingStore
+	productService      ProductService
+	subscriptionService SubscriptionService
+	emailService        EmailService
 }
 
 type PaymentIntentItem struct {
@@ -31,9 +27,9 @@ type PaymentIntentItem struct {
 	Amount int64  `json:"amount" binding:"required"`
 }
 
-func New(stripKey string, webhookSecret string, webhostURL string, store store.Store,
-	productService products.ProductService, subService subscriptions.SubscriptionService,
-	emailService *email.EmailService, logger *observability.Logger) BillingProcessor {
+func New(stripKey string, webhookSecret string, webhostURL string, store BillingStore,
+	productService ProductService, subService SubscriptionService,
+	emailService EmailService, logger *observability.Logger) BillingProcessor {
 	stripe.Key = stripKey
 	return BillingProcessor{
 		stripKey:            stripKey,

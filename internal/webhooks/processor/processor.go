@@ -3,7 +3,6 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
-	"base-server/internal/webhooks/service"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -14,13 +13,13 @@ import (
 
 // WebhookProcessor handles webhook business logic
 type WebhookProcessor struct {
-	store          *store.Store
+	store          WebhookStore
 	logger         *observability.Logger
-	webhookService *service.WebhookService
+	webhookService WebhookService
 }
 
 // New creates a new WebhookProcessor
-func New(store *store.Store, logger *observability.Logger, webhookService *service.WebhookService) *WebhookProcessor {
+func New(store WebhookStore, logger *observability.Logger, webhookService WebhookService) *WebhookProcessor {
 	return &WebhookProcessor{
 		store:          store,
 		logger:         logger,

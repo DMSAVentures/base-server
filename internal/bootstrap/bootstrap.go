@@ -118,9 +118,9 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 		cfg.Services.StripeSecretKey,
 		cfg.Services.StripeWebhookSecret,
 		cfg.Services.WebAppURI,
-		deps.Store,
-		productService,
-		subscriptionService,
+		&deps.Store,
+		&productService,
+		&subscriptionService,
 		emailService,
 		logger,
 	)
@@ -138,11 +138,11 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 			WebAppHost:        cfg.Services.WebAppURI,
 		},
 	}
-	authProc := processor.New(deps.Store, authConfig, googleOAuthClient, billingProc, *emailService, logger)
+	authProc := processor.New(&deps.Store, authConfig, googleOAuthClient, &billingProc, emailService, logger)
 	deps.AuthHandler = handler.New(authProc, logger)
 
 	// Initialize AI capabilities processor and handler
-	aiCapability := AICapabilities.New(logger, cfg.Services.GoogleAIAPIKey, cfg.Services.OpenAIAPIKey, deps.Store)
+	aiCapability := AICapabilities.New(logger, cfg.Services.GoogleAIAPIKey, cfg.Services.OpenAIAPIKey, &deps.Store)
 	deps.AIHandler = aiHandler.New(aiCapability, logger)
 
 	// Initialize voice call processor and handler
@@ -154,27 +154,27 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	eventDispatcher := events.NewEventDispatcher(eventProducer, logger)
 
 	// Initialize campaign processor and handler
-	campaignProc := campaignProcessor.New(deps.Store, logger)
+	campaignProc := campaignProcessor.New(&deps.Store, logger)
 	deps.CampaignHandler = campaignHandler.New(campaignProc, logger)
 
 	// Initialize waitlist processor and handler
-	waitlistProc := waitlistProcessor.New(deps.Store, logger, eventDispatcher)
+	waitlistProc := waitlistProcessor.New(&deps.Store, logger, eventDispatcher)
 	deps.WaitlistHandler = waitlistHandler.New(waitlistProc, logger, cfg.Services.WebAppURI)
 
 	// Initialize analytics processor and handler
-	analyticsProc := analyticsProcessor.New(deps.Store, logger)
+	analyticsProc := analyticsProcessor.New(&deps.Store, logger)
 	deps.AnalyticsHandler = analyticsHandler.New(analyticsProc, logger)
 
 	// Initialize referral processor and handler
-	referralProc := referralProcessor.New(deps.Store, logger)
+	referralProc := referralProcessor.New(&deps.Store, logger)
 	deps.ReferralHandler = referralHandler.New(referralProc, logger, cfg.Services.WebAppURI)
 
 	// Initialize rewards processor and handler
-	rewardProc := rewardProcessor.New(deps.Store, logger)
+	rewardProc := rewardProcessor.New(&deps.Store, logger)
 	deps.RewardHandler = rewardHandler.New(rewardProc, logger)
 
 	// Initialize email template processor and handler
-	emailTemplateProc := emailTemplateProcessor.New(deps.Store, emailService, logger)
+	emailTemplateProc := emailTemplateProcessor.New(&deps.Store, emailService, logger)
 	deps.EmailTemplateHandler = emailTemplateHandler.New(emailTemplateProc, logger)
 
 	// Initialize webhook services
