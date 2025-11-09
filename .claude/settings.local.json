@@ -9,7 +9,11 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:pkg.go.dev)",
       "Bash(mkdir:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(cat:*)",
+      "Bash(export TEST_DB_USER=base_user:*)",
+      "Bash(export TEST_DB_PASS=base_password)",
+      "Bash(export TEST_DB_NAME=base_db)"
     ],
     "deny": [],
     "ask": []

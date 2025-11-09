@@ -194,13 +194,16 @@ func TestAPI_Auth_EmailLogin(t *testing.T) {
 				"email":    testEmail,
 				"password": "wrongpassword",
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusUnauthorized,
 			validateFunc: func(t *testing.T, body []byte, resp *http.Response) {
 				var errResp map[string]interface{}
 				parseJSONResponse(t, body, &errResp)
 
 				if errResp["error"] == nil {
 					t.Error("Expected error message in response")
+				}
+				if errResp["code"] == nil {
+					t.Error("Expected error code in response")
 				}
 			},
 		},
@@ -210,13 +213,16 @@ func TestAPI_Auth_EmailLogin(t *testing.T) {
 				"email":    "nonexistent@example.com",
 				"password": "password123",
 			},
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusNotFound,
 			validateFunc: func(t *testing.T, body []byte, resp *http.Response) {
 				var errResp map[string]interface{}
 				parseJSONResponse(t, body, &errResp)
 
 				if errResp["error"] == nil {
 					t.Error("Expected error message in response")
+				}
+				if errResp["code"] == nil {
+					t.Error("Expected error code in response")
 				}
 			},
 		},
