@@ -168,6 +168,7 @@ func (a *API) RegisterRoutes() {
 	// Public waitlist signup endpoint (no authentication required)
 	publicV1Group := apiGroup.Group("/v1")
 	{
+		publicV1Group.GET("/:campaign_id", a.campaignHandler.HandleGetPublicCampaign)
 		publicV1Group.POST("/campaigns/:campaign_id/users", a.waitlistHandler.HandleSignupUser)
 	}
 

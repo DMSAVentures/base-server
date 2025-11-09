@@ -129,6 +129,24 @@ func (p *CampaignProcessor) GetCampaign(ctx context.Context, accountID, campaign
 	return campaign, nil
 }
 
+// GetPublicCampaign retrieves a campaign by ID without authentication (for public form rendering)
+func (p *CampaignProcessor) GetPublicCampaign(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error) {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "campaign_id", Value: campaignID.String()},
+	)
+
+	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return store.Campaign{}, ErrCampaignNotFound
+		}
+		p.logger.Error(ctx, "failed to get public campaign", err)
+		return store.Campaign{}, err
+	}
+
+	return campaign, nil
+}
+
 // ListCampaigns retrieves campaigns with pagination and filters
 func (p *CampaignProcessor) ListCampaigns(ctx context.Context, accountID uuid.UUID, status, campaignType *string, page, limit int) (store.ListCampaignsResult, error) {
 	ctx = observability.WithFields(ctx,

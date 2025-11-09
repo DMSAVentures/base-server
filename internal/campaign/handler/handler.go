@@ -194,7 +194,7 @@ func (h *Handler) HandleListCampaigns(c *gin.Context) {
 	})
 }
 
-// HandleGetCampaign retrieves a campaign by ID
+// HandleGetCampaign retrieves a campaign by ID (authenticated)
 func (h *Handler) HandleGetCampaign(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -227,6 +227,31 @@ func (h *Handler) HandleGetCampaign(c *gin.Context) {
 
 	campaign, err := h.processor.GetCampaign(ctx, accountID, campaignID)
 	if err != nil {
+		apierrors.RespondWithError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, campaign)
+}
+
+// HandleGetPublicCampaign retrieves a campaign by ID without authentication (for public form rendering)
+func (h *Handler) HandleGetPublicCampaign(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get campaign ID from path
+	campaignIDStr := c.Param("campaign_id")
+	campaignID, err := uuid.Parse(campaignIDStr)
+	if err != nil {
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+		return
+	}
+
+	// Add campaign_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
+
+	campaign, err := h.processor.GetPublicCampaign(ctx, campaignID)
+	if err != nil {
+		// Processor already logged detailed error with full context
 		apierrors.RespondWithError(c, err)
 		return
 	}
