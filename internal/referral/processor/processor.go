@@ -22,11 +22,11 @@ var (
 )
 
 type ReferralProcessor struct {
-	store  store.Storer
+	store  Store
 	logger *observability.Logger
 }
 
-func New(store store.Storer, logger *observability.Logger) ReferralProcessor {
+func New(store Store, logger *observability.Logger) ReferralProcessor {
 	return ReferralProcessor{
 		store:  store,
 		logger: logger,

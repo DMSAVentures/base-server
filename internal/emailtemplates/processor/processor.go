@@ -1,7 +1,6 @@
 package processor
 
 import (
-	"base-server/internal/email"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"bytes"
@@ -23,12 +22,12 @@ var (
 )
 
 type EmailTemplateProcessor struct {
-	store        store.Storer
-	emailService email.EmailSender
+	store        Store
+	emailService EmailService
 	logger       *observability.Logger
 }
 
-func New(store store.Storer, emailService email.EmailSender, logger *observability.Logger) EmailTemplateProcessor {
+func New(store Store, emailService EmailService, logger *observability.Logger) EmailTemplateProcessor {
 	return EmailTemplateProcessor{
 		store:        store,
 		emailService: emailService,

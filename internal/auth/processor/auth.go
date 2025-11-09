@@ -1,9 +1,6 @@
 package processor
 
 import (
-	"base-server/internal/clients/googleoauth"
-	"base-server/internal/email"
-	billingProcessor "base-server/internal/money/billing/processor"
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"context"
@@ -25,12 +22,12 @@ var (
 )
 
 type AuthProcessor struct {
-	store             store.Storer
+	store             Store
 	authConfig        AuthConfig
 	logger            *observability.Logger
-	googleOauthClient googleoauth.GoogleOAuthClient
-	billingProcessor  billingProcessor.BillingProcessorInterface
-	emailService      email.EmailSender
+	googleOauthClient GoogleOAuthClient
+	billingProcessor  BillingProcessor
+	emailService      EmailService
 }
 
 type EmailConfig struct {
@@ -83,8 +80,8 @@ type BaseClaims struct {
 	AuthType       string           `json:"auth_type"`
 }
 
-func New(store store.Storer, authConfig AuthConfig, googleOauthClient googleoauth.GoogleOAuthClient,
-	billingProcessor billingProcessor.BillingProcessorInterface, emailService email.EmailSender,
+func New(store Store, authConfig AuthConfig, googleOauthClient GoogleOAuthClient,
+	billingProcessor BillingProcessor, emailService EmailService,
 	logger *observability.Logger) AuthProcessor {
 	return AuthProcessor{
 		store:             store,

@@ -4,7 +4,6 @@ import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"base-server/internal/waitlist/utils"
-	"base-server/internal/webhooks/events"
 	"context"
 	"errors"
 	"fmt"
@@ -26,12 +25,12 @@ var (
 )
 
 type WaitlistProcessor struct {
-	store           store.Storer
+	store           Store
 	logger          *observability.Logger
-	eventDispatcher events.EventDispatcher
+	eventDispatcher EventDispatcher
 }
 
-func New(store store.Storer, logger *observability.Logger, eventDispatcher events.EventDispatcher) WaitlistProcessor {
+func New(store Store, logger *observability.Logger, eventDispatcher EventDispatcher) WaitlistProcessor {
 	return WaitlistProcessor{
 		store:           store,
 		logger:          logger,

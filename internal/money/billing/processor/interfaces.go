@@ -3,7 +3,9 @@ package processor
 import (
 	"base-server/internal/money/products"
 	"base-server/internal/money/subscriptions"
+	"base-server/internal/store"
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v79"
@@ -46,4 +48,33 @@ type BillingProcessorInterface interface {
 	SubscriptionDeleted(ctx context.Context, subscriptionDeleted stripe.Subscription) error
 	PriceDeleted(ctx context.Context, priceDeleted stripe.Price) error
 	HandleWebhook(ctx context.Context, event stripe.Event) error
+}
+
+// Store defines the database operations required by BillingProcessor
+type Store interface {
+	GetStripeCustomerIDByUserExternalID(ctx context.Context, ID uuid.UUID) (string, error)
+	GetPaymentMethodByUserID(ctx context.Context, userID uuid.UUID) (*store.PaymentMethod, error)
+	GetPriceByID(ctx context.Context, priceID string) (store.Price, error)
+}
+
+// ProductService defines the product operations required by BillingProcessor
+type ProductService interface {
+	ListPrices(ctx context.Context) ([]products.Price, error)
+	CreateProduct(ctx context.Context, productCreated stripe.Product) error
+	CreatePrice(ctx context.Context, priceCreated stripe.Price) error
+	UpdatePrice(ctx context.Context, priceUpdated stripe.Price) error
+	DeletePrice(ctx context.Context, priceDeleted stripe.Price) error
+}
+
+// SubscriptionService defines the subscription operations required by BillingProcessor
+type SubscriptionService interface {
+	GetSubscriptionByUserID(ctx context.Context, userID uuid.UUID) (subscriptions.Subscription, error)
+	CancelSubscription(ctx context.Context, subscriptionID string, cancelAt time.Time) error
+	UpdateSubscription(ctx context.Context, subscriptionUpdated stripe.Subscription) error
+	CreateSubscription(ctx context.Context, subscriptionCreated stripe.Subscription) error
+}
+
+// EmailService defines the email operations required by BillingProcessor
+type EmailService interface {
+	SendEmail(ctx context.Context, to, subject, htmlContent string) error
 }
