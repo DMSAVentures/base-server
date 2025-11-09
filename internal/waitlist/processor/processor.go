@@ -63,9 +63,8 @@ type SignupUserResponse struct {
 }
 
 // SignupUser handles the complete signup process for a waitlist user
-func (p *WaitlistProcessor) SignupUser(ctx context.Context, accountID, campaignID uuid.UUID, req SignupUserRequest, baseURL string) (SignupUserResponse, error) {
+func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID, req SignupUserRequest, baseURL string) (SignupUserResponse, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "email", Value: req.Email},
 	)
@@ -79,10 +78,8 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, accountID, campaignI
 		p.logger.Error(ctx, "failed to get campaign", err)
 		return SignupUserResponse{}, err
 	}
-
-	if campaign.AccountID != accountID {
-		return SignupUserResponse{}, ErrUnauthorized
-	}
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "account_id", Value: campaign.AccountID.String()})
 
 	// Check if email already exists for this campaign
 	existingUser, err := p.store.GetWaitlistUserByEmail(ctx, campaignID, req.Email)

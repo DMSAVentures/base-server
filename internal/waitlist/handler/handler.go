@@ -35,8 +35,6 @@ func New(processor processor.WaitlistProcessor, logger *observability.Logger, ba
 // SignupRequest represents the HTTP request for signing up a user
 type SignupRequest struct {
 	Email            string            `json:"email" binding:"required,email"`
-	FirstName        string            `json:"first_name" binding:"required,min=1,max=100"`
-	LastName         string            `json:"last_name" binding:"required,min=1,max=100"`
 	ReferralCode     *string           `json:"referral_code,omitempty"`
 	CustomFields     map[string]string `json:"custom_fields,omitempty"`
 	UTMSource        *string           `json:"utm_source,omitempty"`
@@ -48,24 +46,9 @@ type SignupRequest struct {
 	TermsAccepted    bool              `json:"terms_accepted" binding:"required"`
 }
 
-// HandleSignupUser handles POST /api/v1/campaigns/:campaign_id/users
+// HandleSignupUser handles POST /api/v1/campaigns/:campaign_id/users (public endpoint)
 func (h *Handler) HandleSignupUser(c *gin.Context) {
 	ctx := c.Request.Context()
-
-	// Get account ID from context
-	accountIDStr, exists := c.Get("Account-ID")
-	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
-		return
-	}
-
-	accountID, err := uuid.Parse(accountIDStr.(string))
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
-		return
-	}
 
 	// Get campaign ID from path
 	campaignIDStr := c.Param("campaign_id")
@@ -89,8 +72,8 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 
 	processorReq := processor.SignupUserRequest{
 		Email:            req.Email,
-		FirstName:        &req.FirstName,
-		LastName:         &req.LastName,
+		FirstName:        nil,
+		LastName:         nil,
 		ReferralCode:     req.ReferralCode,
 		CustomFields:     req.CustomFields,
 		UTMSource:        req.UTMSource,
@@ -104,9 +87,14 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 		UserAgent:        &userAgent,
 	}
 
-	response, err := h.processor.SignupUser(ctx, accountID, campaignID, processorReq, h.baseURL)
+	response, err := h.processor.SignupUser(ctx, campaignID, processorReq, h.baseURL)
 	if err != nil {
 		h.logger.Error(ctx, "failed to signup user", err)
+		if errors.Is(err, processor.ErrCampaignNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
+			return
+		}
+
 		if errors.Is(err, processor.ErrEmailAlreadyExists) {
 			c.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
 			return
@@ -528,7 +516,7 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	// Parse the file based on format (simplified implementation)
 	importedCount := 0
 	if format == "csv" {
-		importedCount, err = h.importFromCSV(ctx, accountID, campaignID, file, header)
+		importedCount, err = h.importFromCSV(ctx, campaignID, file, header)
 	} else if format == "json" {
 		importedCount, err = h.importFromJSON(ctx, accountID, campaignID, file)
 	} else {
@@ -551,7 +539,7 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 }
 
 // importFromCSV imports users from CSV file
-func (h *Handler) importFromCSV(ctx context.Context, accountID, campaignID uuid.UUID, file multipart.File, header *multipart.FileHeader) (int, error) {
+func (h *Handler) importFromCSV(ctx context.Context, campaignID uuid.UUID, file multipart.File, header *multipart.FileHeader) (int, error) {
 	reader := csv.NewReader(file)
 
 	// Read header row
@@ -610,15 +598,24 @@ func (h *Handler) importFromCSV(ctx context.Context, accountID, campaignID uuid.
 			lastName = &ln
 		}
 
-		// Create signup request
+		// Create signup request with custom fields for first_name and last_name if present
+		customFields := make(map[string]string)
+		if firstName != nil && *firstName != "" {
+			customFields["first_name"] = *firstName
+		}
+		if lastName != nil && *lastName != "" {
+			customFields["last_name"] = *lastName
+		}
+
 		req := processor.SignupUserRequest{
 			Email:         email,
-			FirstName:     firstName,
-			LastName:      lastName,
+			FirstName:     nil,
+			LastName:      nil,
+			CustomFields:  customFields,
 			TermsAccepted: true,
 		}
 
-		_, err = h.processor.SignupUser(ctx, accountID, campaignID, req, h.baseURL)
+		_, err = h.processor.SignupUser(ctx, campaignID, req, h.baseURL)
 		if err != nil {
 			h.logger.Error(ctx, "failed to import user", err)
 			continue
@@ -643,12 +640,13 @@ func (h *Handler) importFromJSON(ctx context.Context, accountID, campaignID uuid
 	for _, user := range users {
 		req := processor.SignupUserRequest{
 			Email:         user.Email,
-			FirstName:     &user.FirstName,
-			LastName:      &user.LastName,
+			FirstName:     nil,
+			LastName:      nil,
+			CustomFields:  user.CustomFields,
 			TermsAccepted: user.TermsAccepted,
 		}
 
-		_, err := h.processor.SignupUser(ctx, accountID, campaignID, req, h.baseURL)
+		_, err := h.processor.SignupUser(ctx, campaignID, req, h.baseURL)
 		if err != nil {
 			h.logger.Error(ctx, "failed to import user", err)
 			continue

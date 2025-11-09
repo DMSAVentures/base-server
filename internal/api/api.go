@@ -103,7 +103,7 @@ func (a *API) RegisterRoutes() {
 			// Waitlist Users routes
 			usersGroup := campaignsGroup.Group("/:campaign_id/users")
 			{
-				usersGroup.POST("", a.waitlistHandler.HandleSignupUser)
+				// Note: POST "" (signup) is now a public endpoint - see publicV1Group below
 				usersGroup.GET("", a.waitlistHandler.HandleListUsers)
 				usersGroup.POST("/search", a.waitlistHandler.HandleSearchUsers)
 				usersGroup.POST("/import", a.waitlistHandler.HandleImportUsers)
@@ -164,6 +164,13 @@ func (a *API) RegisterRoutes() {
 			}
 		}
 	}
+
+	// Public waitlist signup endpoint (no authentication required)
+	publicV1Group := apiGroup.Group("/v1")
+	{
+		publicV1Group.POST("/campaigns/:campaign_id/users", a.waitlistHandler.HandleSignupUser)
+	}
+
 	apiGroup.GET("billing/plans", a.billingHandler.ListPrices)
 	apiGroup.POST("billing/webhook", a.billingHandler.HandleWebhook)
 	apiGroup.POST("phone/answer", a.voicecallHandler.HandleAnswerPhone)

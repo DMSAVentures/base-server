@@ -78,8 +78,8 @@ aws ssm start-session \
 ```bash
 docker run --platform linux/amd64 --rm \
   -e DB_HOST=host.docker.internal \
-  -e DB_USERNAME=username \
-  -e DB_PASSWORD=password \
+  -e DB_USERNAME=$(aws ssm get-parameter --name "/db_secrets/protoapp_db_username" --with-decryption --query "Parameter.Value" --output text) \
+  -e DB_PASSWORD=$(aws ssm get-parameter --name "/db_secrets/protoapp_db_password" --with-decryption --query "Parameter.Value" --output text) \
   flyway-migrate
 ```
 

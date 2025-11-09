@@ -253,15 +253,52 @@ paths:
     post:
       tags:
         - Waitlist Users
-      summary: Sign up a user to the waitlist
-      description: Add a new user to the campaign waitlist
+      summary: Sign up a user to the waitlist (Public)
+      description: |
+        Add a new user to the campaign waitlist. This is a **public endpoint** that does not require authentication.
+
+        Only `email` and `terms_accepted` are required fields. Additional user information can be provided via `custom_fields`.
       operationId: signupUser
+      security: []  # Public endpoint - no authentication required
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SignupRequest'
+            examples:
+              minimal:
+                summary: Minimal signup (required fields only)
+                value:
+                  email: "user@example.com"
+                  terms_accepted: true
+              with_custom_fields:
+                summary: Signup with custom fields
+                value:
+                  email: "user@example.com"
+                  terms_accepted: true
+                  custom_fields:
+                    first_name: "John"
+                    last_name: "Doe"
+                    company: "Acme Inc"
+              with_referral:
+                summary: Signup with referral code
+                value:
+                  email: "user@example.com"
+                  terms_accepted: true
+                  referral_code: "ABC123XY"
+                  custom_fields:
+                    first_name: "Jane"
+                    last_name: "Smith"
+              with_utm:
+                summary: Signup with UTM tracking
+                value:
+                  email: "user@example.com"
+                  terms_accepted: true
+                  utm_source: "facebook"
+                  utm_medium: "social"
+                  utm_campaign: "spring-launch"
+                  marketing_consent: true
       responses:
         '201':
           description: User signed up successfully
@@ -271,6 +308,14 @@ paths:
                 $ref: '#/components/schemas/SignupResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '404':
+          description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "campaign not found"
         '409':
           $ref: '#/components/responses/Conflict'
         '429':
@@ -2537,21 +2582,12 @@ components:
       type: object
       required:
         - email
-        - first_name
-        - last_name
         - terms_accepted
       properties:
         email:
           type: string
           format: email
-        first_name:
-          type: string
-          minLength: 1
-          maxLength: 100
-        last_name:
-          type: string
-          minLength: 1
-          maxLength: 100
+          description: User's email address (required)
         referral_code:
           type: string
           description: Referral code if referred by another user
@@ -2559,21 +2595,29 @@ components:
           type: object
           additionalProperties:
             type: string
+          description: Custom form fields (e.g., first_name, last_name, company, etc.)
         utm_source:
           type: string
+          description: UTM source parameter for tracking
         utm_medium:
           type: string
+          description: UTM medium parameter for tracking
         utm_campaign:
           type: string
+          description: UTM campaign parameter for tracking
         utm_term:
           type: string
+          description: UTM term parameter for tracking
         utm_content:
           type: string
+          description: UTM content parameter for tracking
         marketing_consent:
           type: boolean
           default: false
+          description: Whether user consents to marketing communications
         terms_accepted:
           type: boolean
+          description: Whether user accepted terms and conditions (required)
 
     UpdateUserRequest:
       type: object
