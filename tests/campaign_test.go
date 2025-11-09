@@ -10,30 +10,9 @@ import (
 )
 
 // Helper to create authenticated user and return token
+// Now uses direct database insertion to bypass Stripe dependency
 func createAuthenticatedUser(t *testing.T) string {
-	signupReq := map[string]interface{}{
-		"first_name": "Campaign",
-		"last_name":  "Tester",
-		"email":      generateTestEmail(),
-		"password":   "testpassword123",
-	}
-	signupResp, signupBody := makeRequest(t, http.MethodPost, "/api/auth/signup/email", signupReq, nil)
-	if signupResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to create test user: %s", string(signupBody))
-	}
-
-	loginReq := map[string]interface{}{
-		"email":    signupReq["email"],
-		"password": "testpassword123",
-	}
-	loginResp, loginBody := makeRequest(t, http.MethodPost, "/api/auth/login/email", loginReq, nil)
-	if loginResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to login test user: %s", string(loginBody))
-	}
-
-	var loginRespData map[string]interface{}
-	parseJSONResponse(t, loginBody, &loginRespData)
-	return loginRespData["token"].(string)
+	return createAuthenticatedTestUser(t)
 }
 
 func TestAPI_Campaign_Create(t *testing.T) {

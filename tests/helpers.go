@@ -5,6 +5,7 @@ package tests
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"base-server/internal/store"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 var (
@@ -168,8 +170,100 @@ func assertResponseHeader(t *testing.T, resp *http.Response, key, expected strin
 	}
 }
 
-// Note: We don't need createTestUser or cleanupTestUser helpers since
-// the API tests create users through the signup endpoint which is more realistic
+// createTestUserDirectly creates a test user by directly inserting into the database
+// This bypasses the Stripe integration required by the signup endpoint
+func createTestUserDirectly(t *testing.T, firstName, lastName, email, password string) (userID string, accountID string) {
+	testStore := setupTestStore(t)
+	ctx := context.Background()
+
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("Failed to hash password: %v", err)
+	}
+
+	// Start transaction
+	tx, err := testStore.GetDB().BeginTxx(ctx, nil)
+	if err != nil {
+		t.Fatalf("Failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// Insert user
+	var user store.User
+	err = tx.GetContext(ctx, &user, `
+		INSERT INTO users (first_name, last_name)
+		VALUES ($1, $2)
+		RETURNING id, first_name, last_name
+	`, firstName, lastName)
+	if err != nil {
+		t.Fatalf("Failed to create user: %v", err)
+	}
+
+	// Insert user_auth
+	var userAuth store.UserAuth
+	err = tx.GetContext(ctx, &userAuth, `
+		INSERT INTO user_auth (user_id, auth_type)
+		VALUES ($1, $2)
+		RETURNING id, user_id, auth_type
+	`, user.ID, "email")
+	if err != nil {
+		t.Fatalf("Failed to create user auth: %v", err)
+	}
+
+	// Insert email_auth
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO email_auth (auth_id, email, hashed_password)
+		VALUES ($1, $2, $3)
+	`, userAuth.ID, email, string(hashedPassword))
+	if err != nil {
+		t.Fatalf("Failed to create email auth: %v", err)
+	}
+
+	// Create account for user
+	accountName := fmt.Sprintf("%s %s's Account", firstName, lastName)
+	accountSlug := fmt.Sprintf("user-%s", user.ID.String()[:8])
+	var accID uuid.UUID
+	err = tx.GetContext(ctx, &accID, `
+		INSERT INTO accounts (name, slug, owner_user_id, plan, settings)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id
+	`, accountName, accountSlug, user.ID, "free", "{}")
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Commit transaction
+	err = tx.Commit()
+	if err != nil {
+		t.Fatalf("Failed to commit transaction: %v", err)
+	}
+
+	return user.ID.String(), accID.String()
+}
+
+// createAuthenticatedTestUser creates a test user in the database and returns a valid JWT token
+func createAuthenticatedTestUser(t *testing.T) string {
+	email := generateTestEmail()
+	password := "testpassword123"
+
+	// Create user directly in database
+	createTestUserDirectly(t, "Test", "User", email, password)
+
+	// Login via API to get token
+	loginReq := map[string]interface{}{
+		"email":    email,
+		"password": password,
+	}
+	loginResp, loginBody := makeRequest(t, http.MethodPost, "/api/auth/login/email", loginReq, nil)
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to login test user: %s", string(loginBody))
+	}
+
+	var loginRespData map[string]interface{}
+	parseJSONResponse(t, loginBody, &loginRespData)
+	return loginRespData["token"].(string)
+}
 
 // extractCookie extracts a cookie value from the response by name
 func extractCookie(resp *http.Response, name string) string {

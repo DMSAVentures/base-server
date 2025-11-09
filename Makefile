@@ -15,7 +15,7 @@ TEST_API_PORT ?= 8080
 export TEST_DB_HOST
 export TEST_DB_PORT
 export TEST_DB_USER
-export TEST_DB_PASSWORD
+export TEST_DB_PASS := $(TEST_DB_PASSWORD)
 export TEST_DB_NAME
 export TEST_DB_TYPE ?= postgres
 
@@ -88,10 +88,39 @@ test-api:
 	@echo "NOTE: Ensure the server is running on $(TEST_API_HOST):$(TEST_API_PORT)"
 	go test -v -tags=integration ./tests/... -count=1
 
-# Run all integration tests (store + API)
+# Run all integration tests (store + API) - with server
 test-integration: test-db-up
-	@echo "Running all integration tests..."
-	go test -v -tags=integration ./internal/store/... ./tests/... -count=1
+	@echo "Building server..."
+	go build -o base-server .
+	@echo "Starting server in background..."
+	./base-server & echo $$! > server.pid
+	@echo "Waiting for server to be ready..."
+	@for i in $$(seq 1 30); do \
+		if curl -s http://$(TEST_API_HOST):$(TEST_API_PORT)/health > /dev/null 2>&1; then \
+			echo "Server is ready!"; \
+			break; \
+		fi; \
+		if [ $$i -eq 30 ]; then \
+			echo "Server failed to start within 30 seconds"; \
+			kill $$(cat server.pid) 2>/dev/null || true; \
+			rm -f server.pid; \
+			$(MAKE) test-db-down; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+	@echo "Running integration tests..."
+	@go test -v -race -tags=integration ./tests/... -count=1 || (kill $$(cat server.pid) 2>/dev/null; rm -f server.pid; $(MAKE) test-db-down; exit 1)
+	@echo "Stopping server..."
+	@kill $$(cat server.pid) 2>/dev/null || true
+	@rm -f server.pid
+	@$(MAKE) test-db-down
+	@echo "Integration tests completed!"
+
+# Run all integration tests (store only - no server required)
+test-integration-store: test-db-up
+	@echo "Running store integration tests..."
+	go test -v -tags=integration ./internal/store/... -count=1
 	@$(MAKE) test-db-down
 
 # Run all tests (unit + integration)
@@ -114,7 +143,8 @@ help:
 	@echo "  make test-store          - Run store tests only"
 	@echo "  make test-coverage       - Run tests with coverage report"
 	@echo "  make test-api            - Run API integration tests (requires running server)"
-	@echo "  make test-integration    - Run all integration tests (store + API)"
+	@echo "  make test-integration    - Run all integration tests (automatically starts services and server)"
+	@echo "  make test-integration-store - Run store integration tests only"
 	@echo "  make test-all            - Run all tests (unit + integration)"
 	@echo "  make test-one TEST=...   - Run a specific test (e.g., make test-one TEST=TestStore_CreateUser)"
 	@echo "  make test-watch          - Run tests in watch mode (requires watchexec)"
