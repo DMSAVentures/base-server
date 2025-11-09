@@ -10,10 +10,10 @@ import (
 type ProductService struct {
 	logger    *observability.Logger
 	stripeKey string
-	store     store.Storer
+	store     store.Store
 }
 
-func New(stripeKey string, store store.Storer, logger *observability.Logger) ProductService {
+func New(stripeKey string, store store.Store, logger *observability.Logger) ProductService {
 	stripe.Key = stripeKey
 	return ProductService{
 		logger:    logger,
