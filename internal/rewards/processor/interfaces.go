@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Store defines the database operations required by RewardProcessor
-type Store interface {
+// RewardStore defines the database operations required by RewardProcessor
+type RewardStore interface {
 	CreateReward(ctx context.Context, params store.CreateRewardParams) (store.Reward, error)
 	GetRewardByID(ctx context.Context, rewardID uuid.UUID) (store.Reward, error)
 	GetRewardsByCampaign(ctx context.Context, campaignID uuid.UUID) ([]store.Reward, error)

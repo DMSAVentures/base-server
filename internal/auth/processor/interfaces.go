@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Store defines the database operations required by AuthProcessor
-type Store interface {
+// AuthStore defines the database operations required by AuthProcessor
+type AuthStore interface {
 	CheckIfEmailExists(ctx context.Context, email string) (bool, error)
 	CreateUserOnEmailSignup(ctx context.Context, firstName string, lastName string, email string, hashedPassword string) (store.User, error)
 	CreateUserOnGoogleSignIn(ctx context.Context, googleUserId string, email string, firstName string, lastName string) (store.User, error)

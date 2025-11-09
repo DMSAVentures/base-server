@@ -18,11 +18,11 @@ var (
 )
 
 type CampaignProcessor struct {
-	store  Store
+	store  CampaignStore
 	logger *observability.Logger
 }
 
-func New(store Store, logger *observability.Logger) CampaignProcessor {
+func New(store CampaignStore, logger *observability.Logger) CampaignProcessor {
 	return CampaignProcessor{
 		store:  store,
 		logger: logger,

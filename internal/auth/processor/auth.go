@@ -22,7 +22,7 @@ var (
 )
 
 type AuthProcessor struct {
-	store             Store
+	store             AuthStore
 	authConfig        AuthConfig
 	logger            *observability.Logger
 	googleOauthClient GoogleOAuthClient
@@ -80,7 +80,7 @@ type BaseClaims struct {
 	AuthType       string           `json:"auth_type"`
 }
 
-func New(store Store, authConfig AuthConfig, googleOauthClient GoogleOAuthClient,
+func New(store AuthStore, authConfig AuthConfig, googleOauthClient GoogleOAuthClient,
 	billingProcessor BillingProcessor, emailService EmailService,
 	logger *observability.Logger) AuthProcessor {
 	return AuthProcessor{

@@ -22,12 +22,12 @@ var (
 )
 
 type EmailTemplateProcessor struct {
-	store        Store
+	store        EmailTemplateStore
 	emailService EmailService
 	logger       *observability.Logger
 }
 
-func New(store Store, emailService EmailService, logger *observability.Logger) EmailTemplateProcessor {
+func New(store EmailTemplateStore, emailService EmailService, logger *observability.Logger) EmailTemplateProcessor {
 	return EmailTemplateProcessor{
 		store:        store,
 		emailService: emailService,

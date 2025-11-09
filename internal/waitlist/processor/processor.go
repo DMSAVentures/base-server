@@ -25,12 +25,12 @@ var (
 )
 
 type WaitlistProcessor struct {
-	store           Store
+	store           WaitlistStore
 	logger          *observability.Logger
 	eventDispatcher EventDispatcher
 }
 
-func New(store Store, logger *observability.Logger, eventDispatcher EventDispatcher) WaitlistProcessor {
+func New(store WaitlistStore, logger *observability.Logger, eventDispatcher EventDispatcher) WaitlistProcessor {
 	return WaitlistProcessor{
 		store:           store,
 		logger:          logger,

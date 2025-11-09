@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Store defines the database operations required by CampaignProcessor
-type Store interface {
+// CampaignStore defines the database operations required by CampaignProcessor
+type CampaignStore interface {
 	GetCampaignBySlug(ctx context.Context, accountID uuid.UUID, slug string) (store.Campaign, error)
 	CreateCampaign(ctx context.Context, params store.CreateCampaignParams) (store.Campaign, error)
 	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)

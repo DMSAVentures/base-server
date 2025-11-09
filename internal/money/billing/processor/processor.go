@@ -17,7 +17,7 @@ type BillingProcessor struct {
 	WebhookSecret       string
 	webhostURL          string
 	logger              *observability.Logger
-	store               Store
+	store               BillingStore
 	productService      ProductService
 	subscriptionService SubscriptionService
 	emailService        EmailService
@@ -28,7 +28,7 @@ type PaymentIntentItem struct {
 	Amount int64  `json:"amount" binding:"required"`
 }
 
-func New(stripKey string, webhookSecret string, webhostURL string, store Store,
+func New(stripKey string, webhookSecret string, webhostURL string, store BillingStore,
 	productService ProductService, subService SubscriptionService,
 	emailService EmailService, logger *observability.Logger) BillingProcessor {
 	stripe.Key = stripKey

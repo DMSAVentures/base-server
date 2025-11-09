@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Store defines the database operations required by AnalyticsProcessor
-type Store interface {
+// AnalyticsStore defines the database operations required by AnalyticsProcessor
+type AnalyticsStore interface {
 	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)
 	GetAnalyticsOverview(ctx context.Context, campaignID uuid.UUID) (store.AnalyticsOverviewResult, error)
 	GetTopReferrers(ctx context.Context, campaignID uuid.UUID, limit int) ([]store.TopReferrerResult, error)

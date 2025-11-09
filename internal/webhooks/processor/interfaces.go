@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Store defines the database operations required by WebhookProcessor
-type Store interface {
+// WebhookStore defines the database operations required by WebhookProcessor
+type WebhookStore interface {
 	CreateWebhook(ctx context.Context, params store.CreateWebhookParams) (store.Webhook, error)
 	UpdateWebhook(ctx context.Context, webhookID uuid.UUID, params store.UpdateWebhookParams) (store.Webhook, error)
 	GetWebhookByID(ctx context.Context, webhookID uuid.UUID) (store.Webhook, error)

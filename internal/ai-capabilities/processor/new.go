@@ -18,12 +18,12 @@ type AIProcessor struct {
 	logger         *observability.Logger
 	geminiApiKey   string
 	openAiApiKey   string
-	store          Store
+	store          AIStore
 	openaiRealtime *openAIHTTP.OpenAIWebsocketClient
 	googleLive     *googleai.GoogleAILiveClient
 }
 
-func New(logger *observability.Logger, geminiApiKey string, openAiApiKey string, store Store) *AIProcessor {
+func New(logger *observability.Logger, geminiApiKey string, openAiApiKey string, store AIStore) *AIProcessor {
 	var openaiRealtime *openAIHTTP.OpenAIWebsocketClient
 	if openAiApiKey != "" {
 		client, err := openAIHTTP.NewOpenAIRealtimeClient(openAiApiKey, logger)

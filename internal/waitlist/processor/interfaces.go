@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Store defines the database operations required by WaitlistProcessor
-type Store interface {
+// WaitlistStore defines the database operations required by WaitlistProcessor
+type WaitlistStore interface {
 	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)
 	GetWaitlistUserByEmail(ctx context.Context, campaignID uuid.UUID, email string) (store.WaitlistUser, error)
 	GetWaitlistUserByReferralCode(ctx context.Context, referralCode string) (store.WaitlistUser, error)

@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Store defines the database operations required by EmailTemplateProcessor
-type Store interface {
+// EmailTemplateStore defines the database operations required by EmailTemplateProcessor
+type EmailTemplateStore interface {
 	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)
 	CreateEmailTemplate(ctx context.Context, params store.CreateEmailTemplateParams) (store.EmailTemplate, error)
 	GetEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.EmailTemplate, error)

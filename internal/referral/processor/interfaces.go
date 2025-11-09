@@ -7,8 +7,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Store defines the database operations required by ReferralProcessor
-type Store interface {
+// ReferralStore defines the database operations required by ReferralProcessor
+type ReferralStore interface {
 	GetReferralsByCampaignWithStatusFilter(ctx context.Context, campaignID uuid.UUID, status *string, limit, offset int) ([]store.Referral, error)
 	CountReferralsByCampaignWithStatusFilter(ctx context.Context, campaignID uuid.UUID, status *string) (int, error)
 	GetWaitlistUserByReferralCode(ctx context.Context, referralCode string) (store.WaitlistUser, error)

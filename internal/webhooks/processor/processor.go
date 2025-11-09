@@ -13,13 +13,13 @@ import (
 
 // WebhookProcessor handles webhook business logic
 type WebhookProcessor struct {
-	store          Store
+	store          WebhookStore
 	logger         *observability.Logger
 	webhookService WebhookService
 }
 
 // New creates a new WebhookProcessor
-func New(store Store, logger *observability.Logger, webhookService WebhookService) *WebhookProcessor {
+func New(store WebhookStore, logger *observability.Logger, webhookService WebhookService) *WebhookProcessor {
 	return &WebhookProcessor{
 		store:          store,
 		logger:         logger,

@@ -18,11 +18,11 @@ var (
 )
 
 type AnalyticsProcessor struct {
-	store  Store
+	store  AnalyticsStore
 	logger *observability.Logger
 }
 
-func New(store Store, logger *observability.Logger) AnalyticsProcessor {
+func New(store AnalyticsStore, logger *observability.Logger) AnalyticsProcessor {
 	return AnalyticsProcessor{
 		store:  store,
 		logger: logger,

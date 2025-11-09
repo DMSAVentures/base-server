@@ -50,8 +50,8 @@ type BillingProcessorInterface interface {
 	HandleWebhook(ctx context.Context, event stripe.Event) error
 }
 
-// Store defines the database operations required by BillingProcessor
-type Store interface {
+// BillingStore defines the database operations required by BillingProcessor
+type BillingStore interface {
 	GetStripeCustomerIDByUserExternalID(ctx context.Context, ID uuid.UUID) (string, error)
 	GetPaymentMethodByUserID(ctx context.Context, userID uuid.UUID) (*store.PaymentMethod, error)
 	GetPriceByID(ctx context.Context, priceID string) (store.Price, error)
