@@ -35,13 +35,13 @@ import (
 	voiceCallProcessor "base-server/internal/voicecall/processor"
 	waitlistHandler "base-server/internal/waitlist/handler"
 	waitlistProcessor "base-server/internal/waitlist/processor"
-	webhookConsumer "base-server/internal/webhooks/consumer"
 	"base-server/internal/webhooks/events"
 	webhookHandler "base-server/internal/webhooks/handler"
-	webhookProcessor "base-server/internal/webhooks/processor"
-	webhookProducer "base-server/internal/webhooks/produce
+	webhookEventProcessor "base-server/internal/webhooks/processor"
+	webhookProducer "base-server/internal/webhooks/producer"
 	webhookService "base-server/internal/webhooks/service"
 	webhookWorker "base-server/internal/webhooks/worker"
+	"base-server/internal/workers"
 )
 
 // Dependencies holds all initialized application dependencies
@@ -64,13 +64,12 @@ type Dependencies struct {
 	WebhookHandler       *webhookHandler.Handler
 
 	// Background workers
-	WebhookConsumer *webhookConsumer.EventConsumer
+	WebhookConsumer workers.EventConsumer
+	EmailConsumer   workers.EventConsumer
 	WebhookWorker   *webhookWorker.WebhookWorker
-	EmailConsumer   *email.EventConsumer
 
 	// Kafka clients (for cleanup)
 	KafkaProducer *kafkaClient.Producer
-	KafkaConsumer *kafkaClient.Consumer
 }
 
 // Initialize sets up all application dependencies
@@ -103,17 +102,11 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	// Initialize email service
 	emailService := email.New(mailClient, cfg.Services.DefaultEmailSender, logger)
 
-	// Initialize Kafka clients
+	// Initialize Kafka producer
 	brokerList := strings.Split(cfg.Kafka.Brokers, ",")
 	deps.KafkaProducer = kafkaClient.NewProducer(kafkaClient.ProducerConfig{
 		Brokers: brokerList,
 		Topic:   cfg.Kafka.Topic,
-	}, logger)
-
-	deps.KafkaConsumer = kafkaClient.NewConsumer(kafkaClient.ConsumerConfig{
-		Brokers: brokerList,
-		Topic:   cfg.Kafka.Topic,
-		GroupID: cfg.Kafka.ConsumerGroup,
 	}, logger)
 
 	// Initialize product and subscription services
@@ -186,17 +179,23 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 
 	// Initialize webhook services
 	webhookSvc := webhookService.New(&deps.Store, logger)
-	webhookProc := webhookProcessor.New(&deps.Store, logger, webhookSvc)
+	webhookProc := webhookEventProcessor.New(&deps.Store, logger, webhookSvc)
 	deps.WebhookHandler = webhookHandler.New(webhookProc, logger)
-
-	// Initialize webhook event consumer with worker pool (10 workers)
-	deps.WebhookConsumer = webhookConsumer.New(deps.KafkaConsumer, webhookSvc, logger, 10)
 
 	// Initialize webhook retry worker (runs every 30 seconds)
 	deps.WebhookWorker = webhookWorker.New(webhookSvc, logger, 30*time.Second)
 
-	// Initialize email event consumer with worker pool (5 workers)
-	deps.EmailConsumer = email.NewEventConsumer(deps.KafkaConsumer, emailService, deps.Store, logger, 5)
+	// Initialize webhook event processor and consumer with worker pool
+	webhookEvtProcessor := webhookEventProcessor.NewWebhookEventProcessor(webhookSvc, logger)
+	webhookConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup, cfg.Kafka.Topic)
+	webhookConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.WebhookWorkers
+	deps.WebhookConsumer = workers.NewConsumer(webhookConsumerConfig, webhookEvtProcessor, logger)
+
+	// Initialize email event processor and consumer with worker pool
+	emailEvtProcessor := email.NewEmailEventProcessor(emailService, deps.Store, logger)
+	emailConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-email", cfg.Kafka.Topic)
+	emailConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.EmailWorkers
+	deps.EmailConsumer = workers.NewConsumer(emailConsumerConfig, emailEvtProcessor, logger)
 
 	return deps, nil
 }
@@ -206,7 +205,5 @@ func (d *Dependencies) Cleanup() {
 	if d.KafkaProducer != nil {
 		d.KafkaProducer.Close()
 	}
-	if d.KafkaConsumer != nil {
-		d.KafkaConsumer.Close()
-	}
+	// Note: Consumers manage their own Kafka reader cleanup in Stop()
 }
