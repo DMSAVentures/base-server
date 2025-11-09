@@ -178,8 +178,8 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	deps.EmailTemplateHandler = emailTemplateHandler.New(emailTemplateProc, logger)
 
 	// Initialize webhook services
-	webhookSvc := webhookService.New(deps.Store, logger)
-	webhookProc := webhookProcessor.New(deps.Store, logger, webhookSvc)
+	webhookSvc := webhookService.New(&deps.Store, logger)
+	webhookProc := webhookProcessor.New(&deps.Store, logger, webhookSvc)
 	deps.WebhookHandler = webhookHandler.New(webhookProc, logger)
 
 	// Initialize webhook event consumer with worker pool (10 workers)

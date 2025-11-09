@@ -74,7 +74,7 @@ jobs:
           timeout 60 bash -c 'until docker compose -f docker-compose.services.yml exec -T kafka kafka-broker-api-versions --bootstrap-server localhost:9092 2>/dev/null; do sleep 2; done'
 
       - name: Build the application
-        run: go build -v ./...
+        run: go build -v -o base-server .
 
       - name: Run unit tests
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic -short ./...

@@ -17,15 +17,27 @@ import (
 	"github.com/google/uuid"
 )
 
+// WebhookStore defines the interface for webhook-related database operations
+type WebhookStore interface {
+	GetWebhooksByAccount(ctx context.Context, accountID uuid.UUID) ([]store.Webhook, error)
+	CreateWebhookDelivery(ctx context.Context, params store.CreateWebhookDeliveryParams) (store.WebhookDelivery, error)
+	UpdateWebhookDeliveryStatus(ctx context.Context, deliveryID uuid.UUID, params store.UpdateWebhookDeliveryStatusParams) error
+	IncrementWebhookSent(ctx context.Context, webhookID uuid.UUID) error
+	IncrementWebhookFailed(ctx context.Context, webhookID uuid.UUID) error
+	IncrementDeliveryAttempt(ctx context.Context, deliveryID uuid.UUID, nextRetryAt *time.Time) error
+	GetWebhookByID(ctx context.Context, webhookID uuid.UUID) (store.Webhook, error)
+	GetPendingWebhookDeliveries(ctx context.Context, limit int) ([]store.WebhookDelivery, error)
+}
+
 // WebhookService handles webhook delivery operations
 type WebhookService struct {
-	store      store.Store
+	store      WebhookStore
 	logger     *observability.Logger
 	httpClient *http.Client
 }
 
 // New creates a new WebhookService
-func New(store store.Store, logger *observability.Logger) *WebhookService {
+func New(store WebhookStore, logger *observability.Logger) *WebhookService {
 	return &WebhookService{
 		store:  store,
 		logger: logger,

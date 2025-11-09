@@ -208,9 +208,7 @@ func TestDispatchEvent(t *testing.T) {
 
 func TestTestWebhook(t *testing.T) {
 	// Create a test HTTP server
-	receivedTest := false
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedTest = true
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer testServer.Close()
