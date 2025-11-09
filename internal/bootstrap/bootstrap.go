@@ -110,8 +110,8 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	}, logger)
 
 	// Initialize product and subscription services
-	productService := products.New(cfg.Services.StripeSecretKey, &deps.Store, logger)
-	subscriptionService := subscriptions.New(logger, cfg.Services.StripeSecretKey, &deps.Store)
+	productService := products.New(cfg.Services.StripeSecretKey, deps.Store, logger)
+	subscriptionService := subscriptions.New(logger, cfg.Services.StripeSecretKey, deps.Store)
 
 	// Initialize billing processor and handler
 	billingProc := billingProcessor.New(
@@ -192,7 +192,7 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	deps.WebhookConsumer = workers.NewConsumer(webhookConsumerConfig, webhookEvtProcessor, logger)
 
 	// Initialize email event processor and consumer with worker pool
-	emailEvtProcessor := email.NewEmailEventProcessor(emailService, &deps.Store, logger)
+	emailEvtProcessor := email.NewEmailEventProcessor(emailService, deps.Store, logger)
 	emailConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-email", cfg.Kafka.Topic)
 	emailConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.EmailWorkers
 	deps.EmailConsumer = workers.NewConsumer(emailConsumerConfig, emailEvtProcessor, logger)
