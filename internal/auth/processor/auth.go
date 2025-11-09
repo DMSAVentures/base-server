@@ -25,12 +25,12 @@ var (
 )
 
 type AuthProcessor struct {
-	store             store.Store
+	store             store.Storer
 	authConfig        AuthConfig
 	logger            *observability.Logger
-	googleOauthClient *googleoauth.Client
-	billingProcessor  billingProcessor.BillingProcessor
-	emailService      email.EmailService
+	googleOauthClient googleoauth.GoogleOAuthClient
+	billingProcessor  billingProcessor.BillingProcessorInterface
+	emailService      email.EmailSender
 }
 
 type EmailConfig struct {
@@ -83,8 +83,8 @@ type BaseClaims struct {
 	AuthType       string           `json:"auth_type"`
 }
 
-func New(store store.Store, authConfig AuthConfig, googleOauthClient *googleoauth.Client,
-	billingProcessor billingProcessor.BillingProcessor, emailService email.EmailService,
+func New(store store.Storer, authConfig AuthConfig, googleOauthClient googleoauth.GoogleOAuthClient,
+	billingProcessor billingProcessor.BillingProcessorInterface, emailService email.EmailSender,
 	logger *observability.Logger) AuthProcessor {
 	return AuthProcessor{
 		store:             store,
