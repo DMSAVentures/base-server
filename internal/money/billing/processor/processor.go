@@ -2,7 +2,6 @@ package processor
 
 import (
 	"base-server/internal/observability"
-	"base-server/internal/store"
 	"context"
 	"errors"
 
