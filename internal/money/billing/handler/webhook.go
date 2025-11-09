@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"io"
 	"net/http"
@@ -19,15 +20,13 @@ func (h *Handler) HandleUpdateSubscription(c *gin.Context) {
 
 	var req CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, h.logger, err)
 		return
 	}
 
 	err := h.processor.UpdateSubscription(ctx, parsedUserID, req.PriceID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to update subscription", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -43,8 +42,7 @@ func (h *Handler) HandleGetPaymentMethod(c *gin.Context) {
 
 	paymentMethod, err := h.processor.GetPaymentMethodForUser(ctx, parsedUserID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get payment method", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -58,29 +56,26 @@ func (h *Handler) HandleWebhook(c *gin.Context) {
 	// Read the request body
 	payload, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		h.logger.Error(ctx, "failed to read request body", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "failed to read request body"))
 		return
 	}
 
 	// Retrieve the Stripe-Signature header
 	signatureHeader := c.GetHeader("Stripe-Signature")
 	if signatureHeader == "" {
-		h.logger.Error(ctx, "missing Stripe-Signature header", nil)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "missing Stripe-Signature header"})
+		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "missing Stripe-Signature header"))
 		return
 	}
 	event, err := webhook.ConstructEvent(payload, signatureHeader, h.processor.WebhookSecret)
 	if err != nil {
-		h.logger.Error(ctx, "failed to construct event", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "invalid webhook signature"))
+		return
 	}
 	// Handle the event
 
 	err = h.processor.HandleWebhook(ctx, event)
 	if err != nil {
-		h.logger.Error(ctx, "failed to handle webhook", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 

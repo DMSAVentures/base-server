@@ -1,10 +1,10 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"base-server/internal/rewards/processor"
 	"base-server/internal/store"
-	"errors"
 	"net/http"
 	"time"
 
@@ -72,8 +72,7 @@ func (h *Handler) HandleCreateReward(c *gin.Context) {
 
 	var req CreateRewardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, h.logger, err)
 		return
 	}
 
@@ -137,14 +136,7 @@ func (h *Handler) HandleCreateReward(c *gin.Context) {
 
 	reward, err := h.processor.CreateReward(ctx, campaignID, processorReq)
 	if err != nil {
-		h.logger.Error(ctx, "failed to create reward", err)
-		if errors.Is(err, processor.ErrInvalidRewardType) ||
-			errors.Is(err, processor.ErrInvalidTriggerType) ||
-			errors.Is(err, processor.ErrInvalidDeliveryMethod) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -166,8 +158,7 @@ func (h *Handler) HandleListRewards(c *gin.Context) {
 
 	rewards, err := h.processor.ListRewards(ctx, campaignID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to list rewards", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -198,12 +189,7 @@ func (h *Handler) HandleGetReward(c *gin.Context) {
 
 	reward, err := h.processor.GetReward(ctx, campaignID, rewardID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get reward", err)
-		if errors.Is(err, processor.ErrRewardNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "reward not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -234,8 +220,7 @@ func (h *Handler) HandleUpdateReward(c *gin.Context) {
 
 	var req UpdateRewardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, h.logger, err)
 		return
 	}
 
@@ -257,16 +242,7 @@ func (h *Handler) HandleUpdateReward(c *gin.Context) {
 
 	reward, err := h.processor.UpdateReward(ctx, campaignID, rewardID, processorReq)
 	if err != nil {
-		h.logger.Error(ctx, "failed to update reward", err)
-		if errors.Is(err, processor.ErrRewardNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "reward not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidRewardStatus) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reward status"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -297,12 +273,7 @@ func (h *Handler) HandleDeleteReward(c *gin.Context) {
 
 	err = h.processor.DeleteReward(ctx, campaignID, rewardID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to delete reward", err)
-		if errors.Is(err, processor.ErrRewardNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "reward not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -333,8 +304,7 @@ func (h *Handler) HandleGrantReward(c *gin.Context) {
 
 	var req GrantRewardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, h.logger, err)
 		return
 	}
 
@@ -345,24 +315,7 @@ func (h *Handler) HandleGrantReward(c *gin.Context) {
 
 	userReward, err := h.processor.GrantReward(ctx, campaignID, userID, processorReq)
 	if err != nil {
-		h.logger.Error(ctx, "failed to grant reward", err)
-		if errors.Is(err, processor.ErrRewardNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "reward not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidRewardStatus) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "reward is not active"})
-			return
-		}
-		if errors.Is(err, processor.ErrRewardLimitReached) {
-			c.JSON(http.StatusConflict, gin.H{"error": "reward limit reached"})
-			return
-		}
-		if errors.Is(err, processor.ErrUserLimitReached) {
-			c.JSON(http.StatusConflict, gin.H{"error": "user has already claimed maximum rewards"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -393,8 +346,7 @@ func (h *Handler) HandleGetUserRewards(c *gin.Context) {
 
 	rewards, err := h.processor.GetUserRewards(ctx, campaignID, userID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get user rewards", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 

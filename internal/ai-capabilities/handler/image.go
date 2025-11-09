@@ -2,6 +2,7 @@ package handler
 
 import (
 	"base-server/internal/ai-capabilities/processor"
+	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"encoding/json"
 	"net/http"
@@ -15,29 +16,25 @@ func (h *Handler) HandleGenerateImage(c *gin.Context) {
 
 	userID, ok := c.Get("User-ID")
 	if !ok {
-		h.logger.Error(ctx, "failed to get userID from context", nil)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+		apierrors.RespondWithError(c, h.logger, apierrors.Unauthorized("User ID not found in context"))
 		return
 	}
 
 	parsedUserID, err := uuid.Parse(userID.(string))
 	if err != nil {
-		h.logger.Error(ctx, "failed to parse userID id", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid user ID format"))
 		return
 	}
 	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID.String()})
 
 	var req CreateConversationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "Failed to bind JSON request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		apierrors.RespondWithValidationError(c, h.logger, err)
 		return
 	}
 
 	if req.Message == "" {
-		h.logger.Error(ctx, "Message is required", nil)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Message is required"})
+		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "Message is required"))
 		return
 	}
 
@@ -45,8 +42,7 @@ func (h *Handler) HandleGenerateImage(c *gin.Context) {
 	flusher, ok := w.(http.Flusher)
 
 	if !ok {
-		h.logger.Error(ctx, "Streaming unsupported: http.ResponseWriter does not implement http.Flusher", nil)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Streaming unsupported"})
+		apierrors.RespondWithError(c, h.logger, apierrors.InternalError(nil))
 		return
 	}
 
@@ -68,15 +64,13 @@ func (h *Handler) HandleGenerateImage(c *gin.Context) {
 		ctx = observability.WithFields(ctx, observability.Field{Key: "conversation_id", Value: req.ConversationID.String()})
 		responseChan, err = h.aiCapabilities.ContinueImageGenerationConversation(ctx, parsedUserID, req.ConversationID, req.Message)
 		if err != nil {
-			h.logger.Error(ctx, "Failed to continue conversation", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to continue conversation"})
+			apierrors.RespondWithError(c, h.logger, err)
 			return
 		}
 	} else {
 		responseChan, err = h.aiCapabilities.CreateImageGenerationConversation(ctx, parsedUserID, req.Message)
 		if err != nil {
-			h.logger.Error(ctx, "Failed to create conversation", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create conversation"})
+			apierrors.RespondWithError(c, h.logger, err)
 			return
 		}
 	}

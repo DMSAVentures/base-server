@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,8 +12,7 @@ func (h *Handler) ListPrices(c *gin.Context) {
 
 	prices, err := h.processor.ListPrices(ctx)
 	if err != nil {
-		h.logger.Error(ctx, "failed to list prices", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 

@@ -1,9 +1,9 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"base-server/internal/money/billing/processor"
 	"base-server/internal/observability"
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -31,8 +31,7 @@ func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req CreatePaymentIntentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, h.logger, err)
 		return
 	}
 
@@ -42,8 +41,7 @@ func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
 
 	clientSecret, err := h.processor.CreateStripePaymentIntent(ctx, req.Items)
 	if err != nil {
-		h.logger.Error(ctx, "failed to create payment intent", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -55,8 +53,7 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, h.logger, err)
 		return
 	}
 
@@ -66,8 +63,7 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 
 	clientSecret, err := h.processor.CreateSubscriptionIntent(ctx, parsedUserID, req.PriceID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to create subscription", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -84,13 +80,7 @@ func (h *Handler) HandleCancelSubscription(c *gin.Context) {
 
 	err := h.processor.CancelSubscription(ctx, parsedUserID)
 	if err != nil {
-		if errors.Is(err, processor.ErrNoActiveSubscription) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "no active subscription found"})
-			return
-		}
-
-		h.logger.Error(ctx, "failed to cancel subscription", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -106,15 +96,13 @@ func (h *Handler) HandleCreateCheckoutSession(c *gin.Context) {
 
 	var req CreateCheckoutSessionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, h.logger, err)
 		return
 	}
 
 	session, err := h.processor.CreateCheckoutSession(ctx, parsedUserID, req.PriceID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to create checkout session", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -126,15 +114,13 @@ func (h *Handler) GetCheckoutSession(c *gin.Context) {
 	ctx := c.Request.Context()
 	sessionID := c.Query("session_id")
 	if sessionID == "" {
-		h.logger.Error(ctx, "session_id is required", nil)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "session_id is required"})
+		apierrors.RespondWithError(c, h.logger, apierrors.BadRequest(apierrors.CodeInvalidInput, "session_id is required"))
 		return
 	}
 
 	session, err := h.processor.GetCheckoutSession(ctx, sessionID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get checkout session", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -151,13 +137,7 @@ func (h *Handler) HandleGetSubscription(c *gin.Context) {
 
 	sub, err := h.processor.GetActiveSubscription(ctx, parsedUserID)
 	if err != nil {
-		if errors.Is(err, processor.ErrNoActiveSubscription) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "no active subscription found"})
-			return
-		}
-
-		h.logger.Error(ctx, "failed to get subscription", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 
@@ -174,8 +154,7 @@ func (h *Handler) HandleCreateCustomerPortal(c *gin.Context) {
 
 	sessionURL, err := h.processor.CreateCustomerPortal(ctx, parsedUserID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to create customer portal", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, h.logger, err)
 		return
 	}
 

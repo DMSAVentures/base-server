@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -43,7 +44,8 @@ func (h *Handler) HandleAnswerPhone(c *gin.Context) {
 
 	twimlResult, err := twiml.Voice([]twiml.Element{say, connect})
 	if err != nil {
-		c.String(http.StatusInternalServerError, err.Error())
+		apierrors.RespondWithError(c, h.logger, err)
+		return
 	} else {
 		h.logger.Info(c.Request.Context(), fmt.Sprintf("TwiML Response: %s", twimlResult))
 		c.Header("Content-Type", "text/xml")
