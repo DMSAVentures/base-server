@@ -125,9 +125,10 @@ func (s *Server) WaitForShutdown(ctx context.Context) error {
 	<-quit
 	s.logger.Info(ctx, "Shutting down server...")
 
-	// Stop webhook worker and consumer
+	// Stop webhook worker and consumers
 	s.deps.WebhookWorker.Stop()
 	s.deps.WebhookConsumer.Stop()
+	s.deps.EmailConsumer.Stop()
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling

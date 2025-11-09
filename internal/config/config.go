@@ -13,11 +13,12 @@ var ErrEmptyEnvironmentVariable = errors.New("empty environment variable")
 
 // Config holds all application configuration
 type Config struct {
-	Database DatabaseConfig
-	Auth     AuthConfig
-	Services ServicesConfig
-	Kafka    KafkaConfig
-	Server   ServerConfig
+	Database   DatabaseConfig
+	Auth       AuthConfig
+	Services   ServicesConfig
+	Kafka      KafkaConfig
+	WorkerPool WorkerPoolConfig
+	Server     ServerConfig
 }
 
 // DatabaseConfig holds database connection settings
@@ -52,6 +53,12 @@ type KafkaConfig struct {
 	Brokers       string
 	Topic         string
 	ConsumerGroup string
+}
+
+// WorkerPoolConfig holds worker pool configuration for event processing
+type WorkerPoolConfig struct {
+	WebhookWorkers int // Number of workers for webhook event processing
+	EmailWorkers   int // Number of workers for email event processing
 }
 
 // ServerConfig holds HTTP server configuration
@@ -128,6 +135,19 @@ func Load() (*Config, error) {
 	}
 	cfg.Kafka.Topic = getEnvWithDefault("KAFKA_TOPIC", "webhook-events")
 	cfg.Kafka.ConsumerGroup = getEnvWithDefault("KAFKA_CONSUMER_GROUP", "webhook-consumers")
+
+	// Worker pool configuration
+	webhookWorkers := getEnvWithDefault("WEBHOOK_WORKERS", "10")
+	cfg.WorkerPool.WebhookWorkers, err = strconv.Atoi(webhookWorkers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse WEBHOOK_WORKERS: %w", err)
+	}
+
+	emailWorkers := getEnvWithDefault("EMAIL_WORKERS", "5")
+	cfg.WorkerPool.EmailWorkers, err = strconv.Atoi(emailWorkers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse EMAIL_WORKERS: %w", err)
+	}
 
 	// Server configuration
 	serverPort, err := requireEnv("SERVER_PORT")
