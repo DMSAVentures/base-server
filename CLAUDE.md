@@ -24,6 +24,7 @@ base-server/
 │   │   │   └── processor/ # Business logic for billing
 │   │   ├── products/      # Product management service
 │   │   └── subscriptions/ # Subscription management service
+│   ├── apierrors/         # Centralized API error handling
 │   ├── observability/     # Logging and monitoring
 │   └── store/             # Database layer and models
 ├── migrations/            # SQL migration files (Flyway format)
@@ -37,6 +38,7 @@ base-server/
 - **Service**: Domain-specific business operations
 - **Store**: Database operations and models
 - **Client**: External API integrations
+- **APIErrors**: Centralized API error handling, sanitization, and logging
 
 ## Code Conventions
 
@@ -101,32 +103,144 @@ ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: u
 ## Error Handling
 
 ### Error Definition
-Define domain-specific errors as package-level variables:
+Define domain-specific errors as package-level variables in processor/service packages:
 ```go
 var (
     ErrEmailAlreadyExists = errors.New("email already exists")
     ErrUserNotFound       = errors.New("user not found")
+    ErrCampaignNotFound   = errors.New("campaign not found")
 )
 ```
 
-### Error Handling Pattern
+### Centralized API Error Handling
+**CRITICAL:** All API handlers MUST use the `internal/apierrors` package for error responses. This ensures:
+- Internal details (SQL errors, database schema, stack traces) never leak to clients
+- Consistent error response format across all endpoints
+- Two-tier logging: detailed errors in processor, correlation info in API layer
+
+### Processor Layer Error Handling
+Processors should log errors with full context before returning them:
 ```go
-user, err := h.authProcessor.GetUserByExternalID(ctx, parsedUserID)
-if err != nil {
-    h.logger.Error(ctx, "failed to get user by external id", err)
-    if errors.Is(err, store.ErrNotFound) {
-        context.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+func (p *Processor) GetUserByExternalID(ctx context.Context, userID uuid.UUID) (User, error) {
+    // Enrich context with operation-specific fields
+    ctx = observability.WithFields(ctx,
+        observability.Field{Key: "user_id", Value: userID},
+        observability.Field{Key: "operation", Value: "get_user"},
+    )
+
+    user, err := p.store.GetUserByExternalID(ctx, userID)
+    if err != nil {
+        // Log detailed error with full context (user_id, operation, etc.)
+        p.logger.Error(ctx, "failed to get user by external id", err)
+        return User{}, err
+    }
+    return user, nil
+}
+```
+
+### Handler Layer Error Handling
+Handlers use `apierrors` for all error responses:
+
+**For processor/business logic errors:**
+```go
+import "base-server/internal/apierrors"
+
+func (h *Handler) HandleGetUser(c *gin.Context) {
+    ctx := c.Request.Context()
+    userID := parseUserID(c) // your parsing logic
+
+    user, err := h.processor.GetUserByExternalID(ctx, userID)
+    if err != nil {
+        // Processor already logged detailed error with full context
+        // apierrors maps the error and logs correlation info (request_id, status_code, error_code)
+        apierrors.RespondWithError(c, err)
         return
     }
-    context.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-    return
+
+    c.JSON(http.StatusOK, user)
 }
+```
+
+**For validation errors:**
+```go
+func (h *Handler) HandleCreateUser(c *gin.Context) {
+    var req CreateUserRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        // Handles validation errors with structured field-level details
+        apierrors.RespondWithValidationError(c, err)
+        return
+    }
+
+    user, err := h.processor.CreateUser(c.Request.Context(), req)
+    if err != nil {
+        apierrors.RespondWithError(c, err)
+        return
+    }
+
+    c.JSON(http.StatusCreated, user)
+}
+```
+
+### Two-Tier Logging Strategy
+The error handling system uses a two-tier logging approach to balance debugging capability with log efficiency:
+
+**Tier 1 - Processor Layer (Error Level):**
+- Logs detailed errors with full enriched context
+- Includes domain-specific fields (user_id, campaign_id, account_id, etc.)
+- Contains root cause information
+- Used for debugging and root cause analysis
+
+**Tier 2 - API Layer (Info Level):**
+- Logs minimal correlation information
+- Includes request_id, status_code, error_code, error_message
+- Used to correlate API responses with processor logs
+- No duplicate error logging
+
+This approach ensures you can trace from an API response back to the detailed processor logs using the request_id.
+
+### Error Response Format
+All API errors return this consistent JSON structure:
+```json
+{
+  "error": "User-friendly error message",
+  "code": "ERROR_CODE"
+}
+```
+
+Error codes use `UPPER_SNAKE_CASE` format (e.g., `USER_NOT_FOUND`, `EMAIL_EXISTS`, `INVALID_INPUT`).
+
+### Adding New Error Mappings
+When adding new processor errors, update `internal/apierrors/mapper.go`:
+```go
+func MapError(err error) *APIError {
+    switch {
+    case errors.Is(err, yourProcessor.ErrYourNewError):
+        return NotFound(CodeYourError, "User-friendly message")
+    // ... other mappings
+    default:
+        return InternalError(err) // Sanitizes unknown errors
+    }
+}
+```
+
+Define the error code constant in `internal/apierrors/errors.go`:
+```go
+const (
+    // ... existing codes
+    CodeYourError = "YOUR_ERROR"
+)
 ```
 
 ## HTTP Handling
 
 ### Handler Structure
 ```go
+import (
+    "base-server/internal/apierrors"
+    "base-server/internal/observability"
+    "github.com/gin-gonic/gin"
+)
+
 type Handler struct {
     processor SomeProcessor
     logger    *observability.Logger
@@ -134,24 +248,24 @@ type Handler struct {
 
 func (h *Handler) HandleSomeAction(c *gin.Context) {
     ctx := c.Request.Context()
-    
-    // Input validation
+
+    // Input validation - use apierrors for validation errors
     var req RequestStruct
     if err := c.ShouldBindJSON(&req); err != nil {
-        h.logger.Error(ctx, "failed to bind request", err)
-        c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+        apierrors.RespondWithValidationError(c, err)
         return
     }
-    
-    // Business logic
+
+    // Business logic - processor logs detailed errors
     result, err := h.processor.ProcessAction(ctx, req)
     if err != nil {
-        h.logger.Error(ctx, "failed to process", err)
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+        // Use apierrors for all business logic errors
+        // Processor already logged detailed error with full context
+        apierrors.RespondWithError(c, err)
         return
     }
-    
-    // Response
+
+    // Success response
     c.JSON(http.StatusOK, result)
 }
 ```
@@ -419,10 +533,12 @@ websocketServer := &http.Server{
 ## Common Patterns to Follow
 
 1. **Always use context**: Pass context through all function calls
-2. **Structured errors**: Define errors as package-level variables
-3. **Dependency injection**: Use constructor functions for initialization
-4. **Graceful shutdown**: Handle OS signals properly
-5. **Request tracing**: Use request IDs for debugging
-6. **Middleware composition**: Apply cross-cutting concerns via middleware
-7. **Resource cleanup**: Use defer for cleanup operations
-8. **Configuration validation**: Check all required env vars at startup
+2. **Centralized error handling**: Always use `apierrors.RespondWithError()` and `apierrors.RespondWithValidationError()` in handlers
+3. **Two-tier logging**: Processors log detailed errors, API layer logs correlation info
+4. **Structured errors**: Define errors as package-level variables
+5. **Dependency injection**: Use constructor functions for initialization
+6. **Graceful shutdown**: Handle OS signals properly
+7. **Request tracing**: Use request IDs for debugging
+8. **Middleware composition**: Apply cross-cutting concerns via middleware
+9. **Resource cleanup**: Use defer for cleanup operations
+10. **Configuration validation**: Check all required env vars at startup

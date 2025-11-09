@@ -1,10 +1,9 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"base-server/internal/observability"
-	"base-server/internal/store"
 	"base-server/internal/webhooks/processor"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -52,8 +51,7 @@ func (h *Handler) HandleCreateWebhook(c *gin.Context) {
 
 	var req CreateWebhookRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -84,8 +82,7 @@ func (h *Handler) HandleCreateWebhook(c *gin.Context) {
 		MaxRetries:   req.MaxRetries,
 	})
 	if err != nil {
-		h.logger.Error(ctx, "failed to create webhook", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -116,8 +113,7 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 
 		webhooks, err := h.processor.GetWebhooksByCampaign(ctx, campaignID)
 		if err != nil {
-			h.logger.Error(ctx, "failed to get webhooks for campaign", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			apierrors.RespondWithError(c, err)
 			return
 		}
 
@@ -128,8 +124,7 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 	// Get all webhooks for account
 	webhooks, err := h.processor.GetWebhooksByAccount(ctx, parsedAccountID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get webhooks", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -151,8 +146,7 @@ func (h *Handler) HandleGetWebhook(c *gin.Context) {
 
 	webhook, err := h.processor.GetWebhook(ctx, webhookID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get webhook", err)
-		c.JSON(http.StatusNotFound, gin.H{"error": "webhook not found"})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -183,8 +177,7 @@ func (h *Handler) HandleUpdateWebhook(c *gin.Context) {
 
 	var req UpdateWebhookRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -196,8 +189,7 @@ func (h *Handler) HandleUpdateWebhook(c *gin.Context) {
 		MaxRetries:   req.MaxRetries,
 	})
 	if err != nil {
-		h.logger.Error(ctx, "failed to update webhook", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -219,12 +211,7 @@ func (h *Handler) HandleDeleteWebhook(c *gin.Context) {
 
 	err = h.processor.DeleteWebhook(ctx, webhookID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to delete webhook", err)
-		if errors.Is(err, store.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "webhook not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -262,8 +249,7 @@ func (h *Handler) HandleListWebhookDeliveries(c *gin.Context) {
 
 	deliveries, err := h.processor.GetWebhookDeliveries(ctx, webhookID, limit, offset)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get webhook deliveries", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -298,8 +284,7 @@ func (h *Handler) HandleTestWebhook(c *gin.Context) {
 
 	err = h.processor.TestWebhook(ctx, webhookID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to test webhook", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

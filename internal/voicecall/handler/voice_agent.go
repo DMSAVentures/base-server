@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"base-server/internal/voice/pipeline"
 	"base-server/internal/voicecall/twilio"
 	"fmt"
@@ -92,7 +93,8 @@ func (h *Handler) HandleAnswerVoiceAgent(c *gin.Context) {
 
 	twimlResult, err := twiml.Voice([]twiml.Element{say, connect})
 	if err != nil {
-		c.String(500, err.Error())
+		apierrors.RespondWithError(c, err)
+		return
 	} else {
 		h.logger.Info(c.Request.Context(), fmt.Sprintf("Voice Agent TwiML Response: %s", twimlResult))
 		c.Header("Content-Type", "text/xml")

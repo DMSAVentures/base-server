@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"net/http"
 
@@ -16,8 +17,7 @@ func (h *Handler) HandleUpdatePaymentMethod(c *gin.Context) {
 
 	clientSecret, err := h.processor.SetupPaymentMethodUpdateIntent(ctx, parsedUserID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to update payment method", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

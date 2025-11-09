@@ -28,6 +28,33 @@ info:
     - `X-RateLimit-Reset`: Unix timestamp when the rate limit resets
     - `X-Request-ID`: Unique request identifier for debugging
 
+    ## Error Handling
+
+    All error responses follow a consistent format with both a human-readable message and a machine-readable error code:
+
+    ```json
+    {
+      "error": "User-friendly error message",
+      "code": "ERROR_CODE"
+    }
+    ```
+
+    Error codes use `UPPER_SNAKE_CASE` format for easy programmatic handling.
+
+    ### Common Error Codes
+
+    - `INVALID_INPUT` - Validation error or malformed request
+    - `UNAUTHORIZED` - Missing or invalid authentication
+    - `FORBIDDEN` - Insufficient permissions
+    - `CAMPAIGN_NOT_FOUND` - Campaign does not exist
+    - `USER_NOT_FOUND` - User does not exist
+    - `EMAIL_EXISTS` - Email already registered
+    - `USER_EXISTS` - User already exists in campaign
+    - `RATE_LIMIT_EXCEEDED` - Too many requests
+    - `INTERNAL_ERROR` - Server error
+
+    Use the `X-Request-ID` header value from the response to report issues to support.
+
   version: 1.0.0
   contact:
     name: API Support
@@ -315,7 +342,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
-                error: "campaign not found"
+                error: "Campaign not found"
+                code: "CAMPAIGN_NOT_FOUND"
         '409':
           $ref: '#/components/responses/Conflict'
         '429':
@@ -1808,10 +1836,12 @@ components:
           examples:
             validation:
               value:
-                error: "invalid request"
+                error: "Invalid request format. Please check your JSON syntax."
+                code: "INVALID_INPUT"
             missing_field:
               value:
-                error: "email is required"
+                error: "Required field is missing"
+                code: "INVALID_INPUT"
 
     Unauthorized:
       description: Unauthorized - Authentication required
@@ -1821,6 +1851,7 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             error: "Authorization token is missing or invalid"
+            code: "UNAUTHORIZED"
 
     Forbidden:
       description: Forbidden - Insufficient permissions
@@ -1829,7 +1860,8 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
           example:
-            error: "insufficient permissions"
+            error: "You do not have permission to access this resource"
+            code: "FORBIDDEN"
 
     NotFound:
       description: Not found - Resource does not exist
@@ -1837,8 +1869,15 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-          example:
-            error: "campaign not found"
+          examples:
+            campaign:
+              value:
+                error: "Campaign not found"
+                code: "CAMPAIGN_NOT_FOUND"
+            user:
+              value:
+                error: "User not found"
+                code: "USER_NOT_FOUND"
 
     Conflict:
       description: Conflict - Resource already exists
@@ -1846,8 +1885,15 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-          example:
-            error: "email already exists"
+          examples:
+            email_exists:
+              value:
+                error: "Email already exists"
+                code: "EMAIL_EXISTS"
+            user_exists:
+              value:
+                error: "User already exists in this campaign"
+                code: "USER_EXISTS"
 
     TooManyRequests:
       description: Too many requests - Rate limit exceeded
@@ -1873,7 +1919,8 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
           example:
-            error: "rate limit exceeded"
+            error: "Rate limit exceeded. Please try again later."
+            code: "RATE_LIMIT_EXCEEDED"
 
     InternalError:
       description: Internal server error
@@ -1882,7 +1929,8 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
           example:
-            error: "internal server error"
+            error: "An internal server error occurred. Please try again later."
+            code: "INTERNAL_ERROR"
 
   schemas:
     # ==================== ERROR SCHEMA ====================
@@ -1893,9 +1941,14 @@ components:
       properties:
         error:
           type: string
-          description: Error message
+          description: User-friendly error message
+        code:
+          type: string
+          description: Machine-readable error code in UPPER_SNAKE_CASE format
+          example: "INVALID_INPUT"
       example:
-        error: "invalid request"
+        error: "Invalid request format"
+        code: "INVALID_INPUT"
 
     # ==================== CORE MODELS ====================
     Campaign:

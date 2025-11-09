@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"base-server/internal/referral/processor"
 	"net/http"
@@ -31,8 +32,7 @@ func (h *Handler) HandleListReferrals(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -69,8 +69,7 @@ func (h *Handler) HandleListReferrals(c *gin.Context) {
 
 	response, err := h.processor.ListReferrals(ctx, accountID, campaignID, req)
 	if err != nil {
-		h.logger.Error(ctx, "failed to list referrals", err)
-		h.handleProcessorError(c, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -98,8 +97,7 @@ func (h *Handler) HandleTrackReferral(c *gin.Context) {
 
 	var req TrackReferralRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -114,8 +112,7 @@ func (h *Handler) HandleTrackReferral(c *gin.Context) {
 
 	response, err := h.processor.TrackReferral(ctx, campaignID, processorReq)
 	if err != nil {
-		h.logger.Error(ctx, "failed to track referral", err)
-		h.handleProcessorError(c, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -129,8 +126,7 @@ func (h *Handler) HandleGetUserReferrals(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -170,8 +166,7 @@ func (h *Handler) HandleGetUserReferrals(c *gin.Context) {
 
 	response, err := h.processor.GetUserReferrals(ctx, accountID, campaignID, userID, req)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get user referrals", err)
-		h.handleProcessorError(c, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -185,8 +180,7 @@ func (h *Handler) HandleGetReferralLink(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -217,32 +211,10 @@ func (h *Handler) HandleGetReferralLink(c *gin.Context) {
 
 	response, err := h.processor.GetReferralLink(ctx, accountID, campaignID, userID, h.baseURL)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get referral link", err)
-		h.handleProcessorError(c, err)
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
-// handleProcessorError maps processor errors to HTTP responses
-func (h *Handler) handleProcessorError(c *gin.Context, err error) {
-	switch err {
-	case processor.ErrReferralNotFound:
-		c.JSON(http.StatusNotFound, gin.H{"error": "referral not found"})
-	case processor.ErrCampaignNotFound:
-		c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-	case processor.ErrUserNotFound:
-		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-	case processor.ErrUnauthorized:
-		c.JSON(http.StatusForbidden, gin.H{"error": "unauthorized access to campaign"})
-	case processor.ErrInvalidStatus:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid referral status"})
-	case processor.ErrInvalidReferral:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid referral code"})
-	case processor.ErrReferralCodeEmpty:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "referral code is required"})
-	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
-	}
-}

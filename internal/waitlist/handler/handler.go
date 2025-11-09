@@ -1,12 +1,12 @@
 package handler
 
 import (
+	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"base-server/internal/waitlist/processor"
 	"context"
 	"encoding/csv"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -61,8 +61,7 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 
 	var req SignupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -89,29 +88,7 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 
 	response, err := h.processor.SignupUser(ctx, campaignID, processorReq, h.baseURL)
 	if err != nil {
-		h.logger.Error(ctx, "failed to signup user", err)
-		if errors.Is(err, processor.ErrCampaignNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-
-		if errors.Is(err, processor.ErrEmailAlreadyExists) {
-			c.JSON(http.StatusConflict, gin.H{"error": "email already exists"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidReferralCode) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid referral code"})
-			return
-		}
-		if errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrMaxSignupsReached) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "campaign has reached maximum signups"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -125,8 +102,7 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -186,16 +162,7 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 
 	response, err := h.processor.ListUsers(ctx, accountID, campaignID, req)
 	if err != nil {
-		h.logger.Error(ctx, "failed to list users", err)
-		if errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidStatus) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -209,8 +176,7 @@ func (h *Handler) HandleGetUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -241,12 +207,7 @@ func (h *Handler) HandleGetUser(c *gin.Context) {
 
 	user, err := h.processor.GetUser(ctx, accountID, campaignID, userID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get user", err)
-		if errors.Is(err, processor.ErrUserNotFound) || errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -268,8 +229,7 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -300,8 +260,7 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 
 	var req UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -314,16 +273,7 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 
 	user, err := h.processor.UpdateUser(ctx, accountID, campaignID, userID, processorReq)
 	if err != nil {
-		h.logger.Error(ctx, "failed to update user", err)
-		if errors.Is(err, processor.ErrUserNotFound) || errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidStatus) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -337,8 +287,7 @@ func (h *Handler) HandleDeleteUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -369,12 +318,7 @@ func (h *Handler) HandleDeleteUser(c *gin.Context) {
 
 	err = h.processor.DeleteUser(ctx, accountID, campaignID, userID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to delete user", err)
-		if errors.Is(err, processor.ErrUserNotFound) || errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -398,8 +342,7 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -421,8 +364,7 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 
 	var req SearchUsersRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -454,16 +396,7 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 
 	response, err := h.processor.SearchUsers(ctx, accountID, campaignID, processorReq)
 	if err != nil {
-		h.logger.Error(ctx, "failed to search users", err)
-		if errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidStatus) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -477,8 +410,7 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -525,8 +457,7 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	}
 
 	if err != nil {
-		h.logger.Error(ctx, "failed to import users", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -671,8 +602,7 @@ func (h *Handler) HandleExportUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -694,8 +624,7 @@ func (h *Handler) HandleExportUsers(c *gin.Context) {
 
 	var req ExportUsersRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Error(ctx, "failed to bind request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
@@ -725,8 +654,7 @@ func (h *Handler) HandleVerifyUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -757,16 +685,7 @@ func (h *Handler) HandleVerifyUser(c *gin.Context) {
 
 	err = h.processor.VerifyUser(ctx, accountID, campaignID, userID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to verify user", err)
-		if errors.Is(err, processor.ErrUserNotFound) || errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrEmailAlreadyVerified) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "email already verified"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -782,8 +701,7 @@ func (h *Handler) HandleResendVerification(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -814,16 +732,7 @@ func (h *Handler) HandleResendVerification(c *gin.Context) {
 
 	_, err = h.processor.ResendVerificationToken(ctx, accountID, campaignID, userID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to resend verification", err)
-		if errors.Is(err, processor.ErrUserNotFound) || errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrEmailAlreadyVerified) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "email already verified"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 

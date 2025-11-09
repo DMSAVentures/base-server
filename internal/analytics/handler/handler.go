@@ -2,8 +2,8 @@ package handler
 
 import (
 	"base-server/internal/analytics/processor"
+	"base-server/internal/apierrors"
 	"base-server/internal/observability"
-	"errors"
 	"net/http"
 	"time"
 
@@ -30,8 +30,7 @@ func (h *Handler) HandleGetAnalyticsOverview(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -54,12 +53,7 @@ func (h *Handler) HandleGetAnalyticsOverview(c *gin.Context) {
 	// Get analytics overview
 	overview, err := h.processor.GetAnalyticsOverview(ctx, accountID, campaignID)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get analytics overview", err)
-		if errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -73,8 +67,7 @@ func (h *Handler) HandleGetConversionAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -119,16 +112,7 @@ func (h *Handler) HandleGetConversionAnalytics(c *gin.Context) {
 	// Get conversion analytics
 	conversions, err := h.processor.GetConversionAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get conversion analytics", err)
-		if errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidDateRange) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date range"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -142,8 +126,7 @@ func (h *Handler) HandleGetReferralAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -188,16 +171,7 @@ func (h *Handler) HandleGetReferralAnalytics(c *gin.Context) {
 	// Get referral analytics
 	referrals, err := h.processor.GetReferralAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get referral analytics", err)
-		if errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidDateRange) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date range"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -211,8 +185,7 @@ func (h *Handler) HandleGetTimeSeriesAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -260,20 +233,7 @@ func (h *Handler) HandleGetTimeSeriesAnalytics(c *gin.Context) {
 	// Get time series analytics
 	timeSeries, err := h.processor.GetTimeSeriesAnalytics(ctx, accountID, campaignID, dateFrom, dateTo, granularity)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get time series analytics", err)
-		if errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidDateRange) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date range"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidGranularity) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid granularity, must be one of: hour, day, week, month"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -287,8 +247,7 @@ func (h *Handler) HandleGetSourceAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -333,16 +292,7 @@ func (h *Handler) HandleGetSourceAnalytics(c *gin.Context) {
 	// Get source analytics
 	sources, err := h.processor.GetSourceAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get source analytics", err)
-		if errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidDateRange) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date range"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
@@ -356,8 +306,7 @@ func (h *Handler) HandleGetFunnelAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		h.logger.Error(ctx, "account ID not found in context", nil)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
 		return
 	}
 
@@ -402,16 +351,7 @@ func (h *Handler) HandleGetFunnelAnalytics(c *gin.Context) {
 	// Get funnel analytics
 	funnel, err := h.processor.GetFunnelAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		h.logger.Error(ctx, "failed to get funnel analytics", err)
-		if errors.Is(err, processor.ErrCampaignNotFound) || errors.Is(err, processor.ErrUnauthorized) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
-			return
-		}
-		if errors.Is(err, processor.ErrInvalidDateRange) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date range"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		apierrors.RespondWithError(c, err)
 		return
 	}
 
