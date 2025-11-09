@@ -23,7 +23,7 @@ type ErrorResponse struct {
 //
 // It performs the following:
 // 1. Converts the error to an APIError (using MapError if necessary)
-// 2. Logs the error with full internal details for debugging (uses context for observability)
+// 2. Logs the API response for correlation (processor already logged the detailed error)
 // 3. Sends a sanitized error response to the client
 //
 // Example usage:
@@ -42,13 +42,14 @@ func RespondWithError(c *gin.Context, err error) {
 	// Convert to APIError
 	apiErr := MapError(err)
 
-	// Log with full internal details for debugging
-	// The logger automatically uses observability fields from context
-	if apiErr.Internal != nil {
-		logger.Error(ctx, apiErr.Message, apiErr.Internal)
-	} else {
-		logger.Error(ctx, apiErr.Message, errors.New(apiErr.Message))
-	}
+	// Log API error response for correlation with processor logs
+	// Processor has already logged the detailed error with full context
+	// This log entry includes request_id for correlation
+	logger.Info(ctx, "API error response",
+		observability.MetricField{Key: "status_code", Value: apiErr.StatusCode},
+		observability.MetricField{Key: "error_code", Value: apiErr.Code},
+		observability.MetricField{Key: "error_message", Value: apiErr.Message},
+	)
 
 	// Send sanitized response to client
 	c.JSON(apiErr.StatusCode, ErrorResponse{
