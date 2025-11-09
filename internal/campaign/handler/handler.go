@@ -78,12 +78,21 @@ func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 		return
 	}
 
+	// Add account_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
+
 	var req CreateCampaignRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error(ctx, "failed to bind request", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+
+	// Add campaign identifiers to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "campaign_slug", Value: req.Slug},
+		observability.Field{Key: "campaign_type", Value: req.Type},
+	)
 
 	// Set default empty JSONB if not provided
 	if req.FormConfig == nil {
@@ -154,6 +163,9 @@ func (h *Handler) HandleListCampaigns(c *gin.Context) {
 		return
 	}
 
+	// Add account_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
+
 	// Parse query parameters
 	page := 1
 	if pageStr := c.Query("page"); pageStr != "" {
@@ -220,6 +232,9 @@ func (h *Handler) HandleGetCampaign(c *gin.Context) {
 		return
 	}
 
+	// Add account_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
+
 	// Get campaign ID from path
 	campaignIDStr := c.Param("campaign_id")
 	campaignID, err := uuid.Parse(campaignIDStr)
@@ -228,6 +243,9 @@ func (h *Handler) HandleGetCampaign(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
 		return
 	}
+
+	// Add campaign_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
 
 	campaign, err := h.processor.GetCampaign(ctx, accountID, campaignID)
 	if err != nil {
@@ -262,6 +280,9 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 		return
 	}
 
+	// Add account_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
+
 	// Get campaign ID from path
 	campaignIDStr := c.Param("campaign_id")
 	campaignID, err := uuid.Parse(campaignIDStr)
@@ -270,6 +291,9 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
 		return
 	}
+
+	// Add campaign_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
 
 	var req UpdateCampaignRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -334,6 +358,9 @@ func (h *Handler) HandleDeleteCampaign(c *gin.Context) {
 		return
 	}
 
+	// Add account_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
+
 	// Get campaign ID from path
 	campaignIDStr := c.Param("campaign_id")
 	campaignID, err := uuid.Parse(campaignIDStr)
@@ -342,6 +369,9 @@ func (h *Handler) HandleDeleteCampaign(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
 		return
 	}
+
+	// Add campaign_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
 
 	err = h.processor.DeleteCampaign(ctx, accountID, campaignID)
 	if err != nil {
@@ -376,6 +406,9 @@ func (h *Handler) HandleUpdateCampaignStatus(c *gin.Context) {
 		return
 	}
 
+	// Add account_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
+
 	// Get campaign ID from path
 	campaignIDStr := c.Param("campaign_id")
 	campaignID, err := uuid.Parse(campaignIDStr)
@@ -385,12 +418,18 @@ func (h *Handler) HandleUpdateCampaignStatus(c *gin.Context) {
 		return
 	}
 
+	// Add campaign_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
+
 	var req UpdateCampaignStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Error(ctx, "failed to bind request", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
+
+	// Add new status to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "new_status", Value: req.Status})
 
 	campaign, err := h.processor.UpdateCampaignStatus(ctx, accountID, campaignID, req.Status)
 	if err != nil {

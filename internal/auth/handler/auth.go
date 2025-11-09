@@ -96,6 +96,15 @@ func (h *Handler) HandleJWTMiddleware(c *gin.Context) {
 	}
 	c.Set("User-ID", sub)
 	c.Set("Account-ID", claims.AccountID)
+
+	// Add auth context to observability for comprehensive logging
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "user_id", Value: sub},
+		observability.Field{Key: "account_id", Value: claims.AccountID},
+		observability.Field{Key: "auth_type", Value: claims.AuthType},
+	)
+	c.Request = c.Request.WithContext(ctx)
+
 	// Continue to the next handler if the token is valid
 	c.Next()
 }

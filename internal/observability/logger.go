@@ -84,7 +84,19 @@ func Middleware(l *Logger) gin.HandlerFunc {
 			Field{"request_id", requestID},
 			Field{"path", c.Request.URL.Path},
 			Field{"method", c.Request.Method},
+			Field{"client_ip", c.ClientIP()},
+			Field{"user_agent", c.Request.UserAgent()},
 		)
+
+		// Add content length if present
+		if c.Request.ContentLength > 0 {
+			ctx = WithFields(ctx, Field{"content_length", c.Request.ContentLength})
+		}
+
+		// Add query parameters if present (be careful not to log sensitive data)
+		if len(c.Request.URL.RawQuery) > 0 {
+			ctx = WithFields(ctx, Field{"query_params", c.Request.URL.RawQuery})
+		}
 
 		// Store the context in Gin context for later use.
 		c.Request = c.Request.WithContext(ctx)
