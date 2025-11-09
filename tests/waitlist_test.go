@@ -253,3 +253,96 @@ func TestAPI_WaitlistUser_PublicSignup(t *testing.T) {
 		})
 	}
 }
+
+func TestAPI_CampaignCounters_RealTime(t *testing.T) {
+	// Create an authenticated user and a campaign
+	token := createAuthenticatedUser(t)
+
+	// Create a test campaign
+	createCampaignReq := map[string]interface{}{
+		"name":            "Counter Test Campaign",
+		"slug":            generateTestCampaignSlug(),
+		"type":            "waitlist",
+		"form_config":     map[string]interface{}{},
+		"referral_config": map[string]interface{}{},
+		"email_config":    map[string]interface{}{},
+		"branding_config": map[string]interface{}{},
+	}
+	createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", createCampaignReq, token)
+	if createResp.StatusCode != http.StatusCreated {
+		t.Fatalf("Failed to create test campaign: %s", string(createBody))
+	}
+
+	var createdCampaign map[string]interface{}
+	parseJSONResponse(t, createBody, &createdCampaign)
+	campaignID := createdCampaign["id"].(string)
+
+	// Verify initial counts are zero
+	getCampaignPath := fmt.Sprintf("/api/v1/campaigns/%s", campaignID)
+	resp, body := makeAuthenticatedRequest(t, http.MethodGet, getCampaignPath, nil, token)
+	assertStatusCode(t, resp, http.StatusOK)
+
+	var campaign map[string]interface{}
+	parseJSONResponse(t, body, &campaign)
+
+	if campaign["total_signups"].(float64) != 0 {
+		t.Errorf("Expected initial total_signups to be 0, got %v", campaign["total_signups"])
+	}
+	if campaign["total_verified"].(float64) != 0 {
+		t.Errorf("Expected initial total_verified to be 0, got %v", campaign["total_verified"])
+	}
+
+	// Sign up 3 users
+	for i := 1; i <= 3; i++ {
+		signupReq := map[string]interface{}{
+			"email":          fmt.Sprintf("counter-test-%d@example.com", i),
+			"terms_accepted": true,
+		}
+		signupPath := fmt.Sprintf("/api/v1/campaigns/%s/users", campaignID)
+		signupResp, _ := makeRequest(t, http.MethodPost, signupPath, signupReq, nil)
+		if signupResp.StatusCode != http.StatusCreated {
+			t.Fatalf("Failed to signup user %d", i)
+		}
+	}
+
+	// Verify counts are updated
+	resp, body = makeAuthenticatedRequest(t, http.MethodGet, getCampaignPath, nil, token)
+	assertStatusCode(t, resp, http.StatusOK)
+
+	parseJSONResponse(t, body, &campaign)
+
+	if campaign["total_signups"].(float64) != 3 {
+		t.Errorf("Expected total_signups to be 3, got %v", campaign["total_signups"])
+	}
+
+	// Verify in campaign list as well
+	listPath := "/api/v1/campaigns"
+	resp, body = makeAuthenticatedRequest(t, http.MethodGet, listPath, nil, token)
+	assertStatusCode(t, resp, http.StatusOK)
+
+	var listResponse map[string]interface{}
+	parseJSONResponse(t, body, &listResponse)
+
+	campaigns, ok := listResponse["campaigns"].([]interface{})
+	if !ok {
+		t.Fatal("Expected 'campaigns' array in response")
+	}
+
+	// Find our campaign in the list
+	var foundCampaign map[string]interface{}
+	for _, c := range campaigns {
+		campMap := c.(map[string]interface{})
+		if campMap["id"].(string) == campaignID {
+			foundCampaign = campMap
+			break
+		}
+	}
+
+	if foundCampaign == nil {
+		t.Fatal("Campaign not found in list")
+	}
+
+	if foundCampaign["total_signups"].(float64) != 3 {
+		t.Errorf("Expected total_signups in list to be 3, got %v", foundCampaign["total_signups"])
+	}
+}

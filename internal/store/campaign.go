@@ -72,9 +72,18 @@ func (s *Store) CreateCampaign(ctx context.Context, params CreateCampaignParams)
 }
 
 const sqlGetCampaignByID = `
-SELECT id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
-FROM campaigns
-WHERE id = $1 AND deleted_at IS NULL
+SELECT
+    c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
+    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
+    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    COALESCE(COUNT(w.id), 0)::int as total_signups,
+    COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
+    COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
+    c.created_at, c.updated_at, c.deleted_at
+FROM campaigns c
+LEFT JOIN waitlist_users w ON w.campaign_id = c.id AND w.deleted_at IS NULL
+WHERE c.id = $1 AND c.deleted_at IS NULL
+GROUP BY c.id
 `
 
 // GetCampaignByID retrieves a campaign by ID
@@ -92,9 +101,18 @@ func (s *Store) GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (Camp
 }
 
 const sqlGetCampaignBySlug = `
-SELECT id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
-FROM campaigns
-WHERE account_id = $1 AND slug = $2 AND deleted_at IS NULL
+SELECT
+    c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
+    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
+    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    COALESCE(COUNT(w.id), 0)::int as total_signups,
+    COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
+    COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
+    c.created_at, c.updated_at, c.deleted_at
+FROM campaigns c
+LEFT JOIN waitlist_users w ON w.campaign_id = c.id AND w.deleted_at IS NULL
+WHERE c.account_id = $1 AND c.slug = $2 AND c.deleted_at IS NULL
+GROUP BY c.id
 `
 
 // GetCampaignBySlug retrieves a campaign by account ID and slug
@@ -112,10 +130,19 @@ func (s *Store) GetCampaignBySlug(ctx context.Context, accountID uuid.UUID, slug
 }
 
 const sqlGetCampaignsByAccountID = `
-SELECT id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
-FROM campaigns
-WHERE account_id = $1 AND deleted_at IS NULL
-ORDER BY created_at DESC
+SELECT
+    c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
+    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
+    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    COALESCE(COUNT(w.id), 0)::int as total_signups,
+    COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
+    COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
+    c.created_at, c.updated_at, c.deleted_at
+FROM campaigns c
+LEFT JOIN waitlist_users w ON w.campaign_id = c.id AND w.deleted_at IS NULL
+WHERE c.account_id = $1 AND c.deleted_at IS NULL
+GROUP BY c.id
+ORDER BY c.created_at DESC
 `
 
 // GetCampaignsByAccountID retrieves all campaigns for an account
@@ -130,10 +157,19 @@ func (s *Store) GetCampaignsByAccountID(ctx context.Context, accountID uuid.UUID
 }
 
 const sqlGetCampaignsByStatus = `
-SELECT id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
-FROM campaigns
-WHERE account_id = $1 AND status = $2 AND deleted_at IS NULL
-ORDER BY created_at DESC
+SELECT
+    c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
+    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
+    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    COALESCE(COUNT(w.id), 0)::int as total_signups,
+    COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
+    COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
+    c.created_at, c.updated_at, c.deleted_at
+FROM campaigns c
+LEFT JOIN waitlist_users w ON w.campaign_id = c.id AND w.deleted_at IS NULL
+WHERE c.account_id = $1 AND c.status = $2 AND c.deleted_at IS NULL
+GROUP BY c.id
+ORDER BY c.created_at DESC
 `
 
 // GetCampaignsByStatus retrieves campaigns by account ID and status
@@ -168,11 +204,17 @@ type ListCampaignsResult struct {
 // ListCampaigns retrieves campaigns with pagination and filters
 func (s *Store) ListCampaigns(ctx context.Context, params ListCampaignsParams) (ListCampaignsResult, error) {
 	// Build dynamic query
-	query := `SELECT id, account_id, name, slug, description, status, type, launch_date, end_date,
-	          form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url,
-	          max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
-	          FROM campaigns
-	          WHERE account_id = $1 AND deleted_at IS NULL`
+	query := `SELECT
+	          c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
+	          c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
+	          c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+	          COALESCE(COUNT(w.id), 0)::int as total_signups,
+	          COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
+	          COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
+	          c.created_at, c.updated_at, c.deleted_at
+	          FROM campaigns c
+	          LEFT JOIN waitlist_users w ON w.campaign_id = c.id AND w.deleted_at IS NULL
+	          WHERE c.account_id = $1 AND c.deleted_at IS NULL`
 	countQuery := `SELECT COUNT(*) FROM campaigns WHERE account_id = $1 AND deleted_at IS NULL`
 
 	args := []interface{}{params.AccountID}
@@ -201,9 +243,9 @@ func (s *Store) ListCampaigns(ctx context.Context, params ListCampaignsParams) (
 		return ListCampaignsResult{}, fmt.Errorf("failed to get total campaign count: %w", err)
 	}
 
-	// Add pagination
+	// Add GROUP BY and pagination
 	offset := (params.Page - 1) * params.Limit
-	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argCount+1, argCount+2)
+	query += fmt.Sprintf(" GROUP BY c.id ORDER BY c.created_at DESC LIMIT $%d OFFSET $%d", argCount+1, argCount+2)
 	args = append(args, params.Limit, offset)
 
 	// Get campaigns
