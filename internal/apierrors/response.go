@@ -45,11 +45,12 @@ func RespondWithError(c *gin.Context, err error) {
 	// Log API error response for correlation with processor logs
 	// Processor has already logged the detailed error with full context
 	// This log entry includes request_id for correlation
-	logger.Info(ctx, "API error response",
-		observability.MetricField{Key: "status_code", Value: apiErr.StatusCode},
-		observability.MetricField{Key: "error_code", Value: apiErr.Code},
-		observability.MetricField{Key: "error_message", Value: apiErr.Message},
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "status_code", Value: apiErr.StatusCode},
+		observability.Field{Key: "error_code", Value: apiErr.Code},
+		observability.Field{Key: "error_message", Value: apiErr.Message},
 	)
+	logger.Info(ctx, "API error response")
 
 	// Send sanitized response to client
 	c.JSON(apiErr.StatusCode, ErrorResponse{
