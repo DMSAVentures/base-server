@@ -36,8 +36,10 @@ import (
 	waitlistHandler "base-server/internal/waitlist/handler"
 	waitlistProcessor "base-server/internal/waitlist/processor"
 	webhookConsumer "base-server/internal/webhooks/consumer"
+	"base-server/internal/webhooks/events"
 	webhookHandler "base-server/internal/webhooks/handler"
 	webhookProcessor "base-server/internal/webhooks/processor"
+	webhookProducer "base-server/internal/webhooks/produce
 	webhookService "base-server/internal/webhooks/service"
 	webhookWorker "base-server/internal/webhooks/worker"
 )
@@ -64,6 +66,7 @@ type Dependencies struct {
 	// Background workers
 	WebhookConsumer *webhookConsumer.EventConsumer
 	WebhookWorker   *webhookWorker.WebhookWorker
+	EmailConsumer   *email.EventConsumer
 
 	// Kafka clients (for cleanup)
 	KafkaProducer *kafkaClient.Producer
@@ -153,12 +156,16 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	voiceCallProc := voiceCallProcessor.NewVoiceCallProcessor(aiCapability, logger)
 	deps.VoiceCallHandler = voiceCallHandler.New(voiceCallProc, logger)
 
+	// Initialize event producer and dispatcher for internal events
+	eventProducer := webhookProducer.New(deps.KafkaProducer, logger)
+	eventDispatcher := events.NewEventDispatcher(eventProducer, logger)
+
 	// Initialize campaign processor and handler
 	campaignProc := campaignProcessor.New(deps.Store, logger)
 	deps.CampaignHandler = campaignHandler.New(campaignProc, logger)
 
 	// Initialize waitlist processor and handler
-	waitlistProc := waitlistProcessor.New(deps.Store, logger)
+	waitlistProc := waitlistProcessor.New(deps.Store, logger, eventDispatcher)
 	deps.WaitlistHandler = waitlistHandler.New(waitlistProc, logger, cfg.Services.WebAppURI)
 
 	// Initialize analytics processor and handler
@@ -187,6 +194,9 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 
 	// Initialize webhook retry worker (runs every 30 seconds)
 	deps.WebhookWorker = webhookWorker.New(webhookSvc, logger, 30*time.Second)
+
+	// Initialize email event consumer with worker pool (5 workers)
+	deps.EmailConsumer = email.NewEventConsumer(deps.KafkaConsumer, emailService, deps.Store, logger, 5)
 
 	return deps, nil
 }

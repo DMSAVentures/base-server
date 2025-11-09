@@ -4,6 +4,7 @@ import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
 	"base-server/internal/waitlist/utils"
+	"base-server/internal/webhooks/events"
 	"context"
 	"errors"
 	"fmt"
@@ -25,14 +26,16 @@ var (
 )
 
 type WaitlistProcessor struct {
-	store  store.Store
-	logger *observability.Logger
+	store           store.Store
+	logger          *observability.Logger
+	eventDispatcher *events.EventDispatcher
 }
 
-func New(store store.Store, logger *observability.Logger) WaitlistProcessor {
+func New(store store.Store, logger *observability.Logger, eventDispatcher *events.EventDispatcher) WaitlistProcessor {
 	return WaitlistProcessor{
-		store:  store,
-		logger: logger,
+		store:           store,
+		logger:          logger,
+		eventDispatcher: eventDispatcher,
 	}
 }
 
@@ -193,6 +196,24 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 
 	// Build referral link
 	referralLink := utils.BuildReferralLink(baseURL, campaign.Slug, referralCode)
+
+	// Dispatch user.created event for email notifications
+	if p.eventDispatcher != nil {
+		userData := map[string]interface{}{
+			"id":                 user.ID.String(),
+			"email":              user.Email,
+			"first_name":         user.FirstName,
+			"last_name":          user.LastName,
+			"position":           user.Position,
+			"referral_code":      user.ReferralCode,
+			"referral_link":      referralLink,
+			"verification_token": user.VerificationToken,
+			"email_verified":     user.EmailVerified,
+			"campaign_name":      campaign.Name,
+			"campaign_slug":      campaign.Slug,
+		}
+		p.eventDispatcher.DispatchUserCreated(ctx, campaign.AccountID, campaign.ID, userData)
+	}
 
 	p.logger.Info(ctx, "user signed up successfully")
 

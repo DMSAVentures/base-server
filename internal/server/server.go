@@ -87,6 +87,13 @@ func (s *Server) Start(ctx context.Context) error {
 	// Start webhook retry worker (runs every 30 seconds for failed deliveries)
 	go s.deps.WebhookWorker.Start(ctx)
 
+	// Start email event consumer (sends verification/welcome emails)
+	go func() {
+		if err := s.deps.EmailConsumer.Start(ctx); err != nil {
+			s.logger.Error(ctx, "email event consumer stopped with error", err)
+		}
+	}()
+
 	// Create HTTP server
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.config.Server.Port),
