@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -67,6 +68,38 @@ func mergeFields(ctx context.Context, fields []MetricField) []zapcore.Field {
 	return mergedFields
 }
 
+// GetRealClientIP extracts the real client IP from CloudFront headers.
+// CloudFront passes the original client IP in X-Forwarded-For header.
+// Falls back to c.ClientIP() if CloudFront headers are not present.
+func GetRealClientIP(c *gin.Context) string {
+	// CloudFront sends the original client IP in X-Forwarded-For
+	// Format: "client-ip, proxy1-ip, proxy2-ip"
+	// We want the first IP in the list
+	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
+		// Get the first IP from the comma-separated list
+		ips := strings.Split(xff, ",")
+		if len(ips) > 0 {
+			return strings.TrimSpace(ips[0])
+		}
+	}
+
+	// Fallback to Gin's ClientIP method
+	return c.ClientIP()
+}
+
+// GetRealUserAgent extracts the real user agent from CloudFront headers.
+// CloudFront passes the original user agent in CloudFront-Viewer-User-Agent header.
+// Falls back to c.Request.UserAgent() if CloudFront headers are not present.
+func GetRealUserAgent(c *gin.Context) string {
+	// CloudFront sends the original user agent in CloudFront-Viewer-User-Agent
+	if viewerUA := c.GetHeader("CloudFront-Viewer-User-Agent"); viewerUA != "" {
+		return viewerUA
+	}
+
+	// Fallback to standard User-Agent header
+	return c.Request.UserAgent()
+}
+
 // Middleware to add observability fields to Gin context.
 func Middleware(l *Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -84,8 +117,8 @@ func Middleware(l *Logger) gin.HandlerFunc {
 			Field{"request_id", requestID},
 			Field{"path", c.Request.URL.Path},
 			Field{"method", c.Request.Method},
-			Field{"client_ip", c.ClientIP()},
-			Field{"user_agent", c.Request.UserAgent()},
+			Field{"client_ip", GetRealClientIP(c)},
+			Field{"user_agent", GetRealUserAgent(c)},
 		)
 
 		// Add content length if present

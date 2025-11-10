@@ -65,9 +65,9 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 		return
 	}
 
-	// Get IP and User-Agent
-	ipAddress := c.ClientIP()
-	userAgent := c.Request.UserAgent()
+	// Get real IP and User-Agent (from CloudFront headers if available)
+	ipAddress := observability.GetRealClientIP(c)
+	userAgent := observability.GetRealUserAgent(c)
 
 	processorReq := processor.SignupUserRequest{
 		Email:            req.Email,
