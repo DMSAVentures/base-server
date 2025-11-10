@@ -19,16 +19,18 @@ import (
 )
 
 type Handler struct {
-	processor processor.WaitlistProcessor
-	logger    *observability.Logger
-	baseURL   string
+	processor          processor.WaitlistProcessor
+	positionCalculator *processor.PositionCalculator
+	logger             *observability.Logger
+	baseURL            string
 }
 
-func New(processor processor.WaitlistProcessor, logger *observability.Logger, baseURL string) Handler {
+func New(processor processor.WaitlistProcessor, positionCalculator *processor.PositionCalculator, logger *observability.Logger, baseURL string) Handler {
 	return Handler{
-		processor: processor,
-		logger:    logger,
-		baseURL:   baseURL,
+		processor:          processor,
+		positionCalculator: positionCalculator,
+		logger:             logger,
+		baseURL:            baseURL,
 	}
 }
 
@@ -739,5 +741,53 @@ func (h *Handler) HandleResendVerification(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Verification email sent successfully",
 		"sent_at": strconv.FormatInt(c.Request.Context().Value("timestamp").(int64), 10),
+	})
+}
+
+// HandleRecalculatePositions handles POST /api/v1/campaigns/:campaign_id/positions/recalculate
+// Admin endpoint to manually trigger position recalculation for a campaign
+func (h *Handler) HandleRecalculatePositions(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get account ID from context
+	accountIDStr, exists := c.Get("Account-ID")
+	if !exists {
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		return
+	}
+
+	accountID, err := uuid.Parse(accountIDStr.(string))
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse account ID", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		return
+	}
+
+	// Get campaign ID from path
+	campaignIDStr := c.Param("campaign_id")
+	campaignID, err := uuid.Parse(campaignIDStr)
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse campaign ID", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		return
+	}
+
+	// Verify campaign ownership
+	err = h.processor.VerifyCampaignOwnership(ctx, accountID, campaignID)
+	if err != nil {
+		apierrors.RespondWithError(c, err)
+		return
+	}
+
+	// Trigger position recalculation
+	err = h.positionCalculator.CalculatePositionsForCampaign(ctx, campaignID)
+	if err != nil {
+		apierrors.RespondWithError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "Positions recalculated successfully",
+		"campaign_id": campaignID,
 	})
 }

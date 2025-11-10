@@ -626,3 +626,53 @@ func (s *Store) CountWaitlistUsersWithFilters(ctx context.Context, campaignID uu
 	}
 	return count, nil
 }
+
+const sqlGetAllWaitlistUsersForPositionCalculation = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE campaign_id = $1 AND deleted_at IS NULL
+ORDER BY created_at ASC, id ASC
+`
+
+// GetAllWaitlistUsersForPositionCalculation retrieves all waitlist users for a campaign for position calculation
+// Returns users ordered by created_at ASC, id ASC (no pagination)
+func (s *Store) GetAllWaitlistUsersForPositionCalculation(ctx context.Context, campaignID uuid.UUID) ([]WaitlistUser, error) {
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, sqlGetAllWaitlistUsersForPositionCalculation, campaignID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get all waitlist users for position calculation", err)
+		return nil, fmt.Errorf("failed to get all waitlist users for position calculation: %w", err)
+	}
+	return users, nil
+}
+
+const sqlBulkUpdateWaitlistUserPositions = `
+UPDATE waitlist_users
+SET position = data.new_position,
+    updated_at = CURRENT_TIMESTAMP
+FROM (SELECT unnest($1::uuid[]) AS user_id, unnest($2::int[]) AS new_position) AS data
+WHERE waitlist_users.id = data.user_id
+`
+
+// BulkUpdateWaitlistUserPositions updates positions for multiple users in a single query
+func (s *Store) BulkUpdateWaitlistUserPositions(ctx context.Context, userIDs []uuid.UUID, positions []int) error {
+	if len(userIDs) != len(positions) {
+		return fmt.Errorf("userIDs and positions must have same length")
+	}
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Convert UUIDs to strings for the array
+	userIDStrings := make([]string, len(userIDs))
+	for i, id := range userIDs {
+		userIDStrings[i] = id.String()
+	}
+
+	_, err := s.db.ExecContext(ctx, sqlBulkUpdateWaitlistUserPositions, userIDStrings, positions)
+	if err != nil {
+		s.logger.Error(ctx, "failed to bulk update waitlist user positions", err)
+		return fmt.Errorf("failed to bulk update waitlist user positions: %w", err)
+	}
+	return nil
+}
