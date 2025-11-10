@@ -42,6 +42,7 @@ import (
 	webhookService "base-server/internal/webhooks/service"
 	webhookWorker "base-server/internal/webhooks/worker"
 	"base-server/internal/workers"
+	positionWorker "base-server/internal/workers/position"
 )
 
 // Dependencies holds all initialized application dependencies
@@ -64,9 +65,10 @@ type Dependencies struct {
 	WebhookHandler       *webhookHandler.Handler
 
 	// Background workers
-	WebhookConsumer workers.EventConsumer
-	EmailConsumer   workers.EventConsumer
-	WebhookWorker   *webhookWorker.WebhookWorker
+	WebhookConsumer  workers.EventConsumer
+	EmailConsumer    workers.EventConsumer
+	PositionConsumer workers.EventConsumer
+	WebhookWorker    *webhookWorker.WebhookWorker
 
 	// Kafka clients (for cleanup)
 	KafkaProducer *kafkaClient.Producer
@@ -157,9 +159,10 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	campaignProc := campaignProcessor.New(&deps.Store, logger)
 	deps.CampaignHandler = campaignHandler.New(campaignProc, logger)
 
-	// Initialize waitlist processor and handler
+	// Initialize waitlist processor, position calculator, and handler
 	waitlistProc := waitlistProcessor.New(&deps.Store, logger, eventDispatcher)
-	deps.WaitlistHandler = waitlistHandler.New(waitlistProc, logger, cfg.Services.WebAppURI)
+	positionCalculator := waitlistProcessor.NewPositionCalculator(&deps.Store, logger)
+	deps.WaitlistHandler = waitlistHandler.New(waitlistProc, positionCalculator, logger, cfg.Services.WebAppURI)
 
 	// Initialize analytics processor and handler
 	analyticsProc := analyticsProcessor.New(&deps.Store, logger)
@@ -196,6 +199,12 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	emailConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-email", cfg.Kafka.Topic)
 	emailConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.EmailWorkers
 	deps.EmailConsumer = workers.NewConsumer(emailConsumerConfig, emailEvtProcessor, logger)
+
+	// Initialize position calculation event processor and consumer with worker pool
+	positionEvtProcessor := positionWorker.NewProcessor(positionCalculator, logger)
+	positionConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-position", cfg.Kafka.Topic)
+	positionConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.PositionWorkers
+	deps.PositionConsumer = workers.NewConsumer(positionConsumerConfig, positionEvtProcessor, logger)
 
 	return deps, nil
 }

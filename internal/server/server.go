@@ -94,6 +94,13 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Start position calculation event consumer (calculates waitlist positions)
+	go func() {
+		if err := s.deps.PositionConsumer.Start(ctx); err != nil {
+			s.logger.Error(ctx, "position calculation consumer stopped with error", err)
+		}
+	}()
+
 	// Create HTTP server
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.config.Server.Port),
@@ -129,6 +136,7 @@ func (s *Server) WaitForShutdown(ctx context.Context) error {
 	s.deps.WebhookWorker.Stop()
 	s.deps.WebhookConsumer.Stop()
 	s.deps.EmailConsumer.Stop()
+	s.deps.PositionConsumer.Stop()
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling

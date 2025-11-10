@@ -100,6 +100,9 @@ func (a *API) RegisterRoutes() {
 			campaignsGroup.DELETE("/:campaign_id", a.campaignHandler.HandleDeleteCampaign)
 			campaignsGroup.PATCH("/:campaign_id/status", a.campaignHandler.HandleUpdateCampaignStatus)
 
+			// Position calculation admin routes
+			campaignsGroup.POST("/:campaign_id/positions/recalculate", a.waitlistHandler.HandleRecalculatePositions)
+
 			// Waitlist Users routes
 			usersGroup := campaignsGroup.Group("/:campaign_id/users")
 			{

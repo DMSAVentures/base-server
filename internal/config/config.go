@@ -57,8 +57,9 @@ type KafkaConfig struct {
 
 // WorkerPoolConfig holds worker pool configuration for event processing
 type WorkerPoolConfig struct {
-	WebhookWorkers int // Number of workers for webhook event processing
-	EmailWorkers   int // Number of workers for email event processing
+	WebhookWorkers  int // Number of workers for webhook event processing
+	EmailWorkers    int // Number of workers for email event processing
+	PositionWorkers int // Number of workers for position calculation event processing
 }
 
 // ServerConfig holds HTTP server configuration
@@ -147,6 +148,12 @@ func Load() (*Config, error) {
 	cfg.WorkerPool.EmailWorkers, err = strconv.Atoi(emailWorkers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse EMAIL_WORKERS: %w", err)
+	}
+
+	positionWorkers := getEnvWithDefault("POSITION_WORKERS", "3")
+	cfg.WorkerPool.PositionWorkers, err = strconv.Atoi(positionWorkers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse POSITION_WORKERS: %w", err)
 	}
 
 	// Server configuration

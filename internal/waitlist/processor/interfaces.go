@@ -24,6 +24,9 @@ type WaitlistStore interface {
 	VerifyWaitlistUserEmail(ctx context.Context, userID uuid.UUID) error
 	IncrementVerifiedReferralCount(ctx context.Context, userID uuid.UUID) error
 	UpdateVerificationToken(ctx context.Context, userID uuid.UUID, token string) error
+	// Position calculation methods
+	GetAllWaitlistUsersForPositionCalculation(ctx context.Context, campaignID uuid.UUID) ([]store.WaitlistUser, error)
+	BulkUpdateWaitlistUserPositions(ctx context.Context, userIDs []uuid.UUID, positions []int) error
 }
 
 // EventDispatcher defines the event operations required by WaitlistProcessor

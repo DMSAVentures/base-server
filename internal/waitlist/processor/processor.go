@@ -139,13 +139,9 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 		return SignupUserResponse{}, fmt.Errorf("failed to generate verification token: %w", err)
 	}
 
-	// Calculate position (total current users + 1)
-	currentCount, err := p.store.CountWaitlistUsersByCampaign(ctx, campaignID)
-	if err != nil {
-		p.logger.Error(ctx, "failed to count users", err)
-		return SignupUserResponse{}, err
-	}
-	position := currentCount + 1
+	// Position will be calculated asynchronously by the position calculation worker
+	// Set to -1 to indicate "calculating" or "not yet calculated"
+	position := -1
 
 	// Convert custom fields to JSONB metadata
 	metadata := store.JSONB{}
@@ -653,4 +649,9 @@ func isValidUserStatus(status string) bool {
 		store.WaitlistUserStatusBlocked:   true,
 	}
 	return validStatuses[status]
+}
+
+// VerifyCampaignOwnership verifies that a campaign belongs to an account (exported for handler use)
+func (p *WaitlistProcessor) VerifyCampaignOwnership(ctx context.Context, accountID, campaignID uuid.UUID) error {
+	return p.verifyCampaignAccess(ctx, accountID, campaignID)
 }
