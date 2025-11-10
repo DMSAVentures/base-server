@@ -101,8 +101,8 @@ func (h *Handler) HandleTrackReferral(c *gin.Context) {
 		return
 	}
 
-	// Get IP address
-	ipAddress := c.ClientIP()
+	// Get real IP address (from CloudFront headers if available)
+	ipAddress := observability.GetRealClientIP(c)
 
 	processorReq := processor.TrackReferralRequest{
 		ReferralCode: req.ReferralCode,
