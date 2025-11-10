@@ -28,7 +28,7 @@ func NewProducer(config ProducerConfig, logger *observability.Logger) *Producer 
 		Topic:    config.Topic,
 		Balancer: &kafka.LeastBytes{},
 		// Async writes for better performance
-		Async: false,
+		Async: true,
 		// Compression for better throughput
 		Compression: kafka.Snappy,
 		// Batching for efficiency
