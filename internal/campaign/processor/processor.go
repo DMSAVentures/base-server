@@ -286,6 +286,62 @@ func (p *CampaignProcessor) DeleteCampaign(ctx context.Context, accountID, campa
 	return nil
 }
 
+// UpdateReferralConfigRequest represents a request to update referral configuration
+type UpdateReferralConfigRequest struct {
+	PositionsPerReferral int  `json:"positions_per_referral" binding:"min=1,max=100"`
+	VerifiedOnly         bool `json:"verified_only"`
+}
+
+// UpdateReferralConfig updates the referral configuration for a campaign
+// This allows configuring how many positions a user jumps per referral
+func (p *CampaignProcessor) UpdateReferralConfig(ctx context.Context, accountID, campaignID uuid.UUID, req UpdateReferralConfigRequest) (store.Campaign, error) {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "account_id", Value: accountID.String()},
+		observability.Field{Key: "campaign_id", Value: campaignID.String()},
+		observability.Field{Key: "positions_per_referral", Value: req.PositionsPerReferral},
+	)
+
+	// Get existing campaign to preserve other referral config settings
+	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return store.Campaign{}, ErrCampaignNotFound
+		}
+		p.logger.Error(ctx, "failed to get campaign", err)
+		return store.Campaign{}, err
+	}
+
+	// Verify campaign belongs to account
+	if campaign.AccountID != accountID {
+		return store.Campaign{}, ErrUnauthorized
+	}
+
+	// Update referral config with new values
+	referralConfig := campaign.ReferralConfig
+	if referralConfig == nil {
+		referralConfig = store.JSONB{}
+	}
+	referralConfig["positions_per_referral"] = req.PositionsPerReferral
+	referralConfig["verified_only"] = req.VerifiedOnly
+
+	// Update campaign
+	params := store.UpdateCampaignParams{
+		ReferralConfig: referralConfig,
+	}
+
+	updatedCampaign, err := p.store.UpdateCampaign(ctx, accountID, campaignID, params)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return store.Campaign{}, ErrCampaignNotFound
+		}
+		p.logger.Error(ctx, "failed to update referral config", err)
+		return store.Campaign{}, err
+	}
+
+	p.logger.Info(ctx, "referral config updated successfully")
+	return updatedCampaign, nil
+}
+
 // Helper functions
 
 func isValidCampaignStatus(status string) bool {

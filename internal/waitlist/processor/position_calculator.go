@@ -159,3 +159,107 @@ func (pc *PositionCalculator) getCampaignLock(campaignID uuid.UUID) *sync.Mutex 
 	actual, _ := pc.campaignLocks.LoadOrStore(campaignID, &sync.Mutex{})
 	return actual.(*sync.Mutex)
 }
+
+// CalculateUserPosition calculates and updates position for a single user using formula-based approach
+// This method is LOCK-FREE and updates only the specified user's position (single row UPDATE)
+// Formula: position = original_position - (referral_count × positions_per_referral)
+// This approach eliminates database lock contention by avoiding full campaign scans
+func (pc *PositionCalculator) CalculateUserPosition(ctx context.Context, userID uuid.UUID) error {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "user_id", Value: userID.String()},
+		observability.Field{Key: "operation", Value: "calculate_user_position"},
+	)
+
+	pc.logger.Info(ctx, "calculating position for user")
+
+	// 1. Get user
+	user, err := pc.store.GetWaitlistUserByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return ErrUserNotFound
+		}
+		pc.logger.Error(ctx, "failed to get user", err)
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "campaign_id", Value: user.CampaignID.String()},
+	)
+
+	// 2. Get campaign to check configuration
+	campaign, err := pc.store.GetCampaignByID(ctx, user.CampaignID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return ErrCampaignNotFound
+		}
+		pc.logger.Error(ctx, "failed to get campaign", err)
+		return fmt.Errorf("failed to get campaign: %w", err)
+	}
+
+	// 3. Get positions_per_referral from campaign config (default 1)
+	positionsPerReferral := 1
+	if campaign.ReferralConfig != nil {
+		if val, ok := campaign.ReferralConfig["positions_per_referral"].(float64); ok {
+			positionsPerReferral = int(val)
+			// Enforce maximum to prevent abuse
+			if positionsPerReferral > 100 {
+				positionsPerReferral = 100
+			}
+			if positionsPerReferral < 1 {
+				positionsPerReferral = 1
+			}
+		}
+	}
+
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "positions_per_referral", Value: positionsPerReferral},
+	)
+
+	// 4. Check if email verification is required
+	emailVerificationRequired := false
+	if campaign.EmailConfig != nil {
+		if verificationRequired, ok := campaign.EmailConfig["verification_required"].(bool); ok {
+			emailVerificationRequired = verificationRequired
+		}
+	}
+
+	// 5. Determine which referral count to use
+	referralCount := user.ReferralCount
+	if emailVerificationRequired {
+		referralCount = user.VerifiedReferralCount
+	}
+
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "referral_count", Value: referralCount},
+		observability.Field{Key: "original_position", Value: user.OriginalPosition},
+	)
+
+	// 6. Calculate new position using formula
+	// position = original_position - (referral_count × positions_per_referral)
+	newPosition := user.OriginalPosition - (referralCount * positionsPerReferral)
+	if newPosition < 1 {
+		newPosition = 1
+	}
+
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "old_position", Value: user.Position},
+		observability.Field{Key: "new_position", Value: newPosition},
+	)
+
+	// 7. Update position only if changed (single row UPDATE - minimal locking)
+	if newPosition != user.Position {
+		err = pc.store.UpdateWaitlistUserPosition(ctx, userID, newPosition)
+		if err != nil {
+			pc.logger.Error(ctx, "failed to update user position", err)
+			return fmt.Errorf("failed to update position: %w", err)
+		}
+		pc.logger.Info(ctx, "successfully updated user position")
+	} else {
+		pc.logger.Info(ctx, "position unchanged, skipping update")
+	}
+
+	return nil
+}
+
+// ErrUserNotFound is returned when a user is not found
+var ErrUserNotFound = errors.New("user not found")

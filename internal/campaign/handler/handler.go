@@ -416,3 +416,67 @@ func (h *Handler) HandleUpdateCampaignStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, campaign)
 }
+
+// UpdateReferralConfigRequest represents the HTTP request for updating referral configuration
+type UpdateReferralConfigRequest struct {
+	PositionsPerReferral int  `json:"positions_per_referral" binding:"required,min=1,max=100"`
+	VerifiedOnly         bool `json:"verified_only"`
+}
+
+// HandleUpdateReferralConfig updates the referral configuration for a campaign
+// PUT /api/campaigns/:campaign_id/referral-config
+func (h *Handler) HandleUpdateReferralConfig(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get account ID from context
+	accountIDStr, exists := c.Get("Account-ID")
+	if !exists {
+		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
+		return
+	}
+
+	accountID, err := uuid.Parse(accountIDStr.(string))
+	if err != nil {
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
+		return
+	}
+
+	// Add account_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
+
+	// Get campaign ID from path
+	campaignIDStr := c.Param("campaign_id")
+	campaignID, err := uuid.Parse(campaignIDStr)
+	if err != nil {
+		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+		return
+	}
+
+	// Add campaign_id to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
+
+	var req UpdateReferralConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		apierrors.RespondWithValidationError(c, err)
+		return
+	}
+
+	// Add referral config to observability context for comprehensive logging
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "positions_per_referral", Value: req.PositionsPerReferral},
+		observability.Field{Key: "verified_only", Value: req.VerifiedOnly},
+	)
+
+	processorReq := processor.UpdateReferralConfigRequest{
+		PositionsPerReferral: req.PositionsPerReferral,
+		VerifiedOnly:         req.VerifiedOnly,
+	}
+
+	campaign, err := h.processor.UpdateReferralConfig(ctx, accountID, campaignID, processorReq)
+	if err != nil {
+		apierrors.RespondWithError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, campaign)
+}

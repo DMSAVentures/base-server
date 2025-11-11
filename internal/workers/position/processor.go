@@ -26,6 +26,7 @@ func NewProcessor(positionCalculator *processor.PositionCalculator, logger *obse
 }
 
 // Process handles user.created and user.verified events to trigger position calculation
+// Uses formula-based calculation for single user (LOCK-FREE, single row UPDATE)
 func (p *Processor) Process(ctx context.Context, event workers.EventMessage) error {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "event_id", Value: event.ID},
@@ -47,27 +48,52 @@ func (p *Processor) Process(ctx context.Context, event workers.EventMessage) err
 		return nil
 	}
 
-	campaignID, err := uuid.Parse(campaignIDStr)
+	_, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		p.logger.Error(ctx, "invalid campaign_id format", err)
 		// Skip this event - it's malformed
 		return nil
 	}
 
+	// Extract user_id from event data
+	// The event.Data contains a "user" map with the user details
+	userData, ok := event.Data["user"].(map[string]interface{})
+	if !ok {
+		p.logger.Error(ctx, "event missing user data", fmt.Errorf("invalid or missing user data"))
+		// Skip this event - it's malformed
+		return nil
+	}
+
+	userIDStr, ok := userData["id"].(string)
+	if !ok || userIDStr == "" {
+		p.logger.Error(ctx, "event missing user_id", fmt.Errorf("invalid or missing user_id"))
+		// Skip this event - it's malformed
+		return nil
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		p.logger.Error(ctx, "invalid user_id format", err)
+		// Skip this event - it's malformed
+		return nil
+	}
+
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
+		observability.Field{Key: "campaign_id", Value: campaignIDStr},
+		observability.Field{Key: "user_id", Value: userID.String()},
 	)
 
 	p.logger.Info(ctx, fmt.Sprintf("processing %s event for position calculation", event.Type))
 
-	// Trigger position calculation for the campaign
-	err = p.positionCalculator.CalculatePositionsForCampaign(ctx, campaignID)
+	// Calculate position for single user only (LOCK-FREE approach)
+	// This updates only ONE row in the database, eliminating lock contention
+	err = p.positionCalculator.CalculateUserPosition(ctx, userID)
 	if err != nil {
-		p.logger.Error(ctx, "failed to calculate positions for campaign", err)
-		return fmt.Errorf("failed to calculate positions: %w", err)
+		p.logger.Error(ctx, "failed to calculate user position", err)
+		return fmt.Errorf("failed to calculate position: %w", err)
 	}
 
-	p.logger.Info(ctx, "successfully processed event and calculated positions")
+	p.logger.Info(ctx, "successfully processed event and calculated user position")
 	return nil
 }
 
