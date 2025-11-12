@@ -17,6 +17,7 @@ type Config struct {
 	Auth       AuthConfig
 	Services   ServicesConfig
 	Kafka      KafkaConfig
+	Redis      RedisConfig
 	WorkerPool WorkerPoolConfig
 	Server     ServerConfig
 }
@@ -53,6 +54,15 @@ type KafkaConfig struct {
 	Brokers       string
 	Topic         string
 	ConsumerGroup string
+}
+
+// RedisConfig holds Redis configuration for leaderboards and caching
+type RedisConfig struct {
+	Host     string
+	Port     int
+	Password string
+	DB       int
+	Enabled  bool
 }
 
 // WorkerPoolConfig holds worker pool configuration for event processing
@@ -136,6 +146,25 @@ func Load() (*Config, error) {
 	}
 	cfg.Kafka.Topic = getEnvWithDefault("KAFKA_TOPIC", "webhook-events")
 	cfg.Kafka.ConsumerGroup = getEnvWithDefault("KAFKA_CONSUMER_GROUP", "webhook-consumers")
+
+	// Redis configuration (optional for leaderboards)
+	redisEnabled := getEnvWithDefault("REDIS_ENABLED", "false")
+	cfg.Redis.Enabled = redisEnabled == "true" || redisEnabled == "1"
+
+	if cfg.Redis.Enabled {
+		cfg.Redis.Host = getEnvWithDefault("REDIS_HOST", "localhost")
+		redisPort := getEnvWithDefault("REDIS_PORT", "6379")
+		cfg.Redis.Port, err = strconv.Atoi(redisPort)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse REDIS_PORT: %w", err)
+		}
+		cfg.Redis.Password = getEnvWithDefault("REDIS_PASSWORD", "")
+		redisDB := getEnvWithDefault("REDIS_DB", "0")
+		cfg.Redis.DB, err = strconv.Atoi(redisDB)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse REDIS_DB: %w", err)
+		}
+	}
 
 	// Worker pool configuration
 	webhookWorkers := getEnvWithDefault("WEBHOOK_WORKERS", "10")

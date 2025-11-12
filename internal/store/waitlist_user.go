@@ -676,3 +676,56 @@ func (s *Store) BulkUpdateWaitlistUserPositions(ctx context.Context, userIDs []u
 	}
 	return nil
 }
+
+const sqlGetTopWaitlistUsers = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE campaign_id = $1 AND deleted_at IS NULL
+ORDER BY position ASC
+LIMIT $2
+`
+
+// GetTopWaitlistUsers retrieves the top N users by position
+func (s *Store) GetTopWaitlistUsers(ctx context.Context, campaignID uuid.UUID, limit int) ([]WaitlistUser, error) {
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, sqlGetTopWaitlistUsers, campaignID, limit)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get top waitlist users", err)
+		return nil, fmt.Errorf("failed to get top waitlist users: %w", err)
+	}
+	return users, nil
+}
+
+const sqlGetWaitlistUsersByPositionRange = `
+SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+FROM waitlist_users
+WHERE campaign_id = $1 AND position >= $2 AND position <= $3 AND deleted_at IS NULL
+ORDER BY position ASC
+`
+
+// GetWaitlistUsersByPositionRange retrieves users within a position range
+func (s *Store) GetWaitlistUsersByPositionRange(ctx context.Context, campaignID uuid.UUID, startPosition, endPosition int) ([]WaitlistUser, error) {
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, sqlGetWaitlistUsersByPositionRange, campaignID, startPosition, endPosition)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get waitlist users by position range", err)
+		return nil, fmt.Errorf("failed to get waitlist users by position range: %w", err)
+	}
+	return users, nil
+}
+
+const sqlGetWaitlistUserCount = `
+SELECT COUNT(*) FROM waitlist_users
+WHERE campaign_id = $1 AND deleted_at IS NULL
+`
+
+// GetWaitlistUserCount returns the total number of users in a campaign
+func (s *Store) GetWaitlistUserCount(ctx context.Context, campaignID uuid.UUID) (int, error) {
+	var count int
+	err := s.db.GetContext(ctx, &count, sqlGetWaitlistUserCount, campaignID)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get waitlist user count", err)
+		return 0, fmt.Errorf("failed to get waitlist user count: %w", err)
+	}
+	return count, nil
+}
