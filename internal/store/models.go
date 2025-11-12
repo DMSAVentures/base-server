@@ -115,6 +115,13 @@ type Account struct {
 	StripeCustomerID *string    `db:"stripe_customer_id" json:"stripe_customer_id,omitempty"`
 	TrialEndsAt      *time.Time `db:"trial_ends_at" json:"trial_ends_at,omitempty"`
 	Settings         JSONB      `db:"settings" json:"settings"`
+
+	// Leaderboard-as-a-Service features
+	RateLimitRPM     int  `db:"rate_limit_rpm" json:"rate_limit_rpm"`
+	RedisEnabled     bool `db:"redis_enabled" json:"redis_enabled"`
+	WebhooksEnabled  bool `db:"webhooks_enabled" json:"webhooks_enabled"`
+	AnalyticsEnabled bool `db:"analytics_enabled" json:"analytics_enabled"`
+
 	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt        time.Time  `db:"updated_at" json:"updated_at"`
 	DeletedAt        *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
