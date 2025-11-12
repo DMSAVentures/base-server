@@ -11,39 +11,39 @@ import (
 	"github.com/google/uuid"
 )
 
-// CustomerContextKey is the key used to store customer in request context
+// AccountContextKey is the key used to store account in request context
 type contextKey string
 
-const CustomerContextKey contextKey = "customer"
+const AccountContextKey contextKey = "account"
 
 // Middleware creates a Gin middleware for rate limiting
 func (s *Service) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
 
-		// Get customer from context (should be set by auth middleware)
-		customerVal := c.Request.Context().Value(CustomerContextKey)
-		if customerVal == nil {
-			// No customer in context, skip rate limiting (e.g., public endpoints)
+		// Get account from context (should be set by auth middleware)
+		accountVal := c.Request.Context().Value(AccountContextKey)
+		if accountVal == nil {
+			// No account in context, skip rate limiting (e.g., public endpoints)
 			c.Next()
 			return
 		}
 
-		customer, ok := customerVal.(store.Customer)
+		account, ok := accountVal.(store.Account)
 		if !ok {
-			s.logger.Error(ctx, "invalid customer in context", fmt.Errorf("type assertion failed"))
+			s.logger.Error(ctx, "invalid account in context", fmt.Errorf("type assertion failed"))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error", "code": "INTERNAL_ERROR"})
 			c.Abort()
 			return
 		}
 
 		ctx = observability.WithFields(ctx,
-			observability.Field{Key: "customer_id", Value: customer.ID.String()},
-			observability.Field{Key: "rate_limit_rpm", Value: customer.RateLimitRPM},
+			observability.Field{Key: "account_id", Value: account.ID.String()},
+			observability.Field{Key: "rate_limit_rpm", Value: account.RateLimitRPM},
 		)
 
 		// Check rate limit
-		result, err := s.CheckRateLimit(ctx, customer.ID, customer.RateLimitRPM)
+		result, err := s.CheckRateLimit(ctx, account.ID, account.RateLimitRPM)
 		if err != nil {
 			s.logger.Error(ctx, "rate limit check failed", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error", "code": "INTERNAL_ERROR"})
@@ -80,22 +80,22 @@ func (s *Service) Middleware() gin.HandlerFunc {
 	}
 }
 
-// SetCustomerContext is a helper to set customer in request context
-func SetCustomerContext(ctx context.Context, customer store.Customer) context.Context {
-	return context.WithValue(ctx, CustomerContextKey, customer)
+// SetAccountContext is a helper to set account in request context
+func SetAccountContext(ctx context.Context, account store.Account) context.Context {
+	return context.WithValue(ctx, AccountContextKey, account)
 }
 
-// GetCustomerFromContext retrieves customer from request context
-func GetCustomerFromContext(ctx context.Context) (store.Customer, bool) {
-	customer, ok := ctx.Value(CustomerContextKey).(store.Customer)
-	return customer, ok
+// GetAccountFromContext retrieves account from request context
+func GetAccountFromContext(ctx context.Context) (store.Account, bool) {
+	account, ok := ctx.Value(AccountContextKey).(store.Account)
+	return account, ok
 }
 
-// GetCustomerIDFromContext retrieves customer ID from request context
-func GetCustomerIDFromContext(ctx context.Context) (uuid.UUID, bool) {
-	customer, ok := GetCustomerFromContext(ctx)
+// GetAccountIDFromContext retrieves account ID from request context
+func GetAccountIDFromContext(ctx context.Context) (uuid.UUID, bool) {
+	account, ok := GetAccountFromContext(ctx)
 	if !ok {
 		return uuid.Nil, false
 	}
-	return customer.ID, true
+	return account.ID, true
 }

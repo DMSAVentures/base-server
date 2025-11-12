@@ -20,7 +20,7 @@ type RateLimitResult struct {
 	RetryAfterMs    int       `json:"retry_after_ms,omitempty"`
 }
 
-// Service handles rate limiting for customer API requests
+// Service handles rate limiting for account API requests
 type Service struct {
 	redis  *redis.Client
 	store  store.Store
@@ -36,37 +36,37 @@ func NewService(redis *redis.Client, store store.Store, logger *observability.Lo
 	}
 }
 
-// CheckRateLimit checks if a customer is within their rate limit
+// CheckRateLimit checks if an account is within their rate limit
 // Uses Redis for fast distributed rate limiting, falls back to PostgreSQL
-func (s *Service) CheckRateLimit(ctx context.Context, customerID uuid.UUID, rateLimit int) (RateLimitResult, error) {
+func (s *Service) CheckRateLimit(ctx context.Context, accountID uuid.UUID, rateLimit int) (RateLimitResult, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customerID.String()},
+		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "rate_limit", Value: rateLimit},
 	)
 
 	// Try Redis-based rate limiting first (preferred for performance)
 	if s.redis != nil && s.redis.IsEnabled() {
-		result, err := s.checkRateLimitRedis(ctx, customerID, rateLimit)
+		result, err := s.checkRateLimitRedis(ctx, accountID, rateLimit)
 		if err != nil {
 			// Redis failed, fall back to PostgreSQL
 			s.logger.Warn(ctx, "Redis rate limit check failed, falling back to PostgreSQL", err)
-			return s.checkRateLimitPostgres(ctx, customerID, rateLimit)
+			return s.checkRateLimitPostgres(ctx, accountID, rateLimit)
 		}
 		return result, nil
 	}
 
 	// Fall back to PostgreSQL if Redis is not available
-	return s.checkRateLimitPostgres(ctx, customerID, rateLimit)
+	return s.checkRateLimitPostgres(ctx, accountID, rateLimit)
 }
 
 // checkRateLimitRedis implements Redis-based rate limiting using sliding window
-func (s *Service) checkRateLimitRedis(ctx context.Context, customerID uuid.UUID, rateLimit int) (RateLimitResult, error) {
+func (s *Service) checkRateLimitRedis(ctx context.Context, accountID uuid.UUID, rateLimit int) (RateLimitResult, error) {
 	// Use sliding window rate limiting with Redis sorted sets
-	// Key: rl:{customer_id}
+	// Key: rl:{account_id}
 	// Members: request timestamps
 	// Score: timestamp in milliseconds
 
-	key := fmt.Sprintf("rl:%s", customerID.String())
+	key := fmt.Sprintf("rl:%s", accountID.String())
 	now := time.Now()
 	nowMs := now.UnixMilli()
 	windowStart := now.Add(-1 * time.Minute)
@@ -141,7 +141,7 @@ func (s *Service) checkRateLimitRedis(ctx context.Context, customerID uuid.UUID,
 }
 
 // checkRateLimitPostgres implements PostgreSQL-based rate limiting (fallback)
-func (s *Service) checkRateLimitPostgres(ctx context.Context, customerID uuid.UUID, rateLimit int) (RateLimitResult, error) {
+func (s *Service) checkRateLimitPostgres(ctx context.Context, accountID uuid.UUID, rateLimit int) (RateLimitResult, error) {
 	now := time.Now()
 	windowStart := now.Add(-1 * time.Minute).Truncate(time.Minute)
 	windowEnd := windowStart.Add(1 * time.Minute)
@@ -149,13 +149,13 @@ func (s *Service) checkRateLimitPostgres(ctx context.Context, customerID uuid.UU
 	// Try to get existing rate limit record
 	var rateLimitRecord store.RateLimit
 	query := `
-		SELECT id, customer_id, window_start, window_end, requests_count, requests_limit,
+		SELECT id, account_id, window_start, window_end, requests_count, requests_limit,
 		       is_throttled, created_at, updated_at
 		FROM rate_limits
-		WHERE customer_id = $1 AND window_start = $2
+		WHERE account_id = $1 AND window_start = $2
 	`
 
-	err := s.store.GetDB().GetContext(ctx, &rateLimitRecord, query, customerID, windowStart)
+	err := s.store.GetDB().GetContext(ctx, &rateLimitRecord, query, accountID, windowStart)
 	if err != nil && err.Error() != "sql: no rows in result set" {
 		return RateLimitResult{}, fmt.Errorf("failed to get rate limit record: %w", err)
 	}
@@ -163,14 +163,14 @@ func (s *Service) checkRateLimitPostgres(ctx context.Context, customerID uuid.UU
 	// If record doesn't exist, create it
 	if err != nil {
 		createQuery := `
-			INSERT INTO rate_limits (customer_id, window_start, window_end, requests_count, requests_limit, is_throttled)
+			INSERT INTO rate_limits (account_id, window_start, window_end, requests_count, requests_limit, is_throttled)
 			VALUES ($1, $2, $3, 1, $4, false)
-			RETURNING id, customer_id, window_start, window_end, requests_count, requests_limit,
+			RETURNING id, account_id, window_start, window_end, requests_count, requests_limit,
 			          is_throttled, created_at, updated_at
 		`
 
 		err = s.store.GetDB().GetContext(ctx, &rateLimitRecord, createQuery,
-			customerID, windowStart, windowEnd, rateLimit)
+			accountID, windowStart, windowEnd, rateLimit)
 		if err != nil {
 			return RateLimitResult{}, fmt.Errorf("failed to create rate limit record: %w", err)
 		}
@@ -223,15 +223,15 @@ func (s *Service) checkRateLimitPostgres(ctx context.Context, customerID uuid.UU
 	}, nil
 }
 
-// GetRateLimitStatus retrieves the current rate limit status for a customer
-func (s *Service) GetRateLimitStatus(ctx context.Context, customerID uuid.UUID, rateLimit int) (RateLimitResult, error) {
+// GetRateLimitStatus retrieves the current rate limit status for an account
+func (s *Service) GetRateLimitStatus(ctx context.Context, accountID uuid.UUID, rateLimit int) (RateLimitResult, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customerID.String()},
+		observability.Field{Key: "account_id", Value: accountID.String()},
 	)
 
 	// Try Redis first
 	if s.redis != nil && s.redis.IsEnabled() {
-		key := fmt.Sprintf("rl:%s", customerID.String())
+		key := fmt.Sprintf("rl:%s", accountID.String())
 		now := time.Now()
 		windowStart := now.Add(-1 * time.Minute)
 		windowStartMs := windowStart.UnixMilli()
@@ -242,7 +242,7 @@ func (s *Service) GetRateLimitStatus(ctx context.Context, customerID uuid.UUID, 
 			fmt.Sprintf("%d", now.UnixMilli())).Result()
 		if err != nil {
 			s.logger.Warn(ctx, "Redis status check failed, falling back to PostgreSQL", err)
-			return s.getRateLimitStatusPostgres(ctx, customerID, rateLimit)
+			return s.getRateLimitStatusPostgres(ctx, accountID, rateLimit)
 		}
 
 		return RateLimitResult{
@@ -254,24 +254,24 @@ func (s *Service) GetRateLimitStatus(ctx context.Context, customerID uuid.UUID, 
 	}
 
 	// Fall back to PostgreSQL
-	return s.getRateLimitStatusPostgres(ctx, customerID, rateLimit)
+	return s.getRateLimitStatusPostgres(ctx, accountID, rateLimit)
 }
 
 // getRateLimitStatusPostgres retrieves rate limit status from PostgreSQL
-func (s *Service) getRateLimitStatusPostgres(ctx context.Context, customerID uuid.UUID, rateLimit int) (RateLimitResult, error) {
+func (s *Service) getRateLimitStatusPostgres(ctx context.Context, accountID uuid.UUID, rateLimit int) (RateLimitResult, error) {
 	now := time.Now()
 	windowStart := now.Add(-1 * time.Minute).Truncate(time.Minute)
 	windowEnd := windowStart.Add(1 * time.Minute)
 
 	var rateLimitRecord store.RateLimit
 	query := `
-		SELECT id, customer_id, window_start, window_end, requests_count, requests_limit,
+		SELECT id, account_id, window_start, window_end, requests_count, requests_limit,
 		       is_throttled, created_at, updated_at
 		FROM rate_limits
-		WHERE customer_id = $1 AND window_start = $2
+		WHERE account_id = $1 AND window_start = $2
 	`
 
-	err := s.store.GetDB().GetContext(ctx, &rateLimitRecord, query, customerID, windowStart)
+	err := s.store.GetDB().GetContext(ctx, &rateLimitRecord, query, accountID, windowStart)
 	if err != nil {
 		// No record means no requests in this window
 		return RateLimitResult{

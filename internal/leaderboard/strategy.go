@@ -47,17 +47,17 @@ func NewHybridService(
 	}
 }
 
-// selectStrategy determines which strategy to use based on customer and campaign
-func (h *HybridService) selectStrategy(ctx context.Context, customer store.Customer, campaignID uuid.UUID, preferredStrategy Strategy) (Strategy, error) {
-	// If customer doesn't have Redis enabled in their plan, use formula
-	if !customer.RedisEnabled {
-		h.logger.Info(ctx, "using formula strategy: customer plan doesn't include Redis")
+// selectStrategy determines which strategy to use based on account and campaign
+func (h *HybridService) selectStrategy(ctx context.Context, account store.Account, campaignID uuid.UUID, preferredStrategy Strategy) (Strategy, error) {
+	// If account doesn't have Redis enabled in their plan, use formula
+	if !account.RedisEnabled {
+		h.logger.Info(ctx, "using formula strategy: account plan doesn't include Redis")
 		return StrategyFormula, nil
 	}
 
 	// If explicit strategy requested and allowed, use it
 	if preferredStrategy == StrategyFormula || preferredStrategy == StrategyRedis {
-		h.logger.Info(ctx, fmt.Sprintf("using %s strategy: explicit customer preference", preferredStrategy))
+		h.logger.Info(ctx, fmt.Sprintf("using %s strategy: explicit account preference", preferredStrategy))
 		return preferredStrategy, nil
 	}
 
@@ -87,24 +87,24 @@ func (h *HybridService) selectStrategy(ctx context.Context, customer store.Custo
 // UpdateUserPosition updates a user's position using the appropriate strategy
 func (h *HybridService) UpdateUserPosition(
 	ctx context.Context,
-	customer store.Customer,
+	account store.Account,
 	campaignID, userID uuid.UUID,
 	strategy Strategy,
 ) error {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 	)
 
-	selectedStrategy, err := h.selectStrategy(ctx, customer, campaignID, strategy)
+	selectedStrategy, err := h.selectStrategy(ctx, account, campaignID, strategy)
 	if err != nil {
 		return fmt.Errorf("failed to select strategy: %w", err)
 	}
 
 	switch selectedStrategy {
 	case StrategyRedis:
-		return h.updateUserPositionRedis(ctx, customer.ID, campaignID, userID)
+		return h.updateUserPositionRedis(ctx, account.ID, campaignID, userID)
 	case StrategyFormula:
 		return h.positionCalculator.CalculateUserPosition(ctx, userID)
 	default:
@@ -113,7 +113,7 @@ func (h *HybridService) UpdateUserPosition(
 }
 
 // updateUserPositionRedis updates position using Redis ZSET
-func (h *HybridService) updateUserPositionRedis(ctx context.Context, customerID, campaignID, userID uuid.UUID) error {
+func (h *HybridService) updateUserPositionRedis(ctx context.Context, accountID, campaignID, userID uuid.UUID) error {
 	// Get user data from PostgreSQL (source of truth)
 	user, err := h.store.GetWaitlistUserByID(ctx, userID)
 	if err != nil {
@@ -152,7 +152,7 @@ func (h *HybridService) updateUserPositionRedis(ctx context.Context, customerID,
 	}
 
 	// Update in Redis
-	err = h.redisService.UpdateScore(ctx, customerID, campaignID, userID, score)
+	err = h.redisService.UpdateScore(ctx, accountID, campaignID, userID, score)
 	if err != nil {
 		return fmt.Errorf("failed to update Redis score: %w", err)
 	}
@@ -174,24 +174,24 @@ func (h *HybridService) updateUserPositionRedis(ctx context.Context, customerID,
 // GetUserRank retrieves a user's rank using the appropriate strategy
 func (h *HybridService) GetUserRank(
 	ctx context.Context,
-	customer store.Customer,
+	account store.Account,
 	campaignID, userID uuid.UUID,
 	strategy Strategy,
 ) (int, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 	)
 
-	selectedStrategy, err := h.selectStrategy(ctx, customer, campaignID, strategy)
+	selectedStrategy, err := h.selectStrategy(ctx, account, campaignID, strategy)
 	if err != nil {
 		return 0, fmt.Errorf("failed to select strategy: %w", err)
 	}
 
 	switch selectedStrategy {
 	case StrategyRedis:
-		rank, err := h.redisService.GetRank(ctx, customer.ID, campaignID, userID)
+		rank, err := h.redisService.GetRank(ctx, account.ID, campaignID, userID)
 		if err != nil {
 			return 0, err
 		}
@@ -213,25 +213,25 @@ func (h *HybridService) GetUserRank(
 // GetTopUsers retrieves top N users using the appropriate strategy
 func (h *HybridService) GetTopUsers(
 	ctx context.Context,
-	customer store.Customer,
+	account store.Account,
 	campaignID uuid.UUID,
 	limit int,
 	strategy Strategy,
 ) ([]LeaderboardEntry, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "limit", Value: limit},
 	)
 
-	selectedStrategy, err := h.selectStrategy(ctx, customer, campaignID, strategy)
+	selectedStrategy, err := h.selectStrategy(ctx, account, campaignID, strategy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select strategy: %w", err)
 	}
 
 	switch selectedStrategy {
 	case StrategyRedis:
-		return h.redisService.GetTopN(ctx, customer.ID, campaignID, limit)
+		return h.redisService.GetTopN(ctx, account.ID, campaignID, limit)
 
 	case StrategyFormula:
 		// Get top users from PostgreSQL
@@ -258,26 +258,26 @@ func (h *HybridService) GetTopUsers(
 // GetUsersAround retrieves users around a specific user
 func (h *HybridService) GetUsersAround(
 	ctx context.Context,
-	customer store.Customer,
+	account store.Account,
 	campaignID, userID uuid.UUID,
 	radius int,
 	strategy Strategy,
 ) ([]LeaderboardEntry, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 		observability.Field{Key: "radius", Value: radius},
 	)
 
-	selectedStrategy, err := h.selectStrategy(ctx, customer, campaignID, strategy)
+	selectedStrategy, err := h.selectStrategy(ctx, account, campaignID, strategy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to select strategy: %w", err)
 	}
 
 	switch selectedStrategy {
 	case StrategyRedis:
-		return h.redisService.GetUsersAround(ctx, customer.ID, campaignID, userID, radius)
+		return h.redisService.GetUsersAround(ctx, account.ID, campaignID, userID, radius)
 
 	case StrategyFormula:
 		// Get user's position
@@ -316,42 +316,42 @@ func (h *HybridService) GetUsersAround(
 
 // SyncToRedis syncs a campaign's leaderboard from PostgreSQL to Redis
 // Used for migrating existing campaigns to Redis or recovering from Redis data loss
-func (h *HybridService) SyncToRedis(ctx context.Context, customer store.Customer, campaignID uuid.UUID) error {
-	if !customer.RedisEnabled {
-		return fmt.Errorf("customer doesn't have Redis enabled")
+func (h *HybridService) SyncToRedis(ctx context.Context, account store.Account, campaignID uuid.UUID) error {
+	if !account.RedisEnabled {
+		return fmt.Errorf("account doesn't have Redis enabled")
 	}
 
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "operation", Value: "sync_to_redis"},
 	)
 
 	h.logger.Info(ctx, "starting sync from PostgreSQL to Redis")
 
-	return h.redisService.SyncFromDatabase(ctx, customer.ID, campaignID)
+	return h.redisService.SyncFromDatabase(ctx, account.ID, campaignID)
 }
 
 // GetUserCount returns the total number of users in the leaderboard
 func (h *HybridService) GetUserCount(
 	ctx context.Context,
-	customer store.Customer,
+	account store.Account,
 	campaignID uuid.UUID,
 	strategy Strategy,
 ) (int, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 	)
 
-	selectedStrategy, err := h.selectStrategy(ctx, customer, campaignID, strategy)
+	selectedStrategy, err := h.selectStrategy(ctx, account, campaignID, strategy)
 	if err != nil {
 		return 0, fmt.Errorf("failed to select strategy: %w", err)
 	}
 
 	switch selectedStrategy {
 	case StrategyRedis:
-		count, err := h.redisService.GetUserCount(ctx, customer.ID, campaignID)
+		count, err := h.redisService.GetUserCount(ctx, account.ID, campaignID)
 		if err != nil {
 			return 0, err
 		}

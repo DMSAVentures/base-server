@@ -35,16 +35,16 @@ func NewRedisLeaderboardService(redis *redis.Client, store store.Store, logger *
 }
 
 // buildKey creates a namespaced Redis key for multi-tenancy
-// Format: lb:{customer_id}:{campaign_id}
-func (s *RedisLeaderboardService) buildKey(customerID, campaignID uuid.UUID) string {
-	return fmt.Sprintf("lb:%s:%s", customerID.String(), campaignID.String())
+// Format: lb:{account_id}:{campaign_id}
+func (s *RedisLeaderboardService) buildKey(accountID, campaignID uuid.UUID) string {
+	return fmt.Sprintf("lb:%s:%s", accountID.String(), campaignID.String())
 }
 
 // UpdateScore updates a user's score in the leaderboard
 // Score represents position (lower is better): score = original_position - (referrals × multiplier)
 func (s *RedisLeaderboardService) UpdateScore(
 	ctx context.Context,
-	customerID, campaignID, userID uuid.UUID,
+	accountID, campaignID, userID uuid.UUID,
 	score float64,
 ) error {
 	if !s.redis.IsEnabled() {
@@ -52,13 +52,13 @@ func (s *RedisLeaderboardService) UpdateScore(
 	}
 
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customerID.String()},
+		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 		observability.Field{Key: "score", Value: score},
 	)
 
-	key := s.buildKey(customerID, campaignID)
+	key := s.buildKey(accountID, campaignID)
 
 	err := s.redis.ZAdd(ctx, key, redisLib.Z{
 		Score:  score,
@@ -78,19 +78,19 @@ func (s *RedisLeaderboardService) UpdateScore(
 // Lower score = better rank (position 1 is best)
 func (s *RedisLeaderboardService) GetRank(
 	ctx context.Context,
-	customerID, campaignID, userID uuid.UUID,
+	accountID, campaignID, userID uuid.UUID,
 ) (int64, error) {
 	if !s.redis.IsEnabled() {
 		return 0, fmt.Errorf("Redis is not enabled")
 	}
 
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customerID.String()},
+		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 	)
 
-	key := s.buildKey(customerID, campaignID)
+	key := s.buildKey(accountID, campaignID)
 
 	// ZRank returns 0-indexed rank (ascending order by score)
 	rank, err := s.redis.ZRank(ctx, key, userID.String())
@@ -109,19 +109,19 @@ func (s *RedisLeaderboardService) GetRank(
 // GetScore returns the user's score in the leaderboard
 func (s *RedisLeaderboardService) GetScore(
 	ctx context.Context,
-	customerID, campaignID, userID uuid.UUID,
+	accountID, campaignID, userID uuid.UUID,
 ) (float64, error) {
 	if !s.redis.IsEnabled() {
 		return 0, fmt.Errorf("Redis is not enabled")
 	}
 
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customerID.String()},
+		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 	)
 
-	key := s.buildKey(customerID, campaignID)
+	key := s.buildKey(accountID, campaignID)
 
 	score, err := s.redis.ZScore(ctx, key, userID.String())
 	if err == redisLib.Nil {
@@ -138,7 +138,7 @@ func (s *RedisLeaderboardService) GetScore(
 // GetTopN returns the top N users in the leaderboard
 func (s *RedisLeaderboardService) GetTopN(
 	ctx context.Context,
-	customerID, campaignID uuid.UUID,
+	accountID, campaignID uuid.UUID,
 	limit int,
 ) ([]LeaderboardEntry, error) {
 	if !s.redis.IsEnabled() {
@@ -146,12 +146,12 @@ func (s *RedisLeaderboardService) GetTopN(
 	}
 
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customerID.String()},
+		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "limit", Value: limit},
 	)
 
-	key := s.buildKey(customerID, campaignID)
+	key := s.buildKey(accountID, campaignID)
 
 	// Get top N with scores (ascending order - lower score is better)
 	results, err := s.redis.ZRangeWithScores(ctx, key, 0, int64(limit-1))
@@ -179,13 +179,13 @@ func (s *RedisLeaderboardService) GetTopN(
 // GetUserCount returns the total number of users in the leaderboard
 func (s *RedisLeaderboardService) GetUserCount(
 	ctx context.Context,
-	customerID, campaignID uuid.UUID,
+	accountID, campaignID uuid.UUID,
 ) (int64, error) {
 	if !s.redis.IsEnabled() {
 		return 0, fmt.Errorf("Redis is not enabled")
 	}
 
-	key := s.buildKey(customerID, campaignID)
+	key := s.buildKey(accountID, campaignID)
 
 	count, err := s.redis.ZCard(ctx, key)
 	if err != nil {
@@ -199,19 +199,19 @@ func (s *RedisLeaderboardService) GetUserCount(
 // RemoveUser removes a user from the leaderboard
 func (s *RedisLeaderboardService) RemoveUser(
 	ctx context.Context,
-	customerID, campaignID, userID uuid.UUID,
+	accountID, campaignID, userID uuid.UUID,
 ) error {
 	if !s.redis.IsEnabled() {
 		return fmt.Errorf("Redis is not enabled")
 	}
 
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customerID.String()},
+		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 	)
 
-	key := s.buildKey(customerID, campaignID)
+	key := s.buildKey(accountID, campaignID)
 
 	err := s.redis.ZRem(ctx, key, userID.String())
 	if err != nil {
@@ -226,7 +226,7 @@ func (s *RedisLeaderboardService) RemoveUser(
 // GetUsersAround returns users around a specific user in the leaderboard
 func (s *RedisLeaderboardService) GetUsersAround(
 	ctx context.Context,
-	customerID, campaignID, userID uuid.UUID,
+	accountID, campaignID, userID uuid.UUID,
 	radius int,
 ) ([]LeaderboardEntry, error) {
 	if !s.redis.IsEnabled() {
@@ -234,14 +234,14 @@ func (s *RedisLeaderboardService) GetUsersAround(
 	}
 
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customerID.String()},
+		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 		observability.Field{Key: "radius", Value: radius},
 	)
 
 	// Get user's rank
-	rank, err := s.GetRank(ctx, customerID, campaignID, userID)
+	rank, err := s.GetRank(ctx, accountID, campaignID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func (s *RedisLeaderboardService) GetUsersAround(
 	}
 	stop := rank + int64(radius) - 1
 
-	key := s.buildKey(customerID, campaignID)
+	key := s.buildKey(accountID, campaignID)
 
 	// Get users in range
 	results, err := s.redis.ZRangeWithScores(ctx, key, start, stop)
@@ -277,14 +277,14 @@ func (s *RedisLeaderboardService) GetUsersAround(
 // SyncFromDatabase populates Redis from PostgreSQL (for initial load or recovery)
 func (s *RedisLeaderboardService) SyncFromDatabase(
 	ctx context.Context,
-	customerID, campaignID uuid.UUID,
+	accountID, campaignID uuid.UUID,
 ) error {
 	if !s.redis.IsEnabled() {
 		return fmt.Errorf("Redis is not enabled")
 	}
 
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customerID.String()},
+		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "operation", Value: "sync_from_database"},
 	)
@@ -303,7 +303,7 @@ func (s *RedisLeaderboardService) SyncFromDatabase(
 		return nil
 	}
 
-	key := s.buildKey(customerID, campaignID)
+	key := s.buildKey(accountID, campaignID)
 
 	// Build Redis ZADD command with all users
 	members := make([]redisLib.Z, len(users))

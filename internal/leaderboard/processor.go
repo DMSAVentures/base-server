@@ -44,9 +44,9 @@ type GetUserRankResponse struct {
 }
 
 // GetUserRank retrieves a user's rank in the leaderboard
-func (p *Processor) GetUserRank(ctx context.Context, customer store.Customer, req GetUserRankRequest) (GetUserRankResponse, error) {
+func (p *Processor) GetUserRank(ctx context.Context, account store.Account, req GetUserRankRequest) (GetUserRankResponse, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: req.CampaignID.String()},
 		observability.Field{Key: "user_id", Value: req.UserID.String()},
 	)
@@ -58,7 +58,7 @@ func (p *Processor) GetUserRank(ctx context.Context, customer store.Customer, re
 	}
 
 	// Get rank
-	rank, err := p.hybridService.GetUserRank(ctx, customer, req.CampaignID, req.UserID, strategy)
+	rank, err := p.hybridService.GetUserRank(ctx, account, req.CampaignID, req.UserID, strategy)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get user rank", err)
 		return GetUserRankResponse{}, fmt.Errorf("failed to get user rank: %w", err)
@@ -106,9 +106,9 @@ type GetTopUsersResponse struct {
 }
 
 // GetTopUsers retrieves the top N users in the leaderboard
-func (p *Processor) GetTopUsers(ctx context.Context, customer store.Customer, req GetTopUsersRequest) (GetTopUsersResponse, error) {
+func (p *Processor) GetTopUsers(ctx context.Context, account store.Account, req GetTopUsersRequest) (GetTopUsersResponse, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: req.CampaignID.String()},
 		observability.Field{Key: "limit", Value: req.Limit},
 	)
@@ -125,14 +125,14 @@ func (p *Processor) GetTopUsers(ctx context.Context, customer store.Customer, re
 	}
 
 	// Get top users
-	entries, err := p.hybridService.GetTopUsers(ctx, customer, req.CampaignID, req.Limit, strategy)
+	entries, err := p.hybridService.GetTopUsers(ctx, account, req.CampaignID, req.Limit, strategy)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get top users", err)
 		return GetTopUsersResponse{}, fmt.Errorf("failed to get top users: %w", err)
 	}
 
 	// Get total count
-	total, err := p.hybridService.GetUserCount(ctx, customer, req.CampaignID, strategy)
+	total, err := p.hybridService.GetUserCount(ctx, account, req.CampaignID, strategy)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get user count", err)
 		// Don't fail the request, just log the error
@@ -176,9 +176,9 @@ type GetUsersAroundResponse struct {
 }
 
 // GetUsersAround retrieves users around a specific user in the leaderboard
-func (p *Processor) GetUsersAround(ctx context.Context, customer store.Customer, req GetUsersAroundRequest) (GetUsersAroundResponse, error) {
+func (p *Processor) GetUsersAround(ctx context.Context, account store.Account, req GetUsersAroundRequest) (GetUsersAroundResponse, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: req.CampaignID.String()},
 		observability.Field{Key: "user_id", Value: req.UserID.String()},
 		observability.Field{Key: "radius", Value: req.Radius},
@@ -196,7 +196,7 @@ func (p *Processor) GetUsersAround(ctx context.Context, customer store.Customer,
 	}
 
 	// Get users around
-	entries, err := p.hybridService.GetUsersAround(ctx, customer, req.CampaignID, req.UserID, req.Radius, strategy)
+	entries, err := p.hybridService.GetUsersAround(ctx, account, req.CampaignID, req.UserID, req.Radius, strategy)
 	if err != nil {
 		p.logger.Error(ctx, "failed to get users around", err)
 		return GetUsersAroundResponse{}, fmt.Errorf("failed to get users around: %w", err)
@@ -238,9 +238,9 @@ type UpdateUserScoreResponse struct {
 }
 
 // UpdateUserScore updates a user's position in the leaderboard
-func (p *Processor) UpdateUserScore(ctx context.Context, customer store.Customer, req UpdateUserScoreRequest) (UpdateUserScoreResponse, error) {
+func (p *Processor) UpdateUserScore(ctx context.Context, account store.Account, req UpdateUserScoreRequest) (UpdateUserScoreResponse, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: req.CampaignID.String()},
 		observability.Field{Key: "user_id", Value: req.UserID.String()},
 	)
@@ -252,7 +252,7 @@ func (p *Processor) UpdateUserScore(ctx context.Context, customer store.Customer
 	}
 
 	// Update position
-	err := p.hybridService.UpdateUserPosition(ctx, customer, req.CampaignID, req.UserID, strategy)
+	err := p.hybridService.UpdateUserPosition(ctx, account, req.CampaignID, req.UserID, strategy)
 	if err != nil {
 		p.logger.Error(ctx, "failed to update user score", err)
 		return UpdateUserScoreResponse{}, fmt.Errorf("failed to update user score: %w", err)
@@ -280,13 +280,13 @@ type SyncToRedisResponse struct {
 }
 
 // SyncToRedis syncs a leaderboard from PostgreSQL to Redis
-func (p *Processor) SyncToRedis(ctx context.Context, customer store.Customer, req SyncToRedisRequest) (SyncToRedisResponse, error) {
+func (p *Processor) SyncToRedis(ctx context.Context, account store.Account, req SyncToRedisRequest) (SyncToRedisResponse, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "customer_id", Value: customer.ID.String()},
+		observability.Field{Key: "account_id", Value: account.ID.String()},
 		observability.Field{Key: "campaign_id", Value: req.CampaignID.String()},
 	)
 
-	err := p.hybridService.SyncToRedis(ctx, customer, req.CampaignID)
+	err := p.hybridService.SyncToRedis(ctx, account, req.CampaignID)
 	if err != nil {
 		p.logger.Error(ctx, "failed to sync to Redis", err)
 		return SyncToRedisResponse{}, fmt.Errorf("failed to sync to Redis: %w", err)

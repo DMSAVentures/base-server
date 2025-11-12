@@ -32,13 +32,13 @@ func (h *Handler) HandleGetUserRank(c *gin.Context) {
 	ctx := c.Request.Context()
 	startTime := time.Now()
 
-	// Get customer from context (set by auth middleware)
-	customerVal, exists := c.Get("customer")
+	// Get account from context (set by auth middleware)
+	accountVal, exists := c.Get("account")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized", "code": "UNAUTHORIZED"})
 		return
 	}
-	customer := customerVal.(store.Customer)
+	account := accountVal.(store.Account)
 
 	// Get API key ID for usage tracking
 	apiKeyIDVal, _ := c.Get("api_key_id")
@@ -56,10 +56,10 @@ func (h *Handler) HandleGetUserRank(c *gin.Context) {
 	}
 
 	// Track usage (async)
-	go h.trackUsage(ctx, customer.ID, &req.CampaignID, apiKeyID, store.UsageOperationGetRank, http.StatusOK, time.Since(startTime))
+	go h.trackUsage(ctx, account.ID, &req.CampaignID, apiKeyID, store.UsageOperationGetRank, http.StatusOK, time.Since(startTime))
 
 	// Process request
-	response, err := h.processor.GetUserRank(ctx, customer, req)
+	response, err := h.processor.GetUserRank(ctx, account, req)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
@@ -73,13 +73,13 @@ func (h *Handler) HandleGetTopUsers(c *gin.Context) {
 	ctx := c.Request.Context()
 	startTime := time.Now()
 
-	// Get customer from context
-	customerVal, exists := c.Get("customer")
+	// Get account from context
+	accountVal, exists := c.Get("account")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized", "code": "UNAUTHORIZED"})
 		return
 	}
-	customer := customerVal.(store.Customer)
+	account := accountVal.(store.Account)
 
 	// Get API key ID for usage tracking
 	apiKeyIDVal, _ := c.Get("api_key_id")
@@ -97,10 +97,10 @@ func (h *Handler) HandleGetTopUsers(c *gin.Context) {
 	}
 
 	// Track usage (async)
-	go h.trackUsage(ctx, customer.ID, &req.CampaignID, apiKeyID, store.UsageOperationGetTopN, http.StatusOK, time.Since(startTime))
+	go h.trackUsage(ctx, account.ID, &req.CampaignID, apiKeyID, store.UsageOperationGetTopN, http.StatusOK, time.Since(startTime))
 
 	// Process request
-	response, err := h.processor.GetTopUsers(ctx, customer, req)
+	response, err := h.processor.GetTopUsers(ctx, account, req)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
@@ -114,13 +114,13 @@ func (h *Handler) HandleGetUsersAround(c *gin.Context) {
 	ctx := c.Request.Context()
 	startTime := time.Now()
 
-	// Get customer from context
-	customerVal, exists := c.Get("customer")
+	// Get account from context
+	accountVal, exists := c.Get("account")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized", "code": "UNAUTHORIZED"})
 		return
 	}
-	customer := customerVal.(store.Customer)
+	account := accountVal.(store.Account)
 
 	// Get API key ID for usage tracking
 	apiKeyIDVal, _ := c.Get("api_key_id")
@@ -138,10 +138,10 @@ func (h *Handler) HandleGetUsersAround(c *gin.Context) {
 	}
 
 	// Track usage (async)
-	go h.trackUsage(ctx, customer.ID, &req.CampaignID, apiKeyID, store.UsageOperationGetUsersAround, http.StatusOK, time.Since(startTime))
+	go h.trackUsage(ctx, account.ID, &req.CampaignID, apiKeyID, store.UsageOperationGetUsersAround, http.StatusOK, time.Since(startTime))
 
 	// Process request
-	response, err := h.processor.GetUsersAround(ctx, customer, req)
+	response, err := h.processor.GetUsersAround(ctx, account, req)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
@@ -155,13 +155,13 @@ func (h *Handler) HandleUpdateUserScore(c *gin.Context) {
 	ctx := c.Request.Context()
 	startTime := time.Now()
 
-	// Get customer from context
-	customerVal, exists := c.Get("customer")
+	// Get account from context
+	accountVal, exists := c.Get("account")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized", "code": "UNAUTHORIZED"})
 		return
 	}
-	customer := customerVal.(store.Customer)
+	account := accountVal.(store.Account)
 
 	// Get API key ID for usage tracking
 	apiKeyIDVal, _ := c.Get("api_key_id")
@@ -179,10 +179,10 @@ func (h *Handler) HandleUpdateUserScore(c *gin.Context) {
 	}
 
 	// Track usage (async)
-	go h.trackUsage(ctx, customer.ID, &req.CampaignID, apiKeyID, store.UsageOperationUpdateScore, http.StatusOK, time.Since(startTime))
+	go h.trackUsage(ctx, account.ID, &req.CampaignID, apiKeyID, store.UsageOperationUpdateScore, http.StatusOK, time.Since(startTime))
 
 	// Process request
-	response, err := h.processor.UpdateUserScore(ctx, customer, req)
+	response, err := h.processor.UpdateUserScore(ctx, account, req)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
@@ -196,13 +196,13 @@ func (h *Handler) HandleSyncToRedis(c *gin.Context) {
 	ctx := c.Request.Context()
 	startTime := time.Now()
 
-	// Get customer from context
-	customerVal, exists := c.Get("customer")
+	// Get account from context
+	accountVal, exists := c.Get("account")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized", "code": "UNAUTHORIZED"})
 		return
 	}
-	customer := customerVal.(store.Customer)
+	account := accountVal.(store.Account)
 
 	// Get API key ID for usage tracking
 	apiKeyIDVal, _ := c.Get("api_key_id")
@@ -220,10 +220,10 @@ func (h *Handler) HandleSyncToRedis(c *gin.Context) {
 	}
 
 	// Track usage (async)
-	go h.trackUsage(ctx, customer.ID, &req.CampaignID, apiKeyID, store.UsageOperationSyncDatabase, http.StatusOK, time.Since(startTime))
+	go h.trackUsage(ctx, account.ID, &req.CampaignID, apiKeyID, store.UsageOperationSyncDatabase, http.StatusOK, time.Since(startTime))
 
 	// Process request
-	response, err := h.processor.SyncToRedis(ctx, customer, req)
+	response, err := h.processor.SyncToRedis(ctx, account, req)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
@@ -242,7 +242,7 @@ func (h *Handler) HandleHealthCheck(c *gin.Context) {
 }
 
 // trackUsage creates a usage event for billing
-func (h *Handler) trackUsage(ctx context.Context, customerID uuid.UUID, campaignID, apiKeyID *uuid.UUID, operation string, statusCode int, responseTime time.Duration) {
+func (h *Handler) trackUsage(ctx context.Context, accountID uuid.UUID, campaignID, apiKeyID *uuid.UUID, operation string, statusCode int, responseTime time.Duration) {
 	// Get request ID from context
 	requestIDVal := ctx.Value("request_id")
 	var requestID *uuid.UUID
@@ -258,7 +258,7 @@ func (h *Handler) trackUsage(ctx context.Context, customerID uuid.UUID, campaign
 	// Create usage event
 	responseTimeMs := int(responseTime.Milliseconds())
 	err := h.store.CreateUsageEvent(ctx, store.CreateUsageEventParams{
-		CustomerID:     customerID,
+		AccountID:     accountID,
 		CampaignID:     campaignID,
 		APIKeyID:       apiKeyID,
 		Operation:      operation,

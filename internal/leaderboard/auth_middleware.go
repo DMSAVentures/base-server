@@ -14,7 +14,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// AuthMiddleware handles API key authentication for customer-facing leaderboard API
+// AuthMiddleware handles API key authentication for account-facing leaderboard API
 type AuthMiddleware struct {
 	store  store.Store
 	logger *observability.Logger
@@ -28,7 +28,7 @@ func NewAuthMiddleware(store store.Store, logger *observability.Logger) *AuthMid
 	}
 }
 
-// Authenticate validates the API key and sets customer in context
+// Authenticate validates the API key and sets account in context
 func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ctx := c.Request.Context()
@@ -123,14 +123,14 @@ func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 
 		ctx = observability.WithFields(ctx,
 			observability.Field{Key: "api_key_id", Value: apiKeyRecord.ID.String()},
-			observability.Field{Key: "customer_id", Value: apiKeyRecord.CustomerID.String()},
+			observability.Field{Key: "account_id", Value: apiKeyRecord.AccountID.String()},
 		)
 
-		// Get customer
-		customer, err := m.store.GetCustomerByID(ctx, apiKeyRecord.CustomerID)
+		// Get account
+		account, err := m.store.GetAccountByID(ctx, apiKeyRecord.AccountID)
 		if err != nil {
 			if err == store.ErrNotFound {
-				m.logger.Warn(ctx, "customer not found")
+				m.logger.Warn(ctx, "account not found")
 				c.JSON(http.StatusUnauthorized, gin.H{
 					"error": "Invalid API key",
 					"code":  "INVALID_API_KEY",
@@ -139,7 +139,7 @@ func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 				return
 			}
 
-			m.logger.Error(ctx, "failed to get customer", err)
+			m.logger.Error(ctx, "failed to get account", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Internal server error",
 				"code":  "INTERNAL_ERROR",
@@ -148,10 +148,10 @@ func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 			return
 		}
 
-		// Check customer status
-		if customer.Status != store.CustomerStatusActive {
-			m.logger.Warn(ctx, "customer account is not active",
-				observability.Field{Key: "status", Value: customer.Status},
+		// Check account status
+		if account.Status != store.AccountStatusActive {
+			m.logger.Warn(ctx, "account is not active",
+				observability.Field{Key: "status", Value: account.Status},
 			)
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": "Account is not active",
@@ -168,13 +168,13 @@ func (m *AuthMiddleware) Authenticate() gin.HandlerFunc {
 			}
 		}()
 
-		// Set customer and API key in context
-		ctx = ratelimit.SetCustomerContext(ctx, customer)
+		// Set account and API key in context
+		ctx = ratelimit.SetAccountContext(ctx, account)
 		c.Request = c.Request.WithContext(ctx)
 
 		// Store API key ID for usage tracking
 		c.Set("api_key_id", apiKeyRecord.ID)
-		c.Set("customer", customer)
+		c.Set("account", account)
 
 		m.logger.Info(ctx, "API key authenticated successfully")
 
@@ -203,7 +203,7 @@ func constantTimeCompare(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
-// GenerateAPIKey generates a new API key for a customer
+// GenerateAPIKey generates a new API key for an account
 // Format: lb_{env}_{random_32_chars}
 // Returns: (apiKey string, keyHash string, keyPrefix string, error)
 func GenerateAPIKey(environment string) (string, string, string, error) {
