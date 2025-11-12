@@ -17,10 +17,10 @@ type CreateCampaignParams struct {
 	Slug             string
 	Description      *string
 	Type             string
-	FormConfig       JSONB
-	ReferralConfig   JSONB
-	EmailConfig      JSONB
-	BrandingConfig   JSONB
+	FormConfig       CreateCampaignFormConfigParams
+	ReferralConfig   CreateCampaignReferralConfigParams
+	EmailConfig      CreateCampaignEmailConfigParams
+	BrandingConfig   CreateCampaignBrandingConfigParams
 	PrivacyPolicyURL *string
 	TermsURL         *string
 	MaxSignups       *int
@@ -33,23 +33,24 @@ type UpdateCampaignParams struct {
 	Status           *string
 	LaunchDate       *time.Time
 	EndDate          *time.Time
-	FormConfig       JSONB
-	ReferralConfig   JSONB
-	EmailConfig      JSONB
-	BrandingConfig   JSONB
+	FormConfig       *UpdateCampaignFormConfigParams
+	ReferralConfig   *UpdateCampaignReferralConfigParams
+	EmailConfig      *UpdateCampaignEmailConfigParams
+	BrandingConfig   *UpdateCampaignBrandingConfigParams
 	PrivacyPolicyURL *string
 	TermsURL         *string
 	MaxSignups       *int
 }
 
 const sqlCreateCampaign = `
-INSERT INTO campaigns (account_id, name, slug, description, type, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
+INSERT INTO campaigns (account_id, name, slug, description, type, privacy_policy_url, terms_url, max_signups)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
 `
 
-// CreateCampaign creates a new campaign
+// CreateCampaign creates a new campaign with all associated configs
 func (s *Store) CreateCampaign(ctx context.Context, params CreateCampaignParams) (Campaign, error) {
+	// Create base campaign record
 	var campaign Campaign
 	err := s.db.GetContext(ctx, &campaign, sqlCreateCampaign,
 		params.AccountID,
@@ -57,10 +58,6 @@ func (s *Store) CreateCampaign(ctx context.Context, params CreateCampaignParams)
 		params.Slug,
 		params.Description,
 		params.Type,
-		params.FormConfig,
-		params.ReferralConfig,
-		params.EmailConfig,
-		params.BrandingConfig,
 		params.PrivacyPolicyURL,
 		params.TermsURL,
 		params.MaxSignups)
@@ -68,14 +65,50 @@ func (s *Store) CreateCampaign(ctx context.Context, params CreateCampaignParams)
 		s.logger.Error(ctx, "failed to create campaign", err)
 		return Campaign{}, fmt.Errorf("failed to create campaign: %w", err)
 	}
+
+	// Create form config
+	params.FormConfig.CampaignID = campaign.ID
+	formConfig, err := s.CreateCampaignFormConfig(ctx, params.FormConfig)
+	if err != nil {
+		s.logger.Error(ctx, "failed to create form config", err)
+		return Campaign{}, fmt.Errorf("failed to create form config: %w", err)
+	}
+	campaign.FormConfig = &formConfig
+
+	// Create referral config
+	params.ReferralConfig.CampaignID = campaign.ID
+	referralConfig, err := s.CreateCampaignReferralConfig(ctx, params.ReferralConfig)
+	if err != nil {
+		s.logger.Error(ctx, "failed to create referral config", err)
+		return Campaign{}, fmt.Errorf("failed to create referral config: %w", err)
+	}
+	campaign.ReferralConfig = &referralConfig
+
+	// Create email config
+	params.EmailConfig.CampaignID = campaign.ID
+	emailConfig, err := s.CreateCampaignEmailConfig(ctx, params.EmailConfig)
+	if err != nil {
+		s.logger.Error(ctx, "failed to create email config", err)
+		return Campaign{}, fmt.Errorf("failed to create email config: %w", err)
+	}
+	campaign.EmailConfig = &emailConfig
+
+	// Create branding config
+	params.BrandingConfig.CampaignID = campaign.ID
+	brandingConfig, err := s.CreateCampaignBrandingConfig(ctx, params.BrandingConfig)
+	if err != nil {
+		s.logger.Error(ctx, "failed to create branding config", err)
+		return Campaign{}, fmt.Errorf("failed to create branding config: %w", err)
+	}
+	campaign.BrandingConfig = &brandingConfig
+
 	return campaign, nil
 }
 
 const sqlGetCampaignByID = `
 SELECT
     c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
     COALESCE(COUNT(w.id), 0)::int as total_signups,
     COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
     COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -86,7 +119,7 @@ WHERE c.id = $1 AND c.deleted_at IS NULL
 GROUP BY c.id
 `
 
-// GetCampaignByID retrieves a campaign by ID
+// GetCampaignByID retrieves a campaign by ID with all associated configs
 func (s *Store) GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (Campaign, error) {
 	var campaign Campaign
 	err := s.db.GetContext(ctx, &campaign, sqlGetCampaignByID, campaignID)
@@ -97,14 +130,20 @@ func (s *Store) GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (Camp
 		s.logger.Error(ctx, "failed to get campaign by id", err)
 		return Campaign{}, fmt.Errorf("failed to get campaign by id: %w", err)
 	}
+
+	// Load all configs
+	if err := s.LoadCampaignConfigs(ctx, &campaign); err != nil {
+		s.logger.Error(ctx, "failed to load campaign configs", err)
+		return Campaign{}, fmt.Errorf("failed to load campaign configs: %w", err)
+	}
+
 	return campaign, nil
 }
 
 const sqlGetCampaignBySlug = `
 SELECT
     c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
     COALESCE(COUNT(w.id), 0)::int as total_signups,
     COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
     COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -115,7 +154,7 @@ WHERE c.account_id = $1 AND c.slug = $2 AND c.deleted_at IS NULL
 GROUP BY c.id
 `
 
-// GetCampaignBySlug retrieves a campaign by account ID and slug
+// GetCampaignBySlug retrieves a campaign by account ID and slug with all associated configs
 func (s *Store) GetCampaignBySlug(ctx context.Context, accountID uuid.UUID, slug string) (Campaign, error) {
 	var campaign Campaign
 	err := s.db.GetContext(ctx, &campaign, sqlGetCampaignBySlug, accountID, slug)
@@ -126,14 +165,20 @@ func (s *Store) GetCampaignBySlug(ctx context.Context, accountID uuid.UUID, slug
 		s.logger.Error(ctx, "failed to get campaign by slug", err)
 		return Campaign{}, fmt.Errorf("failed to get campaign by slug: %w", err)
 	}
+
+	// Load all configs
+	if err := s.LoadCampaignConfigs(ctx, &campaign); err != nil {
+		s.logger.Error(ctx, "failed to load campaign configs", err)
+		return Campaign{}, fmt.Errorf("failed to load campaign configs: %w", err)
+	}
+
 	return campaign, nil
 }
 
 const sqlGetCampaignsByAccountID = `
 SELECT
     c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
     COALESCE(COUNT(w.id), 0)::int as total_signups,
     COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
     COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -145,7 +190,7 @@ GROUP BY c.id
 ORDER BY c.created_at DESC
 `
 
-// GetCampaignsByAccountID retrieves all campaigns for an account
+// GetCampaignsByAccountID retrieves all campaigns for an account with all associated configs
 func (s *Store) GetCampaignsByAccountID(ctx context.Context, accountID uuid.UUID) ([]Campaign, error) {
 	var campaigns []Campaign
 	err := s.db.SelectContext(ctx, &campaigns, sqlGetCampaignsByAccountID, accountID)
@@ -153,14 +198,22 @@ func (s *Store) GetCampaignsByAccountID(ctx context.Context, accountID uuid.UUID
 		s.logger.Error(ctx, "failed to get campaigns by account id", err)
 		return nil, fmt.Errorf("failed to get campaigns by account id: %w", err)
 	}
+
+	// Load configs for each campaign
+	for i := range campaigns {
+		if err := s.LoadCampaignConfigs(ctx, &campaigns[i]); err != nil {
+			s.logger.Error(ctx, "failed to load campaign configs", err)
+			return nil, fmt.Errorf("failed to load campaign configs: %w", err)
+		}
+	}
+
 	return campaigns, nil
 }
 
 const sqlGetCampaignsByStatus = `
 SELECT
     c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
     COALESCE(COUNT(w.id), 0)::int as total_signups,
     COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
     COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -172,7 +225,7 @@ GROUP BY c.id
 ORDER BY c.created_at DESC
 `
 
-// GetCampaignsByStatus retrieves campaigns by account ID and status
+// GetCampaignsByStatus retrieves campaigns by account ID and status with all associated configs
 func (s *Store) GetCampaignsByStatus(ctx context.Context, accountID uuid.UUID, status string) ([]Campaign, error) {
 	var campaigns []Campaign
 	err := s.db.SelectContext(ctx, &campaigns, sqlGetCampaignsByStatus, accountID, status)
@@ -180,6 +233,15 @@ func (s *Store) GetCampaignsByStatus(ctx context.Context, accountID uuid.UUID, s
 		s.logger.Error(ctx, "failed to get campaigns by status", err)
 		return nil, fmt.Errorf("failed to get campaigns by status: %w", err)
 	}
+
+	// Load configs for each campaign
+	for i := range campaigns {
+		if err := s.LoadCampaignConfigs(ctx, &campaigns[i]); err != nil {
+			s.logger.Error(ctx, "failed to load campaign configs", err)
+			return nil, fmt.Errorf("failed to load campaign configs: %w", err)
+		}
+	}
+
 	return campaigns, nil
 }
 
@@ -201,13 +263,12 @@ type ListCampaignsResult struct {
 	TotalPages int
 }
 
-// ListCampaigns retrieves campaigns with pagination and filters
+// ListCampaigns retrieves campaigns with pagination and filters, including all associated configs
 func (s *Store) ListCampaigns(ctx context.Context, params ListCampaignsParams) (ListCampaignsResult, error) {
 	// Build dynamic query
 	query := `SELECT
 	          c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-	          c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-	          c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+	          c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
 	          COALESCE(COUNT(w.id), 0)::int as total_signups,
 	          COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
 	          COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -256,6 +317,14 @@ func (s *Store) ListCampaigns(ctx context.Context, params ListCampaignsParams) (
 		return ListCampaignsResult{}, fmt.Errorf("failed to list campaigns: %w", err)
 	}
 
+	// Load configs for each campaign
+	for i := range campaigns {
+		if err := s.LoadCampaignConfigs(ctx, &campaigns[i]); err != nil {
+			s.logger.Error(ctx, "failed to load campaign configs", err)
+			return ListCampaignsResult{}, fmt.Errorf("failed to load campaign configs: %w", err)
+		}
+	}
+
 	totalPages := (totalCount + params.Limit - 1) / params.Limit
 
 	return ListCampaignsResult{
@@ -274,19 +343,15 @@ SET name = COALESCE($3, name),
     status = COALESCE($5, status),
     launch_date = COALESCE($6, launch_date),
     end_date = COALESCE($7, end_date),
-    form_config = COALESCE($8, form_config),
-    referral_config = COALESCE($9, referral_config),
-    email_config = COALESCE($10, email_config),
-    branding_config = COALESCE($11, branding_config),
-    privacy_policy_url = COALESCE($12, privacy_policy_url),
-    terms_url = COALESCE($13, terms_url),
-    max_signups = COALESCE($14, max_signups),
+    privacy_policy_url = COALESCE($8, privacy_policy_url),
+    terms_url = COALESCE($9, terms_url),
+    max_signups = COALESCE($10, max_signups),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
-RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
+RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
 `
 
-// UpdateCampaign updates a campaign
+// UpdateCampaign updates a campaign and its associated configs
 func (s *Store) UpdateCampaign(ctx context.Context, accountID, campaignID uuid.UUID, params UpdateCampaignParams) (Campaign, error) {
 	var campaign Campaign
 	err := s.db.GetContext(ctx, &campaign, sqlUpdateCampaign,
@@ -297,10 +362,6 @@ func (s *Store) UpdateCampaign(ctx context.Context, accountID, campaignID uuid.U
 		params.Status,
 		params.LaunchDate,
 		params.EndDate,
-		params.FormConfig,
-		params.ReferralConfig,
-		params.EmailConfig,
-		params.BrandingConfig,
 		params.PrivacyPolicyURL,
 		params.TermsURL,
 		params.MaxSignups)
@@ -311,6 +372,46 @@ func (s *Store) UpdateCampaign(ctx context.Context, accountID, campaignID uuid.U
 		s.logger.Error(ctx, "failed to update campaign", err)
 		return Campaign{}, fmt.Errorf("failed to update campaign: %w", err)
 	}
+
+	// Update configs if provided
+	if params.FormConfig != nil {
+		_, err := s.UpdateCampaignFormConfig(ctx, campaignID, *params.FormConfig)
+		if err != nil {
+			s.logger.Error(ctx, "failed to update form config", err)
+			return Campaign{}, fmt.Errorf("failed to update form config: %w", err)
+		}
+	}
+
+	if params.ReferralConfig != nil {
+		_, err := s.UpdateCampaignReferralConfig(ctx, campaignID, *params.ReferralConfig)
+		if err != nil {
+			s.logger.Error(ctx, "failed to update referral config", err)
+			return Campaign{}, fmt.Errorf("failed to update referral config: %w", err)
+		}
+	}
+
+	if params.EmailConfig != nil {
+		_, err := s.UpdateCampaignEmailConfig(ctx, campaignID, *params.EmailConfig)
+		if err != nil {
+			s.logger.Error(ctx, "failed to update email config", err)
+			return Campaign{}, fmt.Errorf("failed to update email config: %w", err)
+		}
+	}
+
+	if params.BrandingConfig != nil {
+		_, err := s.UpdateCampaignBrandingConfig(ctx, campaignID, *params.BrandingConfig)
+		if err != nil {
+			s.logger.Error(ctx, "failed to update branding config", err)
+			return Campaign{}, fmt.Errorf("failed to update branding config: %w", err)
+		}
+	}
+
+	// Load all configs
+	if err := s.LoadCampaignConfigs(ctx, &campaign); err != nil {
+		s.logger.Error(ctx, "failed to load campaign configs", err)
+		return Campaign{}, fmt.Errorf("failed to load campaign configs: %w", err)
+	}
+
 	return campaign, nil
 }
 
@@ -318,10 +419,10 @@ const sqlUpdateCampaignStatus = `
 UPDATE campaigns
 SET status = $3, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
-RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
+RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
 `
 
-// UpdateCampaignStatus updates a campaign's status
+// UpdateCampaignStatus updates a campaign's status and loads all associated configs
 func (s *Store) UpdateCampaignStatus(ctx context.Context, accountID, campaignID uuid.UUID, status string) (Campaign, error) {
 	var campaign Campaign
 	err := s.db.GetContext(ctx, &campaign, sqlUpdateCampaignStatus, campaignID, accountID, status)
@@ -332,6 +433,13 @@ func (s *Store) UpdateCampaignStatus(ctx context.Context, accountID, campaignID 
 		s.logger.Error(ctx, "failed to update campaign status", err)
 		return Campaign{}, fmt.Errorf("failed to update campaign status: %w", err)
 	}
+
+	// Load all configs
+	if err := s.LoadCampaignConfigs(ctx, &campaign); err != nil {
+		s.logger.Error(ctx, "failed to load campaign configs", err)
+		return Campaign{}, fmt.Errorf("failed to load campaign configs: %w", err)
+	}
+
 	return campaign, nil
 }
 
