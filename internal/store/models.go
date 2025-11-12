@@ -146,10 +146,11 @@ type Campaign struct {
 	LaunchDate  *time.Time `db:"launch_date" json:"launch_date,omitempty"`
 	EndDate     *time.Time `db:"end_date" json:"end_date,omitempty"`
 
-	FormConfig     JSONB `db:"form_config" json:"form_config"`
-	ReferralConfig JSONB `db:"referral_config" json:"referral_config"`
-	EmailConfig    JSONB `db:"email_config" json:"email_config"`
-	BrandingConfig JSONB `db:"branding_config" json:"branding_config"`
+	// Config references (loaded separately via JOINs or separate queries)
+	FormConfig     *CampaignFormConfig     `db:"-" json:"form_config,omitempty"`
+	ReferralConfig *CampaignReferralConfig `db:"-" json:"referral_config,omitempty"`
+	EmailConfig    *CampaignEmailConfig    `db:"-" json:"email_config,omitempty"`
+	BrandingConfig *CampaignBrandingConfig `db:"-" json:"branding_config,omitempty"`
 
 	PrivacyPolicyURL *string `db:"privacy_policy_url" json:"privacy_policy_url,omitempty"`
 	TermsURL         *string `db:"terms_url" json:"terms_url,omitempty"`
@@ -162,6 +163,71 @@ type Campaign struct {
 	CreatedAt time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
 	DeletedAt *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
+}
+
+// CampaignFormConfig represents form configuration for a campaign
+type CampaignFormConfig struct {
+	ID             uuid.UUID            `db:"id" json:"id"`
+	CampaignID     uuid.UUID            `db:"campaign_id" json:"campaign_id"`
+	CaptchaEnabled bool                 `db:"captcha_enabled" json:"captcha_enabled"`
+	DoubleOptIn    bool                 `db:"double_opt_in" json:"double_opt_in"`
+	CustomCSS      *string              `db:"custom_css" json:"custom_css,omitempty"`
+	Fields         []CampaignFormField  `db:"-" json:"fields,omitempty"` // Loaded separately
+	CreatedAt      time.Time            `db:"created_at" json:"created_at"`
+	UpdatedAt      time.Time            `db:"updated_at" json:"updated_at"`
+}
+
+// CampaignFormField represents a single form field definition
+type CampaignFormField struct {
+	ID           uuid.UUID   `db:"id" json:"id"`
+	FormConfigID uuid.UUID   `db:"form_config_id" json:"form_config_id"`
+	Name         string      `db:"name" json:"name"`
+	Type         string      `db:"type" json:"type"`
+	Label        string      `db:"label" json:"label"`
+	Placeholder  *string     `db:"placeholder" json:"placeholder,omitempty"`
+	Required     bool        `db:"required" json:"required"`
+	Options      StringArray `db:"options" json:"options,omitempty"`
+	Validation   JSONB       `db:"validation" json:"validation,omitempty"`
+	DisplayOrder int         `db:"display_order" json:"display_order"`
+	CreatedAt    time.Time   `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time   `db:"updated_at" json:"updated_at"`
+}
+
+// CampaignReferralConfig represents referral configuration for a campaign
+type CampaignReferralConfig struct {
+	ID                   uuid.UUID   `db:"id" json:"id"`
+	CampaignID           uuid.UUID   `db:"campaign_id" json:"campaign_id"`
+	Enabled              bool        `db:"enabled" json:"enabled"`
+	PointsPerReferral    int         `db:"points_per_referral" json:"points_per_referral"`
+	VerifiedOnly         bool        `db:"verified_only" json:"verified_only"`
+	SharingChannels      StringArray `db:"sharing_channels" json:"sharing_channels"`
+	CustomShareMessages  JSONB       `db:"custom_share_messages" json:"custom_share_messages,omitempty"`
+	CreatedAt            time.Time   `db:"created_at" json:"created_at"`
+	UpdatedAt            time.Time   `db:"updated_at" json:"updated_at"`
+}
+
+// CampaignEmailConfig represents email configuration for a campaign
+type CampaignEmailConfig struct {
+	ID                   uuid.UUID `db:"id" json:"id"`
+	CampaignID           uuid.UUID `db:"campaign_id" json:"campaign_id"`
+	FromName             *string   `db:"from_name" json:"from_name,omitempty"`
+	FromEmail            *string   `db:"from_email" json:"from_email,omitempty"`
+	ReplyTo              *string   `db:"reply_to" json:"reply_to,omitempty"`
+	VerificationRequired bool      `db:"verification_required" json:"verification_required"`
+	CreatedAt            time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt            time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// CampaignBrandingConfig represents branding configuration for a campaign
+type CampaignBrandingConfig struct {
+	ID           uuid.UUID `db:"id" json:"id"`
+	CampaignID   uuid.UUID `db:"campaign_id" json:"campaign_id"`
+	LogoURL      *string   `db:"logo_url" json:"logo_url,omitempty"`
+	PrimaryColor string    `db:"primary_color" json:"primary_color"`
+	FontFamily   string    `db:"font_family" json:"font_family"`
+	CustomDomain *string   `db:"custom_domain" json:"custom_domain,omitempty"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // WaitlistUser represents a user on a waitlist
