@@ -31,14 +31,29 @@ func createTestAccount(t *testing.T, testDB *TestDB) Account {
 func createTestCampaign(t *testing.T, testDB *TestDB, accountID uuid.UUID, name, slug string) Campaign {
 	t.Helper()
 	campaign, err := testDB.Store.CreateCampaign(context.Background(), CreateCampaignParams{
-		AccountID:      accountID,
-		Name:           name,
-		Slug:           slug,
-		Type:           "waitlist",
-		FormConfig:     JSONB{},
-		ReferralConfig: JSONB{},
-		EmailConfig:    JSONB{},
-		BrandingConfig: JSONB{},
+		AccountID: accountID,
+		Name:      name,
+		Slug:      slug,
+		Type:      "waitlist",
+		FormConfig: CreateCampaignFormConfigParams{
+			CaptchaEnabled: false,
+			DoubleOptIn:    true,
+			Fields:         []CreateFormFieldParams{},
+		},
+		ReferralConfig: CreateCampaignReferralConfigParams{
+			Enabled:             true,
+			PointsPerReferral:   1,
+			VerifiedOnly:        true,
+			SharingChannels:     []string{"email", "twitter", "facebook", "linkedin", "whatsapp"},
+			CustomShareMessages: JSONB{},
+		},
+		EmailConfig: CreateCampaignEmailConfigParams{
+			VerificationRequired: true,
+		},
+		BrandingConfig: CreateCampaignBrandingConfigParams{
+			PrimaryColor: "#2563EB",
+			FontFamily:   "Inter",
+		},
 	})
 	if err != nil {
 		t.Fatalf("failed to create test campaign: %v", err)
@@ -81,14 +96,29 @@ func TestStore_CreateCampaign(t *testing.T) {
 				t.Helper()
 				account := createTestAccount(t, testDB)
 				return CreateCampaignParams{
-					AccountID:      account.ID,
-					Name:           "Test Campaign",
-					Slug:           "test-campaign",
-					Type:           "waitlist",
-					FormConfig:     JSONB{},
-					ReferralConfig: JSONB{},
-					EmailConfig:    JSONB{},
-					BrandingConfig: JSONB{},
+					AccountID: account.ID,
+					Name:      "Test Campaign",
+					Slug:      "test-campaign",
+					Type:      "waitlist",
+					FormConfig: CreateCampaignFormConfigParams{
+						CaptchaEnabled: false,
+						DoubleOptIn:    true,
+						Fields:         []CreateFormFieldParams{},
+					},
+					ReferralConfig: CreateCampaignReferralConfigParams{
+						Enabled:             true,
+						PointsPerReferral:   1,
+						VerifiedOnly:        true,
+						SharingChannels:     []string{"email"},
+						CustomShareMessages: JSONB{},
+					},
+					EmailConfig: CreateCampaignEmailConfigParams{
+						VerificationRequired: true,
+					},
+					BrandingConfig: CreateCampaignBrandingConfigParams{
+						PrimaryColor: "#2563EB",
+						FontFamily:   "Inter",
+					},
 				}
 			},
 			wantErr: false,
@@ -115,6 +145,19 @@ func TestStore_CreateCampaign(t *testing.T) {
 				if campaign.TotalVerified != 0 {
 					t.Errorf("TotalVerified = %v, want 0", campaign.TotalVerified)
 				}
+				// Validate configs are loaded
+				if campaign.FormConfig == nil {
+					t.Error("FormConfig should be loaded")
+				}
+				if campaign.ReferralConfig == nil {
+					t.Error("ReferralConfig should be loaded")
+				}
+				if campaign.EmailConfig == nil {
+					t.Error("EmailConfig should be loaded")
+				}
+				if campaign.BrandingConfig == nil {
+					t.Error("BrandingConfig should be loaded")
+				}
 			},
 		},
 		{
@@ -126,6 +169,10 @@ func TestStore_CreateCampaign(t *testing.T) {
 				maxSignups := 1000
 				privacyURL := "https://example.com/privacy"
 				termsURL := "https://example.com/terms"
+				customCSS := ".form { border: 1px solid #ccc; }"
+				logoURL := "https://example.com/logo.png"
+				fromName := "Test Campaign"
+				fromEmail := "test@example.com"
 				return CreateCampaignParams{
 					AccountID:        account.ID,
 					Name:             "Full Campaign",
@@ -135,10 +182,37 @@ func TestStore_CreateCampaign(t *testing.T) {
 					MaxSignups:       &maxSignups,
 					PrivacyPolicyURL: &privacyURL,
 					TermsURL:         &termsURL,
-					FormConfig:       JSONB{"enabled": true},
-					ReferralConfig:   JSONB{"points": 10},
-					EmailConfig:      JSONB{},
-					BrandingConfig:   JSONB{},
+					FormConfig: CreateCampaignFormConfigParams{
+						CaptchaEnabled: true,
+						DoubleOptIn:    false,
+						CustomCSS:      &customCSS,
+						Fields: []CreateFormFieldParams{
+							{
+								Name:         "email",
+								Type:         "email",
+								Label:        "Email Address",
+								Required:     true,
+								DisplayOrder: 0,
+							},
+						},
+					},
+					ReferralConfig: CreateCampaignReferralConfigParams{
+						Enabled:             true,
+						PointsPerReferral:   10,
+						VerifiedOnly:        false,
+						SharingChannels:     []string{"email", "twitter"},
+						CustomShareMessages: JSONB{"twitter": "Check this out!"},
+					},
+					EmailConfig: CreateCampaignEmailConfigParams{
+						FromName:             &fromName,
+						FromEmail:            &fromEmail,
+						VerificationRequired: false,
+					},
+					BrandingConfig: CreateCampaignBrandingConfigParams{
+						LogoURL:      &logoURL,
+						PrimaryColor: "#FF6B6B",
+						FontFamily:   "Helvetica",
+					},
 				}
 			},
 			wantErr: false,
@@ -149,6 +223,26 @@ func TestStore_CreateCampaign(t *testing.T) {
 				}
 				if campaign.MaxSignups == nil || *campaign.MaxSignups != *params.MaxSignups {
 					t.Errorf("MaxSignups = %v, want %v", campaign.MaxSignups, params.MaxSignups)
+				}
+				// Validate form config
+				if campaign.FormConfig == nil {
+					t.Fatal("FormConfig should be loaded")
+				}
+				if !campaign.FormConfig.CaptchaEnabled {
+					t.Error("FormConfig.CaptchaEnabled = false, want true")
+				}
+				if campaign.FormConfig.DoubleOptIn {
+					t.Error("FormConfig.DoubleOptIn = true, want false")
+				}
+				if len(campaign.FormConfig.Fields) != 1 {
+					t.Errorf("FormConfig.Fields length = %d, want 1", len(campaign.FormConfig.Fields))
+				}
+				// Validate referral config
+				if campaign.ReferralConfig == nil {
+					t.Fatal("ReferralConfig should be loaded")
+				}
+				if campaign.ReferralConfig.PointsPerReferral != 10 {
+					t.Errorf("ReferralConfig.PointsPerReferral = %d, want 10", campaign.ReferralConfig.PointsPerReferral)
 				}
 			},
 		},

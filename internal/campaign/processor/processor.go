@@ -29,7 +29,8 @@ func New(store CampaignStore, logger *observability.Logger) CampaignProcessor {
 	}
 }
 
-// CreateCampaignRequest represents a request to create a campaign
+// CreateCampaignRequest represents a request to create a campaign (DEPRECATED - use CreateCampaignRequestV2)
+// This is kept for compatibility but handlers should use CreateCampaignV2
 type CreateCampaignRequest struct {
 	Name             string
 	Slug             string
@@ -44,66 +45,8 @@ type CreateCampaignRequest struct {
 	MaxSignups       *int
 }
 
-// CreateCampaign creates a new campaign for an account
-func (p *CampaignProcessor) CreateCampaign(ctx context.Context, accountID uuid.UUID, req CreateCampaignRequest) (store.Campaign, error) {
-	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_slug", Value: req.Slug},
-	)
-
-	// Validate campaign type
-	if !isValidCampaignType(req.Type) {
-		return store.Campaign{}, ErrInvalidCampaignType
-	}
-
-	// Check if slug already exists for this account
-	existingCampaign, err := p.store.GetCampaignBySlug(ctx, accountID, req.Slug)
-	if err == nil && existingCampaign.ID != uuid.Nil {
-		return store.Campaign{}, ErrSlugAlreadyExists
-	}
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		p.logger.Error(ctx, "failed to check slug existence", err)
-		return store.Campaign{}, err
-	}
-
-	// Set defaults for JSONB fields if not provided
-	if req.FormConfig == nil {
-		req.FormConfig = store.JSONB{}
-	}
-	if req.ReferralConfig == nil {
-		req.ReferralConfig = store.JSONB{}
-	}
-	if req.EmailConfig == nil {
-		req.EmailConfig = store.JSONB{}
-	}
-	if req.BrandingConfig == nil {
-		req.BrandingConfig = store.JSONB{}
-	}
-
-	params := store.CreateCampaignParams{
-		AccountID:        accountID,
-		Name:             req.Name,
-		Slug:             req.Slug,
-		Description:      req.Description,
-		Type:             req.Type,
-		FormConfig:       req.FormConfig,
-		ReferralConfig:   req.ReferralConfig,
-		EmailConfig:      req.EmailConfig,
-		BrandingConfig:   req.BrandingConfig,
-		PrivacyPolicyURL: req.PrivacyPolicyURL,
-		TermsURL:         req.TermsURL,
-		MaxSignups:       req.MaxSignups,
-	}
-
-	campaign, err := p.store.CreateCampaign(ctx, params)
-	if err != nil {
-		p.logger.Error(ctx, "failed to create campaign", err)
-		return store.Campaign{}, err
-	}
-
-	p.logger.Info(ctx, "campaign created successfully")
-	return campaign, nil
-}
+// CreateCampaign is DEPRECATED - handlers now use CreateCampaignV2 with typed configs
+// This method is kept for backwards compatibility but should not be used
 
 // GetCampaign retrieves a campaign by ID
 func (p *CampaignProcessor) GetCampaign(ctx context.Context, accountID, campaignID uuid.UUID) (store.Campaign, error) {
@@ -193,7 +136,8 @@ func (p *CampaignProcessor) ListCampaigns(ctx context.Context, accountID uuid.UU
 	return result, nil
 }
 
-// UpdateCampaignRequest represents a request to update a campaign
+// UpdateCampaignRequest represents a request to update a campaign (DEPRECATED - use UpdateCampaignRequestV2)
+// This is kept for compatibility but handlers should use UpdateCampaignV2
 type UpdateCampaignRequest struct {
 	Name             *string
 	Description      *string
@@ -208,37 +152,8 @@ type UpdateCampaignRequest struct {
 	MaxSignups       *int
 }
 
-// UpdateCampaign updates a campaign
-func (p *CampaignProcessor) UpdateCampaign(ctx context.Context, accountID, campaignID uuid.UUID, req UpdateCampaignRequest) (store.Campaign, error) {
-	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
-	)
-
-	params := store.UpdateCampaignParams{
-		Name:             req.Name,
-		Description:      req.Description,
-		FormConfig:       req.FormConfig,
-		ReferralConfig:   req.ReferralConfig,
-		EmailConfig:      req.EmailConfig,
-		BrandingConfig:   req.BrandingConfig,
-		PrivacyPolicyURL: req.PrivacyPolicyURL,
-		TermsURL:         req.TermsURL,
-		MaxSignups:       req.MaxSignups,
-	}
-
-	campaign, err := p.store.UpdateCampaign(ctx, accountID, campaignID, params)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return store.Campaign{}, ErrCampaignNotFound
-		}
-		p.logger.Error(ctx, "failed to update campaign", err)
-		return store.Campaign{}, err
-	}
-
-	p.logger.Info(ctx, "campaign updated successfully")
-	return campaign, nil
-}
+// UpdateCampaign is DEPRECATED - handlers now use UpdateCampaignV2 with typed configs
+// This method is kept for backwards compatibility but should not be used
 
 // UpdateCampaignStatus updates a campaign's status
 func (p *CampaignProcessor) UpdateCampaignStatus(ctx context.Context, accountID, campaignID uuid.UUID, status string) (store.Campaign, error) {

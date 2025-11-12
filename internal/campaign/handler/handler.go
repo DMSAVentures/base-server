@@ -91,39 +91,27 @@ func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 		observability.Field{Key: "campaign_type", Value: req.Type},
 	)
 
-	// Set default empty JSONB if not provided
-	if req.FormConfig == nil {
-		emptyJSON := store.JSONB{}
-		req.FormConfig = &emptyJSON
-	}
-	if req.ReferralConfig == nil {
-		emptyJSON := store.JSONB{}
-		req.ReferralConfig = &emptyJSON
-	}
-	if req.EmailConfig == nil {
-		emptyJSON := store.JSONB{}
-		req.EmailConfig = &emptyJSON
-	}
-	if req.BrandingConfig == nil {
-		emptyJSON := store.JSONB{}
-		req.BrandingConfig = &emptyJSON
-	}
+	// Convert JSONB configs to typed configs for v2 processor
+	formConfig := convertJSONBToFormConfig(req.FormConfig)
+	referralConfig := convertJSONBToReferralConfig(req.ReferralConfig)
+	emailConfig := convertJSONBToEmailConfig(req.EmailConfig)
+	brandingConfig := convertJSONBToBrandingConfig(req.BrandingConfig)
 
-	processorReq := processor.CreateCampaignRequest{
+	processorReq := processor.CreateCampaignRequestV2{
 		Name:             req.Name,
 		Slug:             req.Slug,
 		Description:      req.Description,
 		Type:             req.Type,
-		FormConfig:       *req.FormConfig,
-		ReferralConfig:   *req.ReferralConfig,
-		EmailConfig:      *req.EmailConfig,
-		BrandingConfig:   *req.BrandingConfig,
+		FormConfig:       formConfig,
+		ReferralConfig:   referralConfig,
+		EmailConfig:      emailConfig,
+		BrandingConfig:   brandingConfig,
 		PrivacyPolicyURL: req.PrivacyPolicyURL,
 		TermsURL:         req.TermsURL,
 		MaxSignups:       req.MaxSignups,
 	}
 
-	campaign, err := h.processor.CreateCampaign(ctx, accountID, processorReq)
+	campaign, err := h.processor.CreateCampaignV2(ctx, accountID, processorReq)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
@@ -296,7 +284,7 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 		return
 	}
 
-	processorReq := processor.UpdateCampaignRequest{
+	processorReq := processor.UpdateCampaignRequestV2{
 		Name:             req.Name,
 		Description:      req.Description,
 		LaunchDate:       req.LaunchDate,
@@ -306,20 +294,25 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 		MaxSignups:       req.MaxSignups,
 	}
 
+	// Convert JSONB configs to typed configs if provided
 	if req.FormConfig != nil {
-		processorReq.FormConfig = *req.FormConfig
+		converted := convertJSONBToFormConfig(req.FormConfig)
+		processorReq.FormConfig = &converted
 	}
 	if req.ReferralConfig != nil {
-		processorReq.ReferralConfig = *req.ReferralConfig
+		converted := convertJSONBToReferralConfig(req.ReferralConfig)
+		processorReq.ReferralConfig = &converted
 	}
 	if req.EmailConfig != nil {
-		processorReq.EmailConfig = *req.EmailConfig
+		converted := convertJSONBToEmailConfig(req.EmailConfig)
+		processorReq.EmailConfig = &converted
 	}
 	if req.BrandingConfig != nil {
-		processorReq.BrandingConfig = *req.BrandingConfig
+		converted := convertJSONBToBrandingConfig(req.BrandingConfig)
+		processorReq.BrandingConfig = &converted
 	}
 
-	campaign, err := h.processor.UpdateCampaign(ctx, accountID, campaignID, processorReq)
+	campaign, err := h.processor.UpdateCampaignV2(ctx, accountID, campaignID, processorReq)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
@@ -415,4 +408,167 @@ func (h *Handler) HandleUpdateCampaignStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, campaign)
+}
+
+// Conversion helpers from JSONB to typed configs
+
+func convertJSONBToFormConfig(jsonb *store.JSONB) processor.FormConfigRequest {
+	if jsonb == nil {
+		return processor.FormConfigRequest{}
+	}
+
+	config := processor.FormConfigRequest{}
+	j := *jsonb
+
+	// Convert captcha_enabled
+	if val, ok := j["captcha_enabled"].(bool); ok {
+		config.CaptchaEnabled = &val
+	}
+
+	// Convert double_opt_in
+	if val, ok := j["double_opt_in"].(bool); ok {
+		config.DoubleOptIn = &val
+	}
+
+	// Convert custom_css
+	if val, ok := j["custom_css"].(string); ok {
+		config.CustomCSS = &val
+	}
+
+	// Convert fields array
+	if fieldsInterface, ok := j["fields"].([]interface{}); ok {
+		fields := make([]processor.FormFieldRequest, 0, len(fieldsInterface))
+		for i, fieldInterface := range fieldsInterface {
+			if fieldMap, ok := fieldInterface.(map[string]interface{}); ok {
+				field := processor.FormFieldRequest{
+					DisplayOrder: i,
+				}
+				if name, ok := fieldMap["name"].(string); ok {
+					field.Name = name
+				}
+				if fieldType, ok := fieldMap["type"].(string); ok {
+					field.Type = fieldType
+				}
+				if label, ok := fieldMap["label"].(string); ok {
+					field.Label = label
+				}
+				if placeholder, ok := fieldMap["placeholder"].(string); ok {
+					field.Placeholder = &placeholder
+				}
+				if required, ok := fieldMap["required"].(bool); ok {
+					field.Required = required
+				}
+				if options, ok := fieldMap["options"].([]interface{}); ok {
+					strOptions := make([]string, 0, len(options))
+					for _, opt := range options {
+						if strOpt, ok := opt.(string); ok {
+							strOptions = append(strOptions, strOpt)
+						}
+					}
+					field.Options = strOptions
+				}
+				if validation, ok := fieldMap["validation"].(map[string]interface{}); ok {
+					field.Validation = validation
+				}
+				fields = append(fields, field)
+			}
+		}
+		config.Fields = fields
+	}
+
+	return config
+}
+
+func convertJSONBToReferralConfig(jsonb *store.JSONB) processor.ReferralConfigRequest {
+	if jsonb == nil {
+		return processor.ReferralConfigRequest{}
+	}
+
+	config := processor.ReferralConfigRequest{}
+	j := *jsonb
+
+	if val, ok := j["enabled"].(bool); ok {
+		config.Enabled = &val
+	}
+
+	if val, ok := j["points_per_referral"].(float64); ok {
+		intVal := int(val)
+		config.PointsPerReferral = &intVal
+	} else if val, ok := j["points_per_referral"].(int); ok {
+		config.PointsPerReferral = &val
+	}
+
+	if val, ok := j["verified_only"].(bool); ok {
+		config.VerifiedOnly = &val
+	}
+
+	if channels, ok := j["sharing_channels"].([]interface{}); ok {
+		strChannels := make([]string, 0, len(channels))
+		for _, ch := range channels {
+			if strCh, ok := ch.(string); ok {
+				strChannels = append(strChannels, strCh)
+			}
+		}
+		config.SharingChannels = strChannels
+	}
+
+	if messages, ok := j["custom_share_messages"].(map[string]interface{}); ok {
+		config.CustomShareMessages = messages
+	}
+
+	return config
+}
+
+func convertJSONBToEmailConfig(jsonb *store.JSONB) processor.EmailConfigRequest {
+	if jsonb == nil {
+		return processor.EmailConfigRequest{}
+	}
+
+	config := processor.EmailConfigRequest{}
+	j := *jsonb
+
+	if val, ok := j["from_name"].(string); ok {
+		config.FromName = &val
+	}
+
+	if val, ok := j["from_email"].(string); ok {
+		config.FromEmail = &val
+	}
+
+	if val, ok := j["reply_to"].(string); ok {
+		config.ReplyTo = &val
+	}
+
+	if val, ok := j["verification_required"].(bool); ok {
+		config.VerificationRequired = &val
+	}
+
+	return config
+}
+
+func convertJSONBToBrandingConfig(jsonb *store.JSONB) processor.BrandingConfigRequest {
+	if jsonb == nil {
+		return processor.BrandingConfigRequest{}
+	}
+
+	config := processor.BrandingConfigRequest{}
+	j := *jsonb
+
+	if val, ok := j["logo_url"].(string); ok {
+		config.LogoURL = &val
+	}
+
+	if val, ok := j["primary_color"].(string); ok {
+		config.PrimaryColor = &val
+	}
+
+	if val, ok := j["font_family"].(string); ok {
+		config.FontFamily = &val
+	}
+
+	if val, ok := j["custom_domain"].(string); ok {
+		config.CustomDomain = &val
+	}
+
+	return config
 }

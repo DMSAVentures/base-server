@@ -5,7 +5,6 @@ import (
 	"base-server/internal/campaign/processor"
 	"base-server/internal/observability"
 	"base-server/internal/store"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

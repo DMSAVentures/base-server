@@ -57,9 +57,7 @@ func (pc *PositionCalculator) CalculatePositionsForCampaign(ctx context.Context,
 	// Check if email verification is required from campaign config
 	emailVerificationRequired := false
 	if campaign.EmailConfig != nil {
-		if verificationRequired, ok := campaign.EmailConfig["verification_required"].(bool); ok {
-			emailVerificationRequired = verificationRequired
-		}
+		emailVerificationRequired = campaign.EmailConfig.VerificationRequired
 	}
 
 	ctx = observability.WithFields(ctx,

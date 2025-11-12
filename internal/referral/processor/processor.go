@@ -357,10 +357,8 @@ func isValidReferralStatus(status string) bool {
 func getShareMessage(campaign store.Campaign, user store.WaitlistUser) string {
 	// Try to get custom share message from campaign config
 	if campaign.ReferralConfig != nil {
-		if customMessages, ok := campaign.ReferralConfig["custom_share_messages"].(map[string]interface{}); ok {
-			if message, ok := customMessages["default"].(string); ok {
-				return message
-			}
+		if customMessages, ok := campaign.ReferralConfig.CustomShareMessages["default"].(string); ok {
+			return customMessages
 		}
 	}
 
