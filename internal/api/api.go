@@ -6,7 +6,9 @@ import (
 	authHandler "base-server/internal/auth/handler"
 	campaignHandler "base-server/internal/campaign/handler"
 	emailTemplateHandler "base-server/internal/emailtemplates/handler"
+	leaderboardPkg "base-server/internal/leaderboard"
 	billingHandler "base-server/internal/money/billing/handler"
+	"base-server/internal/ratelimit"
 	referralHandler "base-server/internal/referral/handler"
 	rewardHandler "base-server/internal/rewards/handler"
 	voiceCallHandler "base-server/internal/voicecall/handler"
@@ -30,10 +32,13 @@ type API struct {
 	aiHandler            aiHandler.Handler
 	voicecallHandler     voiceCallHandler.Handler
 	webhookHandler       *webhookHandler.Handler
+	leaderboardHandler   *leaderboardPkg.Handler
+	leaderboardAuthMW    *leaderboardPkg.AuthMiddleware
+	rateLimitService     *ratelimit.Service
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	waitlistHandler waitlistHandler.Handler, analyticsHandler analyticsHandler.Handler, referralHandler referralHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
+	waitlistHandler waitlistHandler.Handler, analyticsHandler analyticsHandler.Handler, referralHandler referralHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler, leaderboardHandler *leaderboardPkg.Handler, leaderboardAuthMW *leaderboardPkg.AuthMiddleware, rateLimitService *ratelimit.Service) API {
 	return API{
 		router:               router,
 		authHandler:          authHandler,
@@ -47,6 +52,9 @@ func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandl
 		aiHandler:            aiHandler,
 		voicecallHandler:     voicecallHandler,
 		webhookHandler:       webhookHandler,
+		leaderboardHandler:   leaderboardHandler,
+		leaderboardAuthMW:    leaderboardAuthMW,
+		rateLimitService:     rateLimitService,
 	}
 }
 
@@ -181,6 +189,23 @@ func (a *API) RegisterRoutes() {
 	apiGroup.GET("audio/transcribe", a.voicecallHandler.HandleVoice)               // WebSocket requires GET
 	apiGroup.POST("phone/answer-agent", a.voicecallHandler.HandleAnswerVoiceAgent) // TwiML for voice agent
 	apiGroup.GET("phone/voice-agent", a.voicecallHandler.HandleVoiceAgent)         // WebSocket for voice agent
+
+	// Leaderboard-as-a-Service API (v1) - Public API with API key authentication
+	// Uses API key authentication (Bearer lb_live_xxx or lb_test_xxx) and rate limiting
+	if a.leaderboardHandler != nil && a.leaderboardAuthMW != nil && a.rateLimitService != nil {
+		leaderboardV1 := apiGroup.Group("/v1/leaderboard")
+		leaderboardV1.Use(a.leaderboardAuthMW.Authenticate())
+		leaderboardV1.Use(a.rateLimitService.Middleware())
+		{
+			// Core leaderboard operations
+			leaderboardV1.POST("/rank", a.leaderboardHandler.HandleGetUserRank)
+			leaderboardV1.POST("/top", a.leaderboardHandler.HandleGetTopUsers)
+			leaderboardV1.POST("/around", a.leaderboardHandler.HandleGetUsersAround)
+			leaderboardV1.POST("/update", a.leaderboardHandler.HandleUpdateUserScore)
+			leaderboardV1.POST("/sync", a.leaderboardHandler.HandleSyncToRedis)
+			leaderboardV1.GET("/health", a.leaderboardHandler.HandleHealthCheck)
+		}
+	}
 }
 
 func (a *API) Health() {

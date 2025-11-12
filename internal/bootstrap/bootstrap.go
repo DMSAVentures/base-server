@@ -20,7 +20,10 @@ import (
 	"base-server/internal/clients/googleoauth"
 	kafkaClient "base-server/internal/clients/kafka"
 	"base-server/internal/clients/mail"
+	redisClient "base-server/internal/clients/redis"
 	"base-server/internal/email"
+	leaderboardPkg "base-server/internal/leaderboard"
+	"base-server/internal/ratelimit"
 	emailTemplateHandler "base-server/internal/emailtemplates/handler"
 	emailTemplateProcessor "base-server/internal/emailtemplates/processor"
 	billingHandler "base-server/internal/money/billing/handler"
@@ -63,12 +66,18 @@ type Dependencies struct {
 	RewardHandler        rewardHandler.Handler
 	EmailTemplateHandler emailTemplateHandler.Handler
 	WebhookHandler       *webhookHandler.Handler
+	LeaderboardHandler   *leaderboardPkg.Handler
 
 	// Background workers
 	WebhookConsumer  workers.EventConsumer
 	EmailConsumer    workers.EventConsumer
 	PositionConsumer workers.EventConsumer
 	WebhookWorker    *webhookWorker.WebhookWorker
+
+	// Leaderboard services (for LaaS)
+	RedisClient         *redisClient.Client
+	RateLimitService    *ratelimit.Service
+	LeaderboardAuthMW   *leaderboardPkg.AuthMiddleware
 
 	// Kafka clients (for cleanup)
 	KafkaProducer *kafkaClient.Producer
@@ -164,6 +173,25 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	positionCalculator := waitlistProcessor.NewPositionCalculator(&deps.Store, logger)
 	deps.WaitlistHandler = waitlistHandler.New(waitlistProc, positionCalculator, logger, cfg.Services.WebAppURI)
 
+	// Initialize Redis client (optional for LaaS)
+	deps.RedisClient, err = redisClient.NewClient(cfg.Redis, logger)
+	if err != nil {
+		// Redis is optional - log error but continue
+		logger.Warn(ctx, "Redis client initialization failed, LaaS features will use formula-based calculation only", err)
+		deps.RedisClient = nil
+	}
+
+	// Initialize LaaS services
+	redisLeaderboardSvc := leaderboardPkg.NewRedisLeaderboardService(deps.RedisClient, &deps.Store, logger)
+	rateLimitSvc := ratelimit.NewService(deps.RedisClient, deps.Store, logger)
+	hybridLeaderboardSvc := leaderboardPkg.NewHybridService(redisLeaderboardSvc, positionCalculator, deps.Store, logger)
+	leaderboardProc := leaderboardPkg.NewProcessor(hybridLeaderboardSvc, deps.Store, logger)
+	leaderboardAuthMW := leaderboardPkg.NewAuthMiddleware(deps.Store, logger)
+
+	deps.RateLimitService = rateLimitSvc
+	deps.LeaderboardAuthMW = leaderboardAuthMW
+	deps.LeaderboardHandler = leaderboardPkg.NewHandler(leaderboardProc, deps.Store, logger)
+
 	// Initialize analytics processor and handler
 	analyticsProc := analyticsProcessor.New(&deps.Store, logger)
 	deps.AnalyticsHandler = analyticsHandler.New(analyticsProc, logger)
@@ -213,6 +241,9 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 func (d *Dependencies) Cleanup() {
 	if d.KafkaProducer != nil {
 		d.KafkaProducer.Close()
+	}
+	if d.RedisClient != nil {
+		d.RedisClient.Close()
 	}
 	// Note: Consumers manage their own Kafka reader cleanup in Stop()
 }

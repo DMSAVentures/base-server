@@ -71,6 +71,9 @@ func (s *Server) Setup() {
 		s.deps.AIHandler,
 		s.deps.VoiceCallHandler,
 		s.deps.WebhookHandler,
+		s.deps.LeaderboardHandler,
+		s.deps.LeaderboardAuthMW,
+		s.deps.RateLimitService,
 	)
 	api.RegisterRoutes()
 }
