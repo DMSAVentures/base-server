@@ -215,6 +215,226 @@ func TestStore_GetSignupsOverTime(t *testing.T) {
 	})
 }
 
+func TestStore_GetSignupsBySource(t *testing.T) {
+	testDB := SetupTestDB(t, TestDBTypePostgres)
+	defer testDB.Close()
+	testDB.Truncate(t)
+
+	ctx := context.Background()
+
+	// Create test account and campaign
+	account := createTestAccount(t, testDB)
+	campaign := createTestCampaign(t, testDB, account.ID, "Source Analytics Test", "source-analytics-test")
+
+	// Create users at specific times with different UTM sources
+	now := time.Now().UTC()
+	yesterday := now.AddDate(0, 0, -1)
+	twoDaysAgo := now.AddDate(0, 0, -2)
+
+	// Helper to create user with specific created_at and utm_source
+	createUserWithSource := func(email string, createdAt time.Time, utmSource *string) {
+		refCode := fmt.Sprintf("REF%s", uuid.New().String()[:8])
+		var utmVal interface{} = nil
+		if utmSource != nil {
+			utmVal = *utmSource
+		}
+		_, err := testDB.db.ExecContext(ctx, `
+			INSERT INTO waitlist_users (
+				id, campaign_id, email, referral_code, position, original_position,
+				terms_accepted, created_at, updated_at, utm_source
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`, uuid.New(), campaign.ID, email, refCode, 1, 1, true, createdAt, createdAt, utmVal)
+		if err != nil {
+			t.Fatalf("Failed to create test user: %v", err)
+		}
+	}
+
+	// Create users with different sources at different times
+	google := "google"
+	facebook := "facebook"
+
+	// Today: 2 google, 1 facebook, 1 null
+	createUserWithSource("today-google1@example.com", now.Add(-1*time.Hour), &google)
+	createUserWithSource("today-google2@example.com", now.Add(-2*time.Hour), &google)
+	createUserWithSource("today-facebook1@example.com", now.Add(-3*time.Hour), &facebook)
+	createUserWithSource("today-null1@example.com", now.Add(-4*time.Hour), nil)
+
+	// Yesterday: 1 google, 2 facebook
+	createUserWithSource("yesterday-google1@example.com", yesterday, &google)
+	createUserWithSource("yesterday-facebook1@example.com", yesterday.Add(-1*time.Hour), &facebook)
+	createUserWithSource("yesterday-facebook2@example.com", yesterday.Add(-2*time.Hour), &facebook)
+
+	// Two days ago: 1 null
+	createUserWithSource("twodays-null1@example.com", twoDaysAgo, nil)
+
+	t.Run("daily period with multiple sources", func(t *testing.T) {
+		from := now.AddDate(0, 0, -3)
+		to := now
+
+		results, err := testDB.Store.GetSignupsBySource(ctx, campaign.ID, from, to, "day")
+		if err != nil {
+			t.Fatalf("GetSignupsBySource() error = %v", err)
+		}
+
+		if len(results) == 0 {
+			t.Fatal("Expected results, got none")
+		}
+
+		// Count by source
+		sourceCounts := make(map[string]int)
+		for _, r := range results {
+			source := ""
+			if r.UTMSource != nil {
+				source = *r.UTMSource
+			}
+			sourceCounts[source] += r.Count
+		}
+
+		// Verify totals per source
+		if sourceCounts["google"] != 3 {
+			t.Errorf("Expected 3 google signups, got %d", sourceCounts["google"])
+		}
+		if sourceCounts["facebook"] != 3 {
+			t.Errorf("Expected 3 facebook signups, got %d", sourceCounts["facebook"])
+		}
+		if sourceCounts[""] != 2 {
+			t.Errorf("Expected 2 null source signups, got %d", sourceCounts[""])
+		}
+	})
+
+	t.Run("daily period - verify date grouping", func(t *testing.T) {
+		from := now.AddDate(0, 0, -3)
+		to := now
+
+		results, err := testDB.Store.GetSignupsBySource(ctx, campaign.ID, from, to, "day")
+		if err != nil {
+			t.Fatalf("GetSignupsBySource() error = %v", err)
+		}
+
+		// Group by date
+		dateSourceCounts := make(map[string]map[string]int)
+		for _, r := range results {
+			dateKey := r.Date.UTC().Format("2006-01-02")
+			source := ""
+			if r.UTMSource != nil {
+				source = *r.UTMSource
+			}
+			if dateSourceCounts[dateKey] == nil {
+				dateSourceCounts[dateKey] = make(map[string]int)
+			}
+			dateSourceCounts[dateKey][source] = r.Count
+		}
+
+		todayKey := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+		yesterdayKey := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+
+		// Verify today's counts
+		if dateSourceCounts[todayKey]["google"] != 2 {
+			t.Errorf("Expected 2 google signups today, got %d", dateSourceCounts[todayKey]["google"])
+		}
+		if dateSourceCounts[todayKey]["facebook"] != 1 {
+			t.Errorf("Expected 1 facebook signup today, got %d", dateSourceCounts[todayKey]["facebook"])
+		}
+
+		// Verify yesterday's counts
+		if dateSourceCounts[yesterdayKey]["google"] != 1 {
+			t.Errorf("Expected 1 google signup yesterday, got %d", dateSourceCounts[yesterdayKey]["google"])
+		}
+		if dateSourceCounts[yesterdayKey]["facebook"] != 2 {
+			t.Errorf("Expected 2 facebook signups yesterday, got %d", dateSourceCounts[yesterdayKey]["facebook"])
+		}
+	})
+
+	t.Run("weekly period", func(t *testing.T) {
+		from := now.AddDate(0, 0, -14)
+		to := now
+
+		results, err := testDB.Store.GetSignupsBySource(ctx, campaign.ID, from, to, "week")
+		if err != nil {
+			t.Fatalf("GetSignupsBySource() error = %v", err)
+		}
+
+		if len(results) == 0 {
+			t.Fatal("Expected results, got none")
+		}
+
+		// Verify data is grouped by week (convert to UTC for comparison)
+		for _, r := range results {
+			dateUTC := r.Date.UTC()
+			if dateUTC.Weekday() != time.Monday {
+				t.Errorf("Expected week to start on Monday, got %v (date: %v)", dateUTC.Weekday(), dateUTC)
+			}
+		}
+	})
+
+	t.Run("monthly period", func(t *testing.T) {
+		from := now.AddDate(0, -2, 0)
+		to := now
+
+		results, err := testDB.Store.GetSignupsBySource(ctx, campaign.ID, from, to, "month")
+		if err != nil {
+			t.Fatalf("GetSignupsBySource() error = %v", err)
+		}
+
+		if len(results) == 0 {
+			t.Fatal("Expected results, got none")
+		}
+
+		// Verify data is grouped by month (day should be 1, convert to UTC)
+		for _, r := range results {
+			dateUTC := r.Date.UTC()
+			if dateUTC.Day() != 1 {
+				t.Errorf("Expected month to start on day 1, got day %d (date: %v)", dateUTC.Day(), dateUTC)
+			}
+		}
+	})
+
+	t.Run("empty result for future dates", func(t *testing.T) {
+		from := now.AddDate(1, 0, 0) // 1 year in future
+		to := now.AddDate(1, 0, 7)
+
+		results, err := testDB.Store.GetSignupsBySource(ctx, campaign.ID, from, to, "day")
+		if err != nil {
+			t.Fatalf("GetSignupsBySource() error = %v", err)
+		}
+
+		if len(results) != 0 {
+			t.Errorf("Expected no results for future dates, got %d", len(results))
+		}
+	})
+
+	t.Run("invalid period defaults to day", func(t *testing.T) {
+		from := now.AddDate(0, 0, -3)
+		to := now
+
+		results, err := testDB.Store.GetSignupsBySource(ctx, campaign.ID, from, to, "invalid")
+		if err != nil {
+			t.Fatalf("GetSignupsBySource() error = %v", err)
+		}
+
+		// Should still return results (defaulting to day)
+		if len(results) == 0 {
+			t.Fatal("Expected results with invalid period (should default to day)")
+		}
+	})
+
+	t.Run("different campaign returns no data", func(t *testing.T) {
+		otherCampaign := createTestCampaign(t, testDB, account.ID, "Other Campaign 2", "other-campaign-2")
+
+		from := now.AddDate(0, 0, -7)
+		to := now
+
+		results, err := testDB.Store.GetSignupsBySource(ctx, otherCampaign.ID, from, to, "day")
+		if err != nil {
+			t.Fatalf("GetSignupsBySource() error = %v", err)
+		}
+
+		if len(results) != 0 {
+			t.Errorf("Expected no results for different campaign, got %d", len(results))
+		}
+	})
+}
+
 func TestStore_GetSignupsOverTime_TimezoneHandling(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()

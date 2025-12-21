@@ -222,6 +222,13 @@ type SignupsOverTimeDataPoint struct {
 	Count int       `db:"count" json:"count"`
 }
 
+// SignupsBySourceDataPoint represents a single data point for signups by source over time
+type SignupsBySourceDataPoint struct {
+	Date      time.Time `db:"date" json:"date"`
+	UTMSource *string   `db:"utm_source" json:"utm_source"`
+	Count     int       `db:"count" json:"count"`
+}
+
 // GetSignupsOverTime retrieves signup counts grouped by time period
 func (s *Store) GetSignupsOverTime(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo time.Time, period string) ([]SignupsOverTimeDataPoint, error) {
 	// Validate period
@@ -253,6 +260,42 @@ ORDER BY date ASC
 	if err != nil {
 		s.logger.Error(ctx, "failed to get signups over time", err)
 		return nil, fmt.Errorf("failed to get signups over time: %w", err)
+	}
+	return results, nil
+}
+
+// GetSignupsBySource retrieves signup counts grouped by time period and UTM source
+func (s *Store) GetSignupsBySource(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo time.Time, period string) ([]SignupsBySourceDataPoint, error) {
+	// Validate period
+	validPeriods := map[string]bool{
+		"hour":  true,
+		"day":   true,
+		"week":  true,
+		"month": true,
+	}
+	if !validPeriods[period] {
+		period = "day"
+	}
+
+	query := fmt.Sprintf(`
+SELECT
+    DATE_TRUNC('%s', created_at) as date,
+    utm_source,
+    COUNT(*)::int as count
+FROM waitlist_users
+WHERE campaign_id = $1
+    AND deleted_at IS NULL
+    AND created_at >= $2
+    AND created_at <= $3
+GROUP BY 1, utm_source
+ORDER BY date ASC, utm_source ASC NULLS LAST
+`, period)
+
+	var results []SignupsBySourceDataPoint
+	err := s.db.SelectContext(ctx, &results, query, campaignID, dateFrom, dateTo)
+	if err != nil {
+		s.logger.Error(ctx, "failed to get signups by source", err)
+		return nil, fmt.Errorf("failed to get signups by source: %w", err)
 	}
 	return results, nil
 }

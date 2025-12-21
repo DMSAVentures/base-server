@@ -240,6 +240,68 @@ func (h *Handler) HandleGetSignupsOverTime(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// HandleGetSignupsBySource retrieves signups by source for stacked bar charts
+func (h *Handler) HandleGetSignupsBySource(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get account ID from context
+	accountIDStr, exists := c.Get("Account-ID")
+	if !exists {
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		return
+	}
+
+	accountID, err := uuid.Parse(accountIDStr.(string))
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse account ID", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		return
+	}
+
+	// Get campaign ID from path
+	campaignIDStr := c.Param("campaign_id")
+	campaignID, err := uuid.Parse(campaignIDStr)
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse campaign ID", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		return
+	}
+
+	// Parse date range parameters
+	var dateFrom, dateTo *time.Time
+	if dateFromStr := c.Query("from"); dateFromStr != "" {
+		parsed, err := time.Parse(time.RFC3339, dateFromStr)
+		if err != nil {
+			h.logger.Error(ctx, "failed to parse from", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from format, use RFC3339"})
+			return
+		}
+		dateFrom = &parsed
+	}
+
+	if dateToStr := c.Query("to"); dateToStr != "" {
+		parsed, err := time.Parse(time.RFC3339, dateToStr)
+		if err != nil {
+			h.logger.Error(ctx, "failed to parse to", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid to format, use RFC3339"})
+			return
+		}
+		dateTo = &parsed
+	}
+
+	// Parse period parameter (default: day)
+	period := c.DefaultQuery("period", "day")
+
+	// Get signups by source
+	response, err := h.processor.GetSignupsBySource(ctx, accountID, campaignID, dateFrom, dateTo, period)
+	if err != nil {
+		apierrors.RespondWithError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // HandleGetSourceAnalytics retrieves traffic source breakdown
 func (h *Handler) HandleGetSourceAnalytics(c *gin.Context) {
 	ctx := c.Request.Context()

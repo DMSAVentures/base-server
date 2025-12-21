@@ -5,6 +5,7 @@ import (
 	"base-server/internal/store"
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,6 +48,14 @@ type SignupsOverTimeResponse struct {
 	Data   []store.SignupsOverTimeDataPoint `json:"data"`
 	Total  int                              `json:"total"`
 	Period string                           `json:"period"`
+}
+
+// SignupsBySourceResponse represents the response for signups by source chart
+type SignupsBySourceResponse struct {
+	Data    []store.SignupsBySourceDataPoint `json:"data"`
+	Sources []string                         `json:"sources"`
+	Total   int                              `json:"total"`
+	Period  string                           `json:"period"`
 }
 
 // ConversionAnalyticsResponse represents conversion analytics response
@@ -344,6 +353,159 @@ func (p *AnalyticsProcessor) GetSignupsOverTime(ctx context.Context, accountID, 
 		Total:  total,
 		Period: period,
 	}, nil
+}
+
+// GetSignupsBySource retrieves signup counts over time broken down by UTM source
+func (p *AnalyticsProcessor) GetSignupsBySource(ctx context.Context, accountID, campaignID uuid.UUID, dateFrom, dateTo *time.Time, period string) (SignupsBySourceResponse, error) {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "account_id", Value: accountID.String()},
+		observability.Field{Key: "campaign_id", Value: campaignID.String()},
+		observability.Field{Key: "period", Value: period},
+	)
+
+	// Verify campaign belongs to account
+	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return SignupsBySourceResponse{}, ErrCampaignNotFound
+		}
+		p.logger.Error(ctx, "failed to get campaign", err)
+		return SignupsBySourceResponse{}, err
+	}
+
+	if campaign.AccountID != accountID {
+		return SignupsBySourceResponse{}, ErrUnauthorized
+	}
+
+	// Set default date range if not provided (use UTC)
+	now := time.Now().UTC()
+	from := now.AddDate(0, 0, -30) // Default: last 30 days
+	to := now
+	if dateFrom != nil {
+		from = dateFrom.UTC()
+	}
+	if dateTo != nil {
+		to = dateTo.UTC()
+	}
+
+	// Validate date range
+	if from.After(to) {
+		return SignupsBySourceResponse{}, ErrInvalidDateRange
+	}
+
+	// Validate period
+	validPeriods := map[string]bool{
+		"hour":  true,
+		"day":   true,
+		"week":  true,
+		"month": true,
+	}
+	if !validPeriods[period] {
+		period = "day"
+	}
+
+	// Get signups by source data
+	data, err := p.store.GetSignupsBySource(ctx, campaignID, from, to, period)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get signups by source", err)
+		return SignupsBySourceResponse{}, err
+	}
+
+	// Extract unique sources and fill gaps
+	data, sources := fillGapsBySource(data, from, to, period)
+
+	// Calculate total
+	total := 0
+	for _, d := range data {
+		total += d.Count
+	}
+
+	return SignupsBySourceResponse{
+		Data:    data,
+		Sources: sources,
+		Total:   total,
+		Period:  period,
+	}, nil
+}
+
+// fillGapsBySource fills in missing time periods with zero counts for each source
+func fillGapsBySource(data []store.SignupsBySourceDataPoint, from, to time.Time, period string) ([]store.SignupsBySourceDataPoint, []string) {
+	// Normalize to UTC to ensure consistent comparison
+	from = from.UTC()
+	to = to.UTC()
+
+	// Extract unique sources
+	sourceSet := make(map[string]bool)
+	for _, d := range data {
+		if d.UTMSource != nil {
+			sourceSet[*d.UTMSource] = true
+		} else {
+			sourceSet[""] = true // empty string for null utm_source
+		}
+	}
+
+	// Convert to sorted slice
+	sources := make([]string, 0, len(sourceSet))
+	for s := range sourceSet {
+		sources = append(sources, s)
+	}
+	// Sort sources with empty string (null) last
+	for i := 0; i < len(sources)-1; i++ {
+		for j := i + 1; j < len(sources); j++ {
+			// Empty string should come last
+			if sources[i] == "" || (sources[j] != "" && sources[i] > sources[j]) {
+				sources[i], sources[j] = sources[j], sources[i]
+			}
+		}
+	}
+
+	if len(data) == 0 {
+		// Return empty data with empty sources
+		return []store.SignupsBySourceDataPoint{}, []string{}
+	}
+
+	// Create a map for quick lookup: key = "unix_timestamp:source"
+	dataMap := make(map[string]int)
+	for _, d := range data {
+		key := truncateTime(d.Date.UTC(), period).Unix()
+		source := ""
+		if d.UTMSource != nil {
+			source = *d.UTMSource
+		}
+		mapKey := formatSourceKey(key, source)
+		dataMap[mapKey] = d.Count
+	}
+
+	// Generate complete list of periods for each source
+	var result []store.SignupsBySourceDataPoint
+	current := truncateTime(from, period)
+	end := truncateTime(to, period)
+
+	for !current.After(end) {
+		key := current.Unix()
+		for _, source := range sources {
+			mapKey := formatSourceKey(key, source)
+			count := dataMap[mapKey]
+			var utmSource *string
+			if source != "" {
+				s := source
+				utmSource = &s
+			}
+			result = append(result, store.SignupsBySourceDataPoint{
+				Date:      current,
+				UTMSource: utmSource,
+				Count:     count,
+			})
+		}
+		current = advanceTime(current, period)
+	}
+
+	return result, sources
+}
+
+// formatSourceKey creates a unique key for date+source combination
+func formatSourceKey(unixTime int64, source string) string {
+	return fmt.Sprintf("%d:%s", unixTime, source)
 }
 
 // fillGaps fills in missing time periods with zero counts
