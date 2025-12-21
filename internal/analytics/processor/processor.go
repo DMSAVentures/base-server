@@ -31,15 +31,22 @@ func New(store AnalyticsStore, logger *observability.Logger) AnalyticsProcessor 
 
 // AnalyticsOverviewResponse represents the overview analytics response
 type AnalyticsOverviewResponse struct {
-	TotalSignups      int                         `json:"total_signups"`
-	TotalVerified     int                         `json:"total_verified"`
-	TotalReferrals    int                         `json:"total_referrals"`
-	VerificationRate  float64                     `json:"verification_rate"`
-	AverageReferrals  float64                     `json:"average_referrals"`
-	ViralCoefficient  float64                     `json:"viral_coefficient"`
-	TopReferrers      []store.TopReferrerResult   `json:"top_referrers"`
-	SignupsOverTime   []store.TimeSeriesDataPoint `json:"signups_over_time"`
-	ReferralSources   []store.SourceBreakdownResult `json:"referral_sources"`
+	TotalSignups      int                              `json:"total_signups"`
+	TotalVerified     int                              `json:"total_verified"`
+	TotalReferrals    int                              `json:"total_referrals"`
+	VerificationRate  float64                          `json:"verification_rate"`
+	AverageReferrals  float64                          `json:"average_referrals"`
+	ViralCoefficient  float64                          `json:"viral_coefficient"`
+	TopReferrers      []store.TopReferrerResult        `json:"top_referrers"`
+	SignupsOverTime   []store.SignupsOverTimeDataPoint `json:"signups_over_time"`
+	ReferralSources   []store.SourceBreakdownResult    `json:"referral_sources"`
+}
+
+// SignupsOverTimeResponse represents the response for signups over time chart
+type SignupsOverTimeResponse struct {
+	Data   []store.SignupsOverTimeDataPoint `json:"data"`
+	Total  int                              `json:"total"`
+	Period string                           `json:"period"`
 }
 
 // ConversionAnalyticsResponse represents conversion analytics response
@@ -113,11 +120,14 @@ func (p *AnalyticsProcessor) GetAnalyticsOverview(ctx context.Context, accountID
 
 	// Get time series data for last 30 days
 	dateFrom := time.Now().AddDate(0, 0, -30)
-	signupsOverTime, err := p.store.GetTimeSeriesAnalytics(ctx, campaignID, &dateFrom, nil, "day")
+	dateTo := time.Now()
+	signupsOverTime, err := p.store.GetSignupsOverTime(ctx, campaignID, dateFrom, dateTo, "day")
 	if err != nil {
-		p.logger.Error(ctx, "failed to get time series analytics", err)
+		p.logger.Error(ctx, "failed to get signups over time", err)
 		return AnalyticsOverviewResponse{}, err
 	}
+	// Fill gaps for missing dates
+	signupsOverTime = fillGaps(signupsOverTime, dateFrom, dateTo, "day")
 
 	// Get referral sources
 	referralSources, err := p.store.GetReferralSourceBreakdown(ctx, campaignID, nil, nil)
@@ -264,52 +274,168 @@ func (p *AnalyticsProcessor) GetReferralAnalytics(ctx context.Context, accountID
 	return response, nil
 }
 
-// GetTimeSeriesAnalytics retrieves time-series analytics data
-func (p *AnalyticsProcessor) GetTimeSeriesAnalytics(ctx context.Context, accountID, campaignID uuid.UUID, dateFrom, dateTo *time.Time, granularity string) ([]store.TimeSeriesDataPoint, error) {
+// GetSignupsOverTime retrieves signup counts over time for charts
+func (p *AnalyticsProcessor) GetSignupsOverTime(ctx context.Context, accountID, campaignID uuid.UUID, dateFrom, dateTo *time.Time, period string) (SignupsOverTimeResponse, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
-		observability.Field{Key: "granularity", Value: granularity},
+		observability.Field{Key: "period", Value: period},
 	)
 
 	// Verify campaign belongs to account
 	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return nil, ErrCampaignNotFound
+			return SignupsOverTimeResponse{}, ErrCampaignNotFound
 		}
 		p.logger.Error(ctx, "failed to get campaign", err)
-		return nil, err
+		return SignupsOverTimeResponse{}, err
 	}
 
 	if campaign.AccountID != accountID {
-		return nil, ErrUnauthorized
+		return SignupsOverTimeResponse{}, ErrUnauthorized
+	}
+
+	// Set default date range if not provided (use UTC)
+	now := time.Now().UTC()
+	from := now.AddDate(0, 0, -30) // Default: last 30 days
+	to := now
+	if dateFrom != nil {
+		from = dateFrom.UTC()
+	}
+	if dateTo != nil {
+		to = dateTo.UTC()
 	}
 
 	// Validate date range
-	if dateFrom != nil && dateTo != nil && dateFrom.After(*dateTo) {
-		return nil, ErrInvalidDateRange
+	if from.After(to) {
+		return SignupsOverTimeResponse{}, ErrInvalidDateRange
 	}
 
-	// Validate granularity
-	validGranularities := map[string]bool{
+	// Validate period
+	validPeriods := map[string]bool{
 		"hour":  true,
 		"day":   true,
 		"week":  true,
 		"month": true,
 	}
-	if !validGranularities[granularity] {
-		return nil, ErrInvalidGranularity
+	if !validPeriods[period] {
+		period = "day"
 	}
 
-	// Get time series data
-	timeSeriesData, err := p.store.GetTimeSeriesAnalytics(ctx, campaignID, dateFrom, dateTo, granularity)
+	// Get signups over time data
+	data, err := p.store.GetSignupsOverTime(ctx, campaignID, from, to, period)
 	if err != nil {
-		p.logger.Error(ctx, "failed to get time series analytics", err)
-		return nil, err
+		p.logger.Error(ctx, "failed to get signups over time", err)
+		return SignupsOverTimeResponse{}, err
 	}
 
-	return timeSeriesData, nil
+	// Fill gaps for missing time periods
+	data = fillGaps(data, from, to, period)
+
+	// Calculate total
+	total := 0
+	for _, d := range data {
+		total += d.Count
+	}
+
+	return SignupsOverTimeResponse{
+		Data:   data,
+		Total:  total,
+		Period: period,
+	}, nil
+}
+
+// fillGaps fills in missing time periods with zero counts
+func fillGaps(data []store.SignupsOverTimeDataPoint, from, to time.Time, period string) []store.SignupsOverTimeDataPoint {
+	// Normalize to UTC to ensure consistent comparison
+	from = from.UTC()
+	to = to.UTC()
+
+	if len(data) == 0 {
+		// Generate all periods with zero counts
+		return generateEmptyPeriods(from, to, period)
+	}
+
+	// Create a map for quick lookup using Unix timestamp (timezone-agnostic)
+	dataMap := make(map[int64]int)
+	for _, d := range data {
+		// Normalize DB date to UTC and truncate, then use Unix timestamp as key
+		key := truncateTime(d.Date.UTC(), period).Unix()
+		dataMap[key] = d.Count
+	}
+
+	// Generate complete list of periods
+	var result []store.SignupsOverTimeDataPoint
+	current := truncateTime(from, period)
+	end := truncateTime(to, period)
+
+	for !current.After(end) {
+		key := current.Unix()
+		count := dataMap[key]
+		result = append(result, store.SignupsOverTimeDataPoint{
+			Date:  current,
+			Count: count,
+		})
+		current = advanceTime(current, period)
+	}
+
+	return result
+}
+
+// generateEmptyPeriods generates a list of periods with zero counts
+func generateEmptyPeriods(from, to time.Time, period string) []store.SignupsOverTimeDataPoint {
+	var result []store.SignupsOverTimeDataPoint
+	current := truncateTime(from.UTC(), period)
+	end := truncateTime(to.UTC(), period)
+
+	for !current.After(end) {
+		result = append(result, store.SignupsOverTimeDataPoint{
+			Date:  current,
+			Count: 0,
+		})
+		current = advanceTime(current, period)
+	}
+
+	return result
+}
+
+// truncateTime truncates a time to the start of the given period (in UTC)
+func truncateTime(t time.Time, period string) time.Time {
+	t = t.UTC()
+	switch period {
+	case "hour":
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.UTC)
+	case "day":
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	case "week":
+		// Truncate to Monday of the week
+		weekday := int(t.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		return time.Date(t.Year(), t.Month(), t.Day()-(weekday-1), 0, 0, 0, 0, time.UTC)
+	case "month":
+		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+	default:
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	}
+}
+
+// advanceTime advances the time by one period
+func advanceTime(t time.Time, period string) time.Time {
+	switch period {
+	case "hour":
+		return t.Add(time.Hour)
+	case "day":
+		return t.AddDate(0, 0, 1)
+	case "week":
+		return t.AddDate(0, 0, 7)
+	case "month":
+		return t.AddDate(0, 1, 0)
+	default:
+		return t.AddDate(0, 0, 1)
+	}
 }
 
 // GetSourceAnalytics retrieves traffic source breakdown

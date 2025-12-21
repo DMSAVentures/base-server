@@ -154,7 +154,7 @@ func (a *API) RegisterRoutes() {
 				analyticsGroup.GET("/overview", a.analyticsHandler.HandleGetAnalyticsOverview)
 				analyticsGroup.GET("/conversions", a.analyticsHandler.HandleGetConversionAnalytics)
 				analyticsGroup.GET("/referrals", a.analyticsHandler.HandleGetReferralAnalytics)
-				analyticsGroup.GET("/time-series", a.analyticsHandler.HandleGetTimeSeriesAnalytics)
+				analyticsGroup.GET("/signups-over-time", a.analyticsHandler.HandleGetSignupsOverTime)
 				analyticsGroup.GET("/sources", a.analyticsHandler.HandleGetSourceAnalytics)
 				analyticsGroup.GET("/funnel", a.analyticsHandler.HandleGetFunnelAnalytics)
 			}

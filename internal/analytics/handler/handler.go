@@ -178,8 +178,8 @@ func (h *Handler) HandleGetReferralAnalytics(c *gin.Context) {
 	c.JSON(http.StatusOK, referrals)
 }
 
-// HandleGetTimeSeriesAnalytics retrieves time-series analytics data
-func (h *Handler) HandleGetTimeSeriesAnalytics(c *gin.Context) {
+// HandleGetSignupsOverTime retrieves signups over time for charts
+func (h *Handler) HandleGetSignupsOverTime(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Get account ID from context
@@ -207,37 +207,37 @@ func (h *Handler) HandleGetTimeSeriesAnalytics(c *gin.Context) {
 
 	// Parse date range parameters
 	var dateFrom, dateTo *time.Time
-	if dateFromStr := c.Query("date_from"); dateFromStr != "" {
+	if dateFromStr := c.Query("from"); dateFromStr != "" {
 		parsed, err := time.Parse(time.RFC3339, dateFromStr)
 		if err != nil {
-			h.logger.Error(ctx, "failed to parse date_from", err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date_from format, use RFC3339"})
+			h.logger.Error(ctx, "failed to parse from", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from format, use RFC3339"})
 			return
 		}
 		dateFrom = &parsed
 	}
 
-	if dateToStr := c.Query("date_to"); dateToStr != "" {
+	if dateToStr := c.Query("to"); dateToStr != "" {
 		parsed, err := time.Parse(time.RFC3339, dateToStr)
 		if err != nil {
-			h.logger.Error(ctx, "failed to parse date_to", err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date_to format, use RFC3339"})
+			h.logger.Error(ctx, "failed to parse to", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid to format, use RFC3339"})
 			return
 		}
 		dateTo = &parsed
 	}
 
-	// Parse granularity parameter (default: day)
-	granularity := c.DefaultQuery("granularity", "day")
+	// Parse period parameter (default: day)
+	period := c.DefaultQuery("period", "day")
 
-	// Get time series analytics
-	timeSeries, err := h.processor.GetTimeSeriesAnalytics(ctx, accountID, campaignID, dateFrom, dateTo, granularity)
+	// Get signups over time
+	response, err := h.processor.GetSignupsOverTime(ctx, accountID, campaignID, dateFrom, dateTo, period)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, timeSeries)
+	c.JSON(http.StatusOK, response)
 }
 
 // HandleGetSourceAnalytics retrieves traffic source breakdown

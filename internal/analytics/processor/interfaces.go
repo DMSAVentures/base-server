@@ -13,7 +13,7 @@ type AnalyticsStore interface {
 	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)
 	GetAnalyticsOverview(ctx context.Context, campaignID uuid.UUID) (store.AnalyticsOverviewResult, error)
 	GetTopReferrers(ctx context.Context, campaignID uuid.UUID, limit int) ([]store.TopReferrerResult, error)
-	GetTimeSeriesAnalytics(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo *time.Time, granularity string) ([]store.TimeSeriesDataPoint, error)
+	GetSignupsOverTime(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo time.Time, period string) ([]store.SignupsOverTimeDataPoint, error)
 	GetReferralSourceBreakdown(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo *time.Time) ([]store.SourceBreakdownResult, error)
 	GetConversionAnalytics(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo *time.Time) (store.ConversionAnalyticsResult, error)
 	GetReferralAnalytics(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo *time.Time) (store.ReferralAnalyticsResult, error)

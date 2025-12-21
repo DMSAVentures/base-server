@@ -22,17 +22,6 @@ type SourceBreakdownResult struct {
 	Count  int    `db:"count" json:"count"`
 }
 
-// TimeSeriesDataPoint represents a point in time series
-type TimeSeriesDataPoint struct {
-	Date          time.Time `db:"date" json:"date"`
-	Signups       int       `db:"signups" json:"signups"`
-	Verified      int       `db:"verified" json:"verified"`
-	Referrals     int       `db:"referrals" json:"referrals"`
-	EmailsSent    int       `db:"emails_sent" json:"emails_sent"`
-	EmailsOpened  int       `db:"emails_opened" json:"emails_opened"`
-	EmailsClicked int       `db:"emails_clicked" json:"emails_clicked"`
-}
-
 // FunnelStepResult represents a funnel step
 type FunnelStepResult struct {
 	Step        string  `db:"step" json:"step"`
@@ -227,45 +216,43 @@ func (s *Store) GetReferralSourceBreakdown(ctx context.Context, campaignID uuid.
 	return results, nil
 }
 
-// GetTimeSeriesAnalytics retrieves time-series analytics data
-func (s *Store) GetTimeSeriesAnalytics(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo *time.Time, granularity string) ([]TimeSeriesDataPoint, error) {
-	// Determine time bucket based on granularity
-	var timeBucket string
-	switch granularity {
-	case "hour":
-		timeBucket = "1 hour"
-	case "day":
-		timeBucket = "1 day"
-	case "week":
-		timeBucket = "1 week"
-	case "month":
-		timeBucket = "1 month"
-	default:
-		timeBucket = "1 day"
+// SignupsOverTimeDataPoint represents a single data point for signups over time
+type SignupsOverTimeDataPoint struct {
+	Date  time.Time `db:"date" json:"date"`
+	Count int       `db:"count" json:"count"`
+}
+
+// GetSignupsOverTime retrieves signup counts grouped by time period
+func (s *Store) GetSignupsOverTime(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo time.Time, period string) ([]SignupsOverTimeDataPoint, error) {
+	// Validate period
+	validPeriods := map[string]bool{
+		"hour":  true,
+		"day":   true,
+		"week":  true,
+		"month": true,
+	}
+	if !validPeriods[period] {
+		period = "day"
 	}
 
 	query := fmt.Sprintf(`
 SELECT
-    time_bucket('%s', time) as date,
-    COALESCE(SUM(new_signups), 0)::int as signups,
-    COALESCE(SUM(new_verified), 0)::int as verified,
-    COALESCE(SUM(new_referrals), 0)::int as referrals,
-    COALESCE(SUM(emails_sent), 0)::int as emails_sent,
-    COALESCE(SUM(emails_opened), 0)::int as emails_opened,
-    COALESCE(SUM(emails_clicked), 0)::int as emails_clicked
-FROM campaign_analytics
+    DATE_TRUNC('%s', created_at) as date,
+    COUNT(*)::int as count
+FROM waitlist_users
 WHERE campaign_id = $1
-    AND ($2::timestamptz IS NULL OR time >= $2)
-    AND ($3::timestamptz IS NULL OR time <= $3)
-GROUP BY date
+    AND deleted_at IS NULL
+    AND created_at >= $2
+    AND created_at <= $3
+GROUP BY 1
 ORDER BY date ASC
-`, timeBucket)
+`, period)
 
-	var results []TimeSeriesDataPoint
+	var results []SignupsOverTimeDataPoint
 	err := s.db.SelectContext(ctx, &results, query, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get time series analytics", err)
-		return nil, fmt.Errorf("failed to get time series analytics: %w", err)
+		s.logger.Error(ctx, "failed to get signups over time", err)
+		return nil, fmt.Errorf("failed to get signups over time: %w", err)
 	}
 	return results, nil
 }
