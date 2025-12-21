@@ -107,20 +107,23 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 		referrer, err := p.store.GetWaitlistUserByReferralCode(ctx, *req.ReferralCode)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {
-				return SignupUserResponse{}, ErrInvalidReferralCode
+				// Invalid referral code - silently ignore and treat as direct signup
+				p.logger.Info(ctx, "invalid referral code provided, treating as direct signup")
+				source = &defaultSource
+			} else {
+				p.logger.Error(ctx, "failed to get referrer by code", err)
+				return SignupUserResponse{}, err
 			}
-			p.logger.Error(ctx, "failed to get referrer by code", err)
-			return SignupUserResponse{}, err
+		} else if referrer.CampaignID != campaignID {
+			// Referrer is from different campaign - silently ignore
+			p.logger.Info(ctx, "referral code from different campaign, treating as direct signup")
+			source = &defaultSource
+		} else {
+			// Valid referral code
+			referredByID = &referrer.ID
+			referralSource := "referral"
+			source = &referralSource
 		}
-
-		// Verify referrer is from same campaign
-		if referrer.CampaignID != campaignID {
-			return SignupUserResponse{}, ErrInvalidReferralCode
-		}
-
-		referredByID = &referrer.ID
-		referralSource := "referral"
-		source = &referralSource
 	} else {
 		source = &defaultSource
 	}
