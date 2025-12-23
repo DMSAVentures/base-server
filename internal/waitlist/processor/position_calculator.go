@@ -70,9 +70,19 @@ func (pc *PositionCalculator) CalculatePositionsForCampaign(ctx context.Context,
 		}
 	}
 
+	// Get referrer_positions_to_jump from referral config (positions the referrer jumps per referral)
+	// Default to 1 to maintain backward compatibility (each referral = 1 position)
+	referrerPositionsToJump := 1
+	if campaign.ReferralConfig != nil {
+		if jump, ok := campaign.ReferralConfig["referrer_positions_to_jump"].(float64); ok && int(jump) > 0 {
+			referrerPositionsToJump = int(jump)
+		}
+	}
+
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "email_verification_required", Value: emailVerificationRequired},
 		observability.Field{Key: "positions_to_jump", Value: positionsToJump},
+		observability.Field{Key: "referrer_positions_to_jump", Value: referrerPositionsToJump},
 	)
 
 	// 2. Get all users for this campaign
@@ -92,7 +102,7 @@ func (pc *PositionCalculator) CalculatePositionsForCampaign(ctx context.Context,
 	)
 
 	// 3. Calculate positions based on referral count, signup time, and referral bonus
-	userPositions := pc.calculatePositions(users, emailVerificationRequired, positionsToJump)
+	userPositions := pc.calculatePositions(users, emailVerificationRequired, positionsToJump, referrerPositionsToJump)
 
 	// 4. Update all positions in bulk
 	userIDs := make([]uuid.UUID, 0, len(userPositions))
@@ -116,15 +126,16 @@ func (pc *PositionCalculator) CalculatePositionsForCampaign(ctx context.Context,
 // calculatePositions implements the position calculation algorithm
 // Algorithm:
 // 1. Sort users by (effective_score DESC, created_at ASC, id ASC)
-//    - effective_score = referral_count + positions_to_jump (if user was referred)
+//   - effective_score = (referral_count * referrer_positions_to_jump) + positions_to_jump (if user was referred)
+//
 // 2. Assign positions 1, 2, 3, ... based on sorted order
-func (pc *PositionCalculator) calculatePositions(users []store.WaitlistUser, emailVerificationRequired bool, positionsToJump int) map[uuid.UUID]int {
+func (pc *PositionCalculator) calculatePositions(users []store.WaitlistUser, emailVerificationRequired bool, positionsToJump int, referrerPositionsToJump int) map[uuid.UUID]int {
 	// Create a copy of users to sort
 	sortedUsers := make([]store.WaitlistUser, len(users))
 	copy(sortedUsers, users)
 
 	// Sort by:
-	// 1. Effective score DESC (referral count + jump bonus for referred users)
+	// 1. Effective score DESC (referral count * referrer jump + referee bonus)
 	// 2. Created at ASC (earlier signup = better position)
 	// 3. ID ASC (tiebreaker)
 	sort.Slice(sortedUsers, func(i, j int) bool {
@@ -141,7 +152,12 @@ func (pc *PositionCalculator) calculatePositions(users []store.WaitlistUser, ema
 			countJ = userJ.ReferralCount
 		}
 
-		// Add positions_to_jump bonus for users who were referred
+		// Multiply referral count by referrer_positions_to_jump
+		// This means each referral is worth N positions for the referrer
+		countI = countI * referrerPositionsToJump
+		countJ = countJ * referrerPositionsToJump
+
+		// Add positions_to_jump bonus for users who were referred (referee bonus)
 		if userI.ReferredByID != nil && positionsToJump > 0 {
 			countI += positionsToJump
 		}
