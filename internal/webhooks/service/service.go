@@ -26,7 +26,7 @@ type WebhookStore interface {
 	IncrementWebhookFailed(ctx context.Context, webhookID uuid.UUID) error
 	IncrementDeliveryAttempt(ctx context.Context, deliveryID uuid.UUID, nextRetryAt *time.Time) error
 	GetWebhookByID(ctx context.Context, webhookID uuid.UUID) (store.Webhook, error)
-	GetPendingWebhookDeliveries(ctx context.Context, limit int) ([]store.WebhookDelivery, error)
+	GetPendingWebhookDeliveries(ctx context.Context, limit int, maxAttempt int) ([]store.WebhookDelivery, error)
 }
 
 // WebhookService handles webhook delivery operations
@@ -284,11 +284,13 @@ func (s *WebhookService) calculateNextRetry(attemptNumber int) time.Time {
 	case 2:
 		delay = 10 * time.Second
 	case 3:
-		delay = 1 * time.Minute
+		delay = 20 * time.Second
 	case 4:
-		delay = 10 * time.Minute
+		delay = 40 * time.Second
+	case 5:
+		delay = 1 * time.Minute
 	default:
-		delay = 10 * time.Minute
+		delay = 5 * time.Minute
 	}
 
 	return time.Now().Add(delay)
@@ -297,7 +299,7 @@ func (s *WebhookService) calculateNextRetry(attemptNumber int) time.Time {
 // RetryFailedDeliveries processes failed webhook deliveries that are ready for retry
 func (s *WebhookService) RetryFailedDeliveries(ctx context.Context, limit int) error {
 	// Get pending deliveries
-	deliveries, err := s.store.GetPendingWebhookDeliveries(ctx, limit)
+	deliveries, err := s.store.GetPendingWebhookDeliveries(ctx, limit, 5)
 	if err != nil {
 		s.logger.Error(ctx, "failed to get pending deliveries", err)
 		return fmt.Errorf("failed to get pending deliveries: %w", err)
@@ -321,7 +323,7 @@ func (s *WebhookService) RetryFailedDeliveries(ctx context.Context, limit int) e
 
 		// Reconstruct payload
 		payload := WebhookPayload{
-			ID:        uuid.New().String(),
+			ID:        delivery.ID.String(),
 			Type:      delivery.EventType,
 			CreatedAt: time.Now().UTC().Format(time.RFC3339),
 			Data:      delivery.Payload,
@@ -366,7 +368,7 @@ func (s *WebhookService) RetryFailedDeliveries(ctx context.Context, limit int) e
 
 			// Calculate next retry time
 			var nextRetryAt *time.Time
-			if webhook.RetryEnabled && delivery.AttemptNumber+1 < webhook.MaxRetries {
+			if webhook.RetryEnabled && delivery.AttemptNumber < webhook.MaxRetries {
 				nextRetry := s.calculateNextRetry(delivery.AttemptNumber + 1)
 				nextRetryAt = &nextRetry
 			}
@@ -384,13 +386,12 @@ func (s *WebhookService) RetryFailedDeliveries(ctx context.Context, limit int) e
 			}
 
 			// Set next retry time if applicable
-			if nextRetryAt != nil {
-				err = s.store.IncrementDeliveryAttempt(ctx, delivery.ID, nextRetryAt)
-				if err != nil {
-					s.logger.Error(ctx, "failed to set next retry time", err)
-				}
-				s.logger.Info(ctx, fmt.Sprintf("webhook delivery %s failed, will retry at %s", delivery.ID, nextRetryAt.Format(time.RFC3339)))
-			} else {
+			err = s.store.IncrementDeliveryAttempt(ctx, delivery.ID, nextRetryAt)
+			if err != nil {
+				s.logger.Error(ctx, "failed to set next retry time", err)
+			}
+			s.logger.Info(ctx, fmt.Sprintf("webhook delivery %s failed, will retry at %s", delivery.ID, nextRetryAt.Format(time.RFC3339)))
+			if delivery.AttemptNumber == webhook.MaxRetries {
 				// Increment webhook failed counter (no more retries)
 				err = s.store.IncrementWebhookFailed(ctx, webhook.ID)
 				if err != nil {

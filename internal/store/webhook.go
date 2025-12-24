@@ -287,7 +287,7 @@ SET status = $2,
     response_body = $4,
     duration_ms = $5,
     error_message = $6,
-    delivered_at = CASE WHEN $2 = 'success' THEN CURRENT_TIMESTAMP ELSE delivered_at END
+    delivered_at = CASE WHEN $2::webhook_delivery_status = 'success' THEN CURRENT_TIMESTAMP ELSE delivered_at END
 WHERE id = $1
 `
 
@@ -330,15 +330,16 @@ func (s *Store) UpdateWebhookDeliveryStatus(ctx context.Context, deliveryID uuid
 const sqlGetPendingWebhookDeliveries = `
 SELECT id, webhook_id, event_type, payload, status, request_headers, response_status, response_body, response_headers, duration_ms, attempt_number, next_retry_at, error_message, created_at, delivered_at
 FROM webhook_deliveries
-WHERE status = 'failed' AND next_retry_at IS NOT NULL AND next_retry_at <= CURRENT_TIMESTAMP
+WHERE status = 'failed' AND next_retry_at IS NOT NULL AND next_retry_at <= CURRENT_TIMESTAMP AND attempt_number < $2
 ORDER BY next_retry_at ASC
 LIMIT $1
 `
 
 // GetPendingWebhookDeliveries retrieves webhook deliveries ready for retry
-func (s *Store) GetPendingWebhookDeliveries(ctx context.Context, limit int) ([]WebhookDelivery, error) {
+func (s *Store) GetPendingWebhookDeliveries(ctx context.Context, limit int, maxAttempt int) ([]WebhookDelivery,
+	error) {
 	var deliveries []WebhookDelivery
-	err := s.db.SelectContext(ctx, &deliveries, sqlGetPendingWebhookDeliveries, limit)
+	err := s.db.SelectContext(ctx, &deliveries, sqlGetPendingWebhookDeliveries, limit, maxAttempt)
 	if err != nil {
 		s.logger.Error(ctx, "failed to get pending webhook deliveries", err)
 		return nil, fmt.Errorf("failed to get pending webhook deliveries: %w", err)
