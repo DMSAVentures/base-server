@@ -708,3 +708,75 @@ func isValidUserStatus(status string) bool {
 func (p *WaitlistProcessor) VerifyCampaignOwnership(ctx context.Context, accountID, campaignID uuid.UUID) error {
 	return p.verifyCampaignAccess(ctx, accountID, campaignID)
 }
+
+// VerifyUserByToken verifies a user's email using the verification token (public endpoint)
+func (p *WaitlistProcessor) VerifyUserByToken(ctx context.Context, campaignID uuid.UUID, token string) error {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "campaign_id", Value: campaignID.String()},
+	)
+
+	// Look up user by verification token
+	user, err := p.store.GetWaitlistUserByVerificationToken(ctx, token)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return ErrInvalidVerificationToken
+		}
+		p.logger.Error(ctx, "failed to get user by verification token", err)
+		return err
+	}
+
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "user_id", Value: user.ID.String()},
+	)
+
+	// Verify user belongs to the specified campaign
+	if user.CampaignID != campaignID {
+		return ErrInvalidVerificationToken
+	}
+
+	// Check if already verified
+	if user.EmailVerified {
+		return ErrEmailAlreadyVerified
+	}
+
+	// Verify the email
+	err = p.store.VerifyWaitlistUserEmail(ctx, user.ID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return ErrUserNotFound
+		}
+		p.logger.Error(ctx, "failed to verify user email", err)
+		return err
+	}
+
+	// If user was referred, increment verified referral count for referrer
+	if user.ReferredByID != nil {
+		if err := p.store.IncrementVerifiedReferralCount(ctx, *user.ReferredByID); err != nil {
+			p.logger.Error(ctx, "failed to increment verified referral count", err)
+			// Don't fail the verification, just log
+		}
+	}
+
+	// Get campaign for event dispatch
+	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get campaign for event dispatch", err)
+		// Don't fail the verification, just log
+	} else if p.eventDispatcher != nil {
+		// Dispatch user.verified event
+		userData := map[string]interface{}{
+			"id":            user.ID.String(),
+			"email":         user.Email,
+			"first_name":    user.FirstName,
+			"last_name":     user.LastName,
+			"position":      user.Position,
+			"referral_code": user.ReferralCode,
+			"campaign_name": campaign.Name,
+			"campaign_slug": campaign.Slug,
+		}
+		p.eventDispatcher.DispatchUserVerified(ctx, campaign.AccountID, campaign.ID, userData)
+	}
+
+	p.logger.Info(ctx, "user email verified successfully via token")
+	return nil
+}

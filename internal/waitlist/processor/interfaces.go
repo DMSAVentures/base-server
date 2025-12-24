@@ -12,6 +12,7 @@ type WaitlistStore interface {
 	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)
 	GetWaitlistUserByEmail(ctx context.Context, campaignID uuid.UUID, email string) (store.WaitlistUser, error)
 	GetWaitlistUserByReferralCode(ctx context.Context, referralCode string) (store.WaitlistUser, error)
+	GetWaitlistUserByVerificationToken(ctx context.Context, token string) (store.WaitlistUser, error)
 	CountWaitlistUsersByCampaign(ctx context.Context, campaignID uuid.UUID) (int, error)
 	CreateWaitlistUser(ctx context.Context, params store.CreateWaitlistUserParams) (store.WaitlistUser, error)
 	IncrementReferralCount(ctx context.Context, userID uuid.UUID) error
@@ -35,4 +36,5 @@ type WaitlistStore interface {
 // EventDispatcher defines the event operations required by WaitlistProcessor
 type EventDispatcher interface {
 	DispatchUserCreated(ctx context.Context, accountID, campaignID uuid.UUID, userData map[string]interface{})
+	DispatchUserVerified(ctx context.Context, accountID, campaignID uuid.UUID, userData map[string]interface{})
 }

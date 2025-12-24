@@ -97,6 +97,38 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
+// HandleVerifyEmail handles GET /api/v1/campaigns/:campaign_id/verify (public endpoint)
+// Verifies a user's email using the token from the verification email
+func (h *Handler) HandleVerifyEmail(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get campaign ID from path
+	campaignIDStr := c.Param("campaign_id")
+	campaignID, err := uuid.Parse(campaignIDStr)
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse campaign ID", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		return
+	}
+
+	// Get token from query parameter
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "verification token is required"})
+		return
+	}
+
+	err = h.processor.VerifyUserByToken(ctx, campaignID, token)
+	if err != nil {
+		apierrors.RespondWithError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Email verified successfully",
+	})
+}
+
 // HandleListUsers handles GET /api/v1/campaigns/:campaign_id/users
 func (h *Handler) HandleListUsers(c *gin.Context) {
 	ctx := c.Request.Context()
