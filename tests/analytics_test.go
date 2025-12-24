@@ -567,9 +567,11 @@ func TestAPI_Analytics_SignupsBySource_GapFilling(t *testing.T) {
 	// Small delay to ensure data is committed
 	time.Sleep(100 * time.Millisecond)
 
-	// Request 7 days of data - extend the 'to' slightly into the future to ensure we capture today
-	from := time.Now().AddDate(0, 0, -6).Format(time.RFC3339)
-	to := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+	// Request 7 days of data using UTC to ensure consistent day boundaries
+	now := time.Now().UTC()
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	from := todayStart.AddDate(0, 0, -6).Format(time.RFC3339)
+	to := todayStart.Add(24*time.Hour - time.Second).Format(time.RFC3339)
 	path := fmt.Sprintf("/api/v1/campaigns/%s/analytics/signups-by-source?period=day&from=%s&to=%s", campaignID, from, to)
 
 	resp, body := makeAuthenticatedRequest(t, http.MethodGet, path, nil, token)
