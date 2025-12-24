@@ -77,7 +77,7 @@ func (m *MockStore) GetWebhookByID(ctx context.Context, webhookID uuid.UUID) (st
 	}, nil
 }
 
-func (m *MockStore) GetPendingWebhookDeliveries(ctx context.Context, limit int) ([]store.WebhookDelivery, error) {
+func (m *MockStore) GetPendingWebhookDeliveries(ctx context.Context, limit int, maxAttempt int) ([]store.WebhookDelivery, error) {
 	return []store.WebhookDelivery{}, nil
 }
 
@@ -118,9 +118,9 @@ func TestCalculateNextRetry(t *testing.T) {
 	}{
 		{1, 2 * time.Second},
 		{2, 10 * time.Second},
-		{3, 1 * time.Minute},
-		{4, 10 * time.Minute},
-		{5, 10 * time.Minute},
+		{3, 20 * time.Second},
+		{4, 40 * time.Second},
+		{5, 1 * time.Minute},
 	}
 
 	for _, tt := range tests {
