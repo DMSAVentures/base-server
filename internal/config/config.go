@@ -39,13 +39,14 @@ type AuthConfig struct {
 
 // ServicesConfig holds external service API keys and configuration
 type ServicesConfig struct {
-	StripeSecretKey         string
-	StripeWebhookSecret     string
-	ResendAPIKey            string
-	DefaultEmailSender      string
-	GoogleAIAPIKey          string
-	OpenAIAPIKey            string
-	WebAppURI               string
+	StripeSecretKey     string
+	StripeWebhookSecret string
+	ResendAPIKey        string
+	DefaultEmailSender  string
+	GoogleAIAPIKey      string
+	OpenAIAPIKey        string
+	WebAppURI           string
+	TurnstileSecretKey  string // Cloudflare Turnstile secret key (optional)
 }
 
 // KafkaConfig holds Kafka/event streaming configuration
@@ -127,6 +128,10 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 	if cfg.Services.WebAppURI, err = requireEnv("WEBAPP_URI"); err != nil {
+		return nil, err
+	}
+
+	if cfg.Services.TurnstileSecretKey, err = requireEnv("TURNSTILE_SECRET_KEY"); err != nil {
 		return nil, err
 	}
 

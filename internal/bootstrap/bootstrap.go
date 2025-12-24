@@ -20,6 +20,7 @@ import (
 	"base-server/internal/clients/googleoauth"
 	kafkaClient "base-server/internal/clients/kafka"
 	"base-server/internal/clients/mail"
+	"base-server/internal/clients/turnstile"
 	"base-server/internal/email"
 	emailTemplateHandler "base-server/internal/emailtemplates/handler"
 	emailTemplateProcessor "base-server/internal/emailtemplates/processor"
@@ -101,6 +102,12 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 		return nil, fmt.Errorf("failed to create resend client: %w", err)
 	}
 
+	// Initialize Turnstile client (optional - only if secret key is configured)
+	var turnstileClient *turnstile.Client
+	if cfg.Services.TurnstileSecretKey != "" {
+		turnstileClient = turnstile.NewClient(cfg.Services.TurnstileSecretKey, logger)
+	}
+
 	// Initialize email service
 	emailService := email.New(mailClient, cfg.Services.DefaultEmailSender, logger)
 
@@ -160,7 +167,7 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	deps.CampaignHandler = campaignHandler.New(campaignProc, logger)
 
 	// Initialize waitlist processor, position calculator, and handler
-	waitlistProc := waitlistProcessor.New(&deps.Store, logger, eventDispatcher)
+	waitlistProc := waitlistProcessor.New(&deps.Store, logger, eventDispatcher, turnstileClient)
 	positionCalculator := waitlistProcessor.NewPositionCalculator(&deps.Store, logger)
 	deps.WaitlistHandler = waitlistHandler.New(waitlistProc, positionCalculator, logger, cfg.Services.WebAppURI)
 

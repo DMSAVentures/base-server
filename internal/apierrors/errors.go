@@ -64,6 +64,8 @@ const (
 	CodePaymentProviderError  = "PAYMENT_PROVIDER_ERROR"
 	CodeEmailServiceError     = "EMAIL_SERVICE_ERROR"
 	CodeAIServiceError        = "AI_SERVICE_ERROR"
+	CodeCaptchaRequired       = "CAPTCHA_REQUIRED"
+	CodeCaptchaFailed         = "CAPTCHA_FAILED"
 )
 
 // NotFound creates a 404 Not Found error

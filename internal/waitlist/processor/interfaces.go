@@ -38,3 +38,9 @@ type EventDispatcher interface {
 	DispatchUserCreated(ctx context.Context, accountID, campaignID uuid.UUID, userData map[string]interface{})
 	DispatchUserVerified(ctx context.Context, accountID, campaignID uuid.UUID, userData map[string]interface{})
 }
+
+// CaptchaVerifier defines the captcha verification operations
+type CaptchaVerifier interface {
+	Verify(ctx context.Context, token string, remoteIP string) error
+	IsEnabled() bool
+}

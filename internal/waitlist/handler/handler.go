@@ -25,7 +25,12 @@ type Handler struct {
 	baseURL            string
 }
 
-func New(processor processor.WaitlistProcessor, positionCalculator *processor.PositionCalculator, logger *observability.Logger, baseURL string) Handler {
+func New(
+	processor processor.WaitlistProcessor,
+	positionCalculator *processor.PositionCalculator,
+	logger *observability.Logger,
+	baseURL string,
+) Handler {
 	return Handler{
 		processor:          processor,
 		positionCalculator: positionCalculator,
@@ -46,6 +51,7 @@ type SignupRequest struct {
 	UTMContent       *string           `json:"utm_content,omitempty"`
 	MarketingConsent bool              `json:"marketing_consent"`
 	TermsAccepted    bool              `json:"terms_accepted" binding:"required"`
+	CaptchaToken     *string           `json:"captcha_token,omitempty"`
 }
 
 // HandleSignupUser handles POST /api/v1/campaigns/:campaign_id/users (public endpoint)
@@ -86,6 +92,7 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 		TermsAccepted:    req.TermsAccepted,
 		IPAddress:        &ipAddress,
 		UserAgent:        &userAgent,
+		CaptchaToken:     req.CaptchaToken,
 	}
 
 	response, err := h.processor.SignupUser(ctx, campaignID, processorReq, h.baseURL)

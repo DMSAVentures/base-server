@@ -98,6 +98,12 @@ func MapError(err error) *APIError {
 	case errors.Is(err, waitlistProcessor.ErrUserNotFound):
 		return NotFound(CodeUserNotFound, "User not found")
 
+	case errors.Is(err, waitlistProcessor.ErrCaptchaRequired):
+		return BadRequest(CodeCaptchaRequired, "Captcha verification required")
+
+	case errors.Is(err, waitlistProcessor.ErrCaptchaFailed):
+		return BadRequest(CodeCaptchaFailed, "Captcha verification failed")
+
 	// Map rewards processor errors
 	case errors.Is(err, rewardsProcessor.ErrRewardNotFound):
 		return NotFound(CodeRewardNotFound, "Reward not found")

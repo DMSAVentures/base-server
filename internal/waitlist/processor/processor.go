@@ -22,19 +22,23 @@ var (
 	ErrInvalidVerificationToken = errors.New("invalid verification token")
 	ErrEmailAlreadyVerified     = errors.New("email already verified")
 	ErrMaxSignupsReached        = errors.New("campaign has reached maximum signups")
+	ErrCaptchaRequired          = errors.New("captcha verification required")
+	ErrCaptchaFailed            = errors.New("captcha verification failed")
 )
 
 type WaitlistProcessor struct {
 	store           WaitlistStore
 	logger          *observability.Logger
 	eventDispatcher EventDispatcher
+	captchaVerifier CaptchaVerifier
 }
 
-func New(store WaitlistStore, logger *observability.Logger, eventDispatcher EventDispatcher) WaitlistProcessor {
+func New(store WaitlistStore, logger *observability.Logger, eventDispatcher EventDispatcher, captchaVerifier CaptchaVerifier) WaitlistProcessor {
 	return WaitlistProcessor{
 		store:           store,
 		logger:          logger,
 		eventDispatcher: eventDispatcher,
+		captchaVerifier: captchaVerifier,
 	}
 }
 
@@ -54,6 +58,7 @@ type SignupUserRequest struct {
 	TermsAccepted    bool
 	IPAddress        *string
 	UserAgent        *string
+	CaptchaToken     *string
 }
 
 // SignupUserResponse represents the response after signing up a user
@@ -97,6 +102,26 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 	// Check max signups limit
 	if campaign.MaxSignups != nil && campaign.TotalSignups >= *campaign.MaxSignups {
 		return SignupUserResponse{}, ErrMaxSignupsReached
+	}
+
+	// Check captcha if enabled for this campaign
+	if p.captchaVerifier != nil && p.captchaVerifier.IsEnabled() && campaign.FormConfig != nil {
+		if captchaConfig, ok := campaign.FormConfig["captcha"].(map[string]interface{}); ok {
+			if enabled, ok := captchaConfig["enabled"].(bool); ok && enabled {
+				// Captcha is required for this campaign
+				if req.CaptchaToken == nil || *req.CaptchaToken == "" {
+					return SignupUserResponse{}, ErrCaptchaRequired
+				}
+				ipAddress := ""
+				if req.IPAddress != nil {
+					ipAddress = *req.IPAddress
+				}
+				if err := p.captchaVerifier.Verify(ctx, *req.CaptchaToken, ipAddress); err != nil {
+					p.logger.Info(ctx, "captcha verification failed")
+					return SignupUserResponse{}, ErrCaptchaFailed
+				}
+			}
+		}
 	}
 
 	// Handle referral code if provided
