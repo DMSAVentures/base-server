@@ -27,6 +27,9 @@ type WaitlistStore interface {
 	// Position calculation methods
 	GetAllWaitlistUsersForPositionCalculation(ctx context.Context, campaignID uuid.UUID) ([]store.WaitlistUser, error)
 	BulkUpdateWaitlistUserPositions(ctx context.Context, userIDs []uuid.UUID, positions []int) error
+	// Channel code methods
+	CreateUserChannelCodes(ctx context.Context, userID uuid.UUID, codes map[string]string) ([]store.UserChannelCode, error)
+	GetUserByChannelCode(ctx context.Context, code string) (*store.WaitlistUser, string, error)
 }
 
 // EventDispatcher defines the event operations required by WaitlistProcessor

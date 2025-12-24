@@ -477,6 +477,15 @@ type AuditLog struct {
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
 }
 
+// UserChannelCode represents a channel-specific referral code for a user
+type UserChannelCode struct {
+	ID        uuid.UUID `db:"id" json:"id"`
+	UserID    uuid.UUID `db:"user_id" json:"user_id"`
+	Channel   string    `db:"channel" json:"channel"`
+	Code      string    `db:"code" json:"code"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
+}
+
 // FraudDetection represents a fraud detection record
 type FraudDetection struct {
 	ID         uuid.UUID  `db:"id" json:"id"`

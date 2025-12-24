@@ -72,3 +72,39 @@ func IsVerificationTokenExpired(sentAt *time.Time, expiryHours int) bool {
 	expiryTime := sentAt.Add(time.Duration(expiryHours) * time.Hour)
 	return time.Now().After(expiryTime)
 }
+
+// ChannelSuffixes maps sharing channels to their 2-character code suffixes
+var ChannelSuffixes = map[string]string{
+	"twitter":  "TW",
+	"facebook": "FB",
+	"linkedin": "LI",
+	"whatsapp": "WA",
+	"email":    "EM",
+}
+
+// GenerateChannelCodes generates unique referral codes for each sharing channel
+// Each code format: {6-char-base}_{2-char-channel-suffix}
+// Example: ABC123_TW for Twitter, ABC123_FB for Facebook
+func GenerateChannelCodes(channels []string) (map[string]string, error) {
+	if len(channels) == 0 {
+		return nil, nil
+	}
+
+	// Generate a 6-character base code
+	baseCode, err := GenerateReferralCode(6)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate base code: %w", err)
+	}
+
+	codes := make(map[string]string)
+	for _, channel := range channels {
+		suffix, ok := ChannelSuffixes[channel]
+		if !ok {
+			// Skip unknown channels
+			continue
+		}
+		codes[channel] = fmt.Sprintf("%s_%s", baseCode, suffix)
+	}
+
+	return codes, nil
+}

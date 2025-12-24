@@ -58,10 +58,11 @@ type SignupUserRequest struct {
 
 // SignupUserResponse represents the response after signing up a user
 type SignupUserResponse struct {
-	User         store.WaitlistUser `json:"user"`
-	Position     int                `json:"position"`
-	ReferralLink string             `json:"referral_link"`
-	Message      string             `json:"message"`
+	User          store.WaitlistUser `json:"user"`
+	Position      int                `json:"position"`
+	ReferralLink  string             `json:"referral_link"`
+	ReferralCodes map[string]string  `json:"referral_codes,omitempty"`
+	Message       string             `json:"message"`
 }
 
 // SignupUser handles the complete signup process for a waitlist user
@@ -104,25 +105,39 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 	defaultSource := "direct"
 
 	if req.ReferralCode != nil && *req.ReferralCode != "" {
-		referrer, err := p.store.GetWaitlistUserByReferralCode(ctx, *req.ReferralCode)
+		// First, try to find referrer by channel code (new format: ABC123_TW)
+		referrer, channel, err := p.store.GetUserByChannelCode(ctx, *req.ReferralCode)
 		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				// Invalid referral code - silently ignore and treat as direct signup
-				p.logger.Info(ctx, "invalid referral code provided, treating as direct signup")
+			p.logger.Error(ctx, "failed to get referrer by channel code", err)
+			return SignupUserResponse{}, err
+		}
+
+		if referrer != nil && referrer.CampaignID == campaignID {
+			// Valid channel code - use channel as source
+			referredByID = &referrer.ID
+			source = &channel
+		} else {
+			// Fall back to legacy referral code lookup
+			legacyReferrer, err := p.store.GetWaitlistUserByReferralCode(ctx, *req.ReferralCode)
+			if err != nil {
+				if errors.Is(err, store.ErrNotFound) {
+					// Invalid referral code - silently ignore and treat as direct signup
+					p.logger.Info(ctx, "invalid referral code provided, treating as direct signup")
+					source = &defaultSource
+				} else {
+					p.logger.Error(ctx, "failed to get referrer by code", err)
+					return SignupUserResponse{}, err
+				}
+			} else if legacyReferrer.CampaignID != campaignID {
+				// Referrer is from different campaign - silently ignore
+				p.logger.Info(ctx, "referral code from different campaign, treating as direct signup")
 				source = &defaultSource
 			} else {
-				p.logger.Error(ctx, "failed to get referrer by code", err)
-				return SignupUserResponse{}, err
+				// Valid legacy referral code
+				referredByID = &legacyReferrer.ID
+				referralSource := "referral"
+				source = &referralSource
 			}
-		} else if referrer.CampaignID != campaignID {
-			// Referrer is from different campaign - silently ignore
-			p.logger.Info(ctx, "referral code from different campaign, treating as direct signup")
-			source = &defaultSource
-		} else {
-			// Valid referral code
-			referredByID = &referrer.ID
-			referralSource := "referral"
-			source = &referralSource
 		}
 	} else {
 		source = &defaultSource
@@ -195,6 +210,40 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 	// Build referral link
 	referralLink := utils.BuildReferralLink(baseURL, campaign.Slug, referralCode)
 
+	// Generate channel-specific referral codes if campaign has sharing channels
+	var referralCodes map[string]string
+	if campaign.ReferralConfig != nil {
+		if sharingChannels, ok := campaign.ReferralConfig["sharing_channels"]; ok {
+			if channelsSlice, ok := sharingChannels.([]interface{}); ok && len(channelsSlice) > 0 {
+				// Convert []interface{} to []string
+				channels := make([]string, 0, len(channelsSlice))
+				for _, ch := range channelsSlice {
+					if chStr, ok := ch.(string); ok {
+						channels = append(channels, chStr)
+					}
+				}
+
+				if len(channels) > 0 {
+					// Generate channel codes
+					codes, err := utils.GenerateChannelCodes(channels)
+					if err != nil {
+						p.logger.Error(ctx, "failed to generate channel codes", err)
+						// Don't fail the signup, just log the error
+					} else if len(codes) > 0 {
+						// Store channel codes in database
+						_, err := p.store.CreateUserChannelCodes(ctx, user.ID, codes)
+						if err != nil {
+							p.logger.Error(ctx, "failed to store channel codes", err)
+							// Don't fail the signup, just log the error
+						} else {
+							referralCodes = codes
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Dispatch user.created event for email notifications
 	if p.eventDispatcher != nil {
 		userData := map[string]interface{}{
@@ -216,10 +265,11 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 	p.logger.Info(ctx, "user signed up successfully")
 
 	return SignupUserResponse{
-		User:         user,
-		Position:     position,
-		ReferralLink: referralLink,
-		Message:      "Successfully joined the waitlist! Please check your email to verify your address.",
+		User:          user,
+		Position:      position,
+		ReferralLink:  referralLink,
+		ReferralCodes: referralCodes,
+		Message:       "Successfully joined the waitlist! Please check your email to verify your address.",
 	}, nil
 }
 
