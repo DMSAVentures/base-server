@@ -71,7 +71,6 @@ func (s *Store) GetAnalyticsOverview(ctx context.Context, campaignID uuid.UUID) 
 	var result AnalyticsOverviewResult
 	err := s.db.GetContext(ctx, &result, sqlGetAnalyticsOverview, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get analytics overview", err)
 		return AnalyticsOverviewResult{}, fmt.Errorf("failed to get analytics overview: %w", err)
 	}
 
@@ -107,7 +106,6 @@ func (s *Store) GetTopReferrers(ctx context.Context, campaignID uuid.UUID, limit
 	var results []TopReferrerResult
 	err := s.db.SelectContext(ctx, &results, sqlGetTopReferrers, campaignID, limit)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get top referrers", err)
 		return nil, fmt.Errorf("failed to get top referrers: %w", err)
 	}
 	return results, nil
@@ -130,7 +128,6 @@ func (s *Store) GetConversionAnalytics(ctx context.Context, campaignID uuid.UUID
 	var result ConversionAnalyticsResult
 	err := s.db.GetContext(ctx, &result, sqlGetConversionAnalytics, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get conversion analytics", err)
 		return ConversionAnalyticsResult{}, fmt.Errorf("failed to get conversion analytics: %w", err)
 	}
 
@@ -167,7 +164,6 @@ func (s *Store) GetReferralAnalytics(ctx context.Context, campaignID uuid.UUID, 
 	var result ReferralAnalyticsResult
 	err := s.db.GetContext(ctx, &result, sqlGetReferralAnalytics, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get referral analytics", err)
 		return ReferralAnalyticsResult{}, fmt.Errorf("failed to get referral analytics: %w", err)
 	}
 
@@ -178,7 +174,6 @@ func (s *Store) GetReferralAnalytics(ctx context.Context, campaignID uuid.UUID, 
 	}
 	err = s.db.GetContext(ctx, &stats, sqlGetReferralStats, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get referral stats", err)
 		return ReferralAnalyticsResult{}, fmt.Errorf("failed to get referral stats: %w", err)
 	}
 
@@ -210,7 +205,6 @@ func (s *Store) GetReferralSourceBreakdown(ctx context.Context, campaignID uuid.
 	var results []SourceBreakdownResult
 	err := s.db.SelectContext(ctx, &results, sqlGetReferralSourceBreakdown, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get referral source breakdown", err)
 		return nil, fmt.Errorf("failed to get referral source breakdown: %w", err)
 	}
 	return results, nil
@@ -258,7 +252,6 @@ ORDER BY date ASC
 	var results []SignupsOverTimeDataPoint
 	err := s.db.SelectContext(ctx, &results, query, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get signups over time", err)
 		return nil, fmt.Errorf("failed to get signups over time: %w", err)
 	}
 	return results, nil
@@ -294,7 +287,6 @@ ORDER BY date ASC, utm_source ASC NULLS LAST
 	var results []SignupsBySourceDataPoint
 	err := s.db.SelectContext(ctx, &results, query, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get signups by source", err)
 		return nil, fmt.Errorf("failed to get signups by source: %w", err)
 	}
 	return results, nil
@@ -318,7 +310,6 @@ func (s *Store) GetSignupSourceBreakdown(ctx context.Context, campaignID uuid.UU
 	var results []SourceBreakdownResult
 	err := s.db.SelectContext(ctx, &results, sqlGetSignupSourceBreakdown, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get signup source breakdown", err)
 		return nil, fmt.Errorf("failed to get signup source breakdown: %w", err)
 	}
 	return results, nil
@@ -342,7 +333,6 @@ LIMIT 20
 func (s *Store) GetUTMCampaignBreakdown(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo *time.Time) ([]map[string]interface{}, error) {
 	rows, err := s.db.QueryxContext(ctx, sqlGetUTMCampaignBreakdown, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get utm campaign breakdown", err)
 		return nil, fmt.Errorf("failed to get utm campaign breakdown: %w", err)
 	}
 	defer rows.Close()
@@ -352,7 +342,6 @@ func (s *Store) GetUTMCampaignBreakdown(ctx context.Context, campaignID uuid.UUI
 		result := make(map[string]interface{})
 		err := rows.MapScan(result)
 		if err != nil {
-			s.logger.Error(ctx, "failed to scan utm campaign row", err)
 			continue
 		}
 		results = append(results, result)
@@ -379,7 +368,6 @@ LIMIT 20
 func (s *Store) GetUTMSourceBreakdown(ctx context.Context, campaignID uuid.UUID, dateFrom, dateTo *time.Time) ([]map[string]interface{}, error) {
 	rows, err := s.db.QueryxContext(ctx, sqlGetUTMSourceBreakdown, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get utm source breakdown", err)
 		return nil, fmt.Errorf("failed to get utm source breakdown: %w", err)
 	}
 	defer rows.Close()
@@ -389,7 +377,6 @@ func (s *Store) GetUTMSourceBreakdown(ctx context.Context, campaignID uuid.UUID,
 		result := make(map[string]interface{})
 		err := rows.MapScan(result)
 		if err != nil {
-			s.logger.Error(ctx, "failed to scan utm source row", err)
 			continue
 		}
 		results = append(results, result)
@@ -430,7 +417,6 @@ func (s *Store) GetFunnelAnalytics(ctx context.Context, campaignID uuid.UUID, da
 
 	err := s.db.GetContext(ctx, &counts, sqlGetFunnelAnalytics, campaignID, dateFrom, dateTo)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get funnel analytics", err)
 		return nil, fmt.Errorf("failed to get funnel analytics: %w", err)
 	}
 

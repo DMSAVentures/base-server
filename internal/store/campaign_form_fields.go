@@ -54,7 +54,6 @@ func (s *Store) CreateCampaignFormField(ctx context.Context, params CreateCampai
 		params.Options,
 		params.DisplayOrder)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create campaign form field", err)
 		return CampaignFormField{}, fmt.Errorf("failed to create campaign form field: %w", err)
 	}
 	return field, nil
@@ -74,7 +73,6 @@ func (s *Store) GetCampaignFormFieldByID(ctx context.Context, fieldID uuid.UUID)
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignFormField{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign form field by id", err)
 		return CampaignFormField{}, fmt.Errorf("failed to get campaign form field by id: %w", err)
 	}
 	return field, nil
@@ -92,7 +90,6 @@ func (s *Store) GetCampaignFormFields(ctx context.Context, campaignID uuid.UUID)
 	var fields []CampaignFormField
 	err := s.db.SelectContext(ctx, &fields, sqlGetCampaignFormFields, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get campaign form fields", err)
 		return nil, fmt.Errorf("failed to get campaign form fields: %w", err)
 	}
 	return fields, nil
@@ -130,7 +127,6 @@ func (s *Store) UpdateCampaignFormField(ctx context.Context, fieldID uuid.UUID, 
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignFormField{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update campaign form field", err)
 		return CampaignFormField{}, fmt.Errorf("failed to update campaign form field: %w", err)
 	}
 	return field, nil
@@ -144,13 +140,11 @@ DELETE FROM campaign_form_fields WHERE id = $1
 func (s *Store) DeleteCampaignFormField(ctx context.Context, fieldID uuid.UUID) error {
 	result, err := s.db.ExecContext(ctx, sqlDeleteCampaignFormField, fieldID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign form field", err)
 		return fmt.Errorf("failed to delete campaign form field: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -169,7 +163,6 @@ DELETE FROM campaign_form_fields WHERE campaign_id = $1
 func (s *Store) DeleteCampaignFormFieldsByCampaignID(ctx context.Context, campaignID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlDeleteCampaignFormFieldsByCampaignID, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign form fields", err)
 		return fmt.Errorf("failed to delete campaign form fields: %w", err)
 	}
 	return nil

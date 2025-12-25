@@ -34,7 +34,6 @@ func (s *Store) GetConversation(ctx context.Context, id uuid.UUID) (*Conversatio
 	var conversation Conversation
 	err := s.db.GetContext(ctx, &conversation, sqlGetConversationByID, id)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get conversation by ID", err)
 		return nil, fmt.Errorf("failed to get conversation by ID: %w", err)
 	}
 	return &conversation, nil
@@ -49,7 +48,6 @@ func (s *Store) CreateConversation(ctx context.Context, userID uuid.UUID) (*Conv
 	var conversation Conversation
 	err := s.db.GetContext(ctx, &conversation, sqlCreateConversationForUserID, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create conversation", err)
 		return nil, fmt.Errorf("failed to create conversation: %w", err)
 	}
 	return &conversation, nil
@@ -62,7 +60,6 @@ func (s *Store) GetAllConversationsByUserID(ctx context.Context, userID uuid.UUI
 	var conversations []Conversation
 	err := s.db.SelectContext(ctx, &conversations, sqlGetAllConversationsByUserID, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get all conversations by user ID", err)
 		return nil, fmt.Errorf("failed to get all conversations by user ID: %w", err)
 	}
 	return conversations, nil
@@ -75,7 +72,6 @@ func (s *Store) GetAllMessagesByConversationID(ctx context.Context, conversation
 	var messages []Message
 	err := s.db.SelectContext(ctx, &messages, sqlGetAllMessagesByConversationID, conversationID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get all messages by conversation ID", err)
 		return nil, fmt.Errorf("failed to get all messages by conversation ID: %w", err)
 	}
 	return messages, nil
@@ -90,7 +86,6 @@ func (s *Store) CreateMessage(ctx context.Context, conversationID uuid.UUID, rol
 	var message Message
 	err := s.db.GetContext(ctx, &message, sqlCreateMessageForConversationID, conversationID, role, content)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create message", err)
 		return nil, fmt.Errorf("failed to create message: %w", err)
 	}
 
@@ -105,13 +100,11 @@ func (s *Store) UpdateConversationTitleByConversationID(ctx context.Context, con
 	title string) error {
 	result, err := s.db.ExecContext(ctx, sqlUpdateConversationTitleByConversationID, title, conversationID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update conversation title", err)
 		return fmt.Errorf("failed to update conversation title: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 

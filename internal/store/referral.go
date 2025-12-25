@@ -34,7 +34,6 @@ func (s *Store) CreateReferral(ctx context.Context, params CreateReferralParams)
 		params.Source,
 		params.IPAddress)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create referral", err)
 		return Referral{}, fmt.Errorf("failed to create referral: %w", err)
 	}
 	return referral, nil
@@ -54,7 +53,6 @@ func (s *Store) GetReferralByID(ctx context.Context, referralID uuid.UUID) (Refe
 		if errors.Is(err, sql.ErrNoRows) {
 			return Referral{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get referral by id", err)
 		return Referral{}, fmt.Errorf("failed to get referral by id: %w", err)
 	}
 	return referral, nil
@@ -72,7 +70,6 @@ func (s *Store) GetReferralsByReferrer(ctx context.Context, referrerID uuid.UUID
 	var referrals []Referral
 	err := s.db.SelectContext(ctx, &referrals, sqlGetReferralsByReferrer, referrerID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get referrals by referrer", err)
 		return nil, fmt.Errorf("failed to get referrals by referrer: %w", err)
 	}
 	return referrals, nil
@@ -91,7 +88,6 @@ func (s *Store) GetReferralsByCampaign(ctx context.Context, campaignID uuid.UUID
 	var referrals []Referral
 	err := s.db.SelectContext(ctx, &referrals, sqlGetReferralsByCampaign, campaignID, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get referrals by campaign", err)
 		return nil, fmt.Errorf("failed to get referrals by campaign: %w", err)
 	}
 	return referrals, nil
@@ -108,7 +104,6 @@ func (s *Store) CountReferralsByCampaign(ctx context.Context, campaignID uuid.UU
 	var count int
 	err := s.db.GetContext(ctx, &count, sqlCountReferralsByCampaign, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to count referrals", err)
 		return 0, fmt.Errorf("failed to count referrals: %w", err)
 	}
 	return count, nil
@@ -127,13 +122,11 @@ WHERE id = $1
 func (s *Store) UpdateReferralStatus(ctx context.Context, referralID uuid.UUID, status string) error {
 	res, err := s.db.ExecContext(ctx, sqlUpdateReferralStatus, referralID, status)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update referral status", err)
 		return fmt.Errorf("failed to update referral status: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -158,7 +151,6 @@ func (s *Store) GetReferralByReferrerAndReferred(ctx context.Context, referrerID
 		if errors.Is(err, sql.ErrNoRows) {
 			return Referral{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get referral", err)
 		return Referral{}, fmt.Errorf("failed to get referral: %w", err)
 	}
 	return referral, nil
@@ -175,7 +167,6 @@ func (s *Store) GetVerifiedReferralCountByReferrer(ctx context.Context, referrer
 	var count int
 	err := s.db.GetContext(ctx, &count, sqlGetVerifiedReferralCountByReferrer, referrerID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to count verified referrals", err)
 		return 0, fmt.Errorf("failed to count verified referrals: %w", err)
 	}
 	return count, nil
@@ -193,7 +184,6 @@ func (s *Store) GetReferralsByStatus(ctx context.Context, campaignID uuid.UUID, 
 	var referrals []Referral
 	err := s.db.SelectContext(ctx, &referrals, sqlGetReferralsByStatus, campaignID, status)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get referrals by status", err)
 		return nil, fmt.Errorf("failed to get referrals by status: %w", err)
 	}
 	return referrals, nil
@@ -213,7 +203,6 @@ func (s *Store) GetReferralsByCampaignWithStatusFilter(ctx context.Context, camp
 	var referrals []Referral
 	err := s.db.SelectContext(ctx, &referrals, sqlGetReferralsByCampaignWithStatusFilter, campaignID, status, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get referrals by campaign with filter", err)
 		return nil, fmt.Errorf("failed to get referrals by campaign with filter: %w", err)
 	}
 	return referrals, nil
@@ -231,7 +220,6 @@ func (s *Store) CountReferralsByCampaignWithStatusFilter(ctx context.Context, ca
 	var count int
 	err := s.db.GetContext(ctx, &count, sqlCountReferralsByCampaignWithStatusFilter, campaignID, status)
 	if err != nil {
-		s.logger.Error(ctx, "failed to count referrals with filter", err)
 		return 0, fmt.Errorf("failed to count referrals with filter: %w", err)
 	}
 	return count, nil
@@ -250,7 +238,6 @@ func (s *Store) GetReferralsByReferrerWithPagination(ctx context.Context, referr
 	var referrals []Referral
 	err := s.db.SelectContext(ctx, &referrals, sqlGetReferralsByReferrerWithPagination, referrerID, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get referrals by referrer with pagination", err)
 		return nil, fmt.Errorf("failed to get referrals by referrer with pagination: %w", err)
 	}
 	return referrals, nil
@@ -267,7 +254,6 @@ func (s *Store) CountReferralsByReferrer(ctx context.Context, referrerID uuid.UU
 	var count int
 	err := s.db.GetContext(ctx, &count, sqlCountReferralsByReferrer, referrerID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to count referrals by referrer", err)
 		return 0, fmt.Errorf("failed to count referrals by referrer: %w", err)
 	}
 	return count, nil

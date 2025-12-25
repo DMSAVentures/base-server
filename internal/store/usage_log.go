@@ -34,7 +34,6 @@ func (s *Store) InsertUsageLog(ctx context.Context, usageLog UsageLog) (UsageLog
 		usageLog.Model,
 	)
 	if err != nil {
-		s.logger.Error(ctx, "failed to insert usage log", err)
 		return UsageLog{}, fmt.Errorf("failed to insert usage log: %w", err)
 	}
 	return usageLog, nil
@@ -57,7 +56,6 @@ func (s *Store) GetUsageLogsByUserIDForPeriod(ctx context.Context, userID uuid.U
 		endDate,
 	)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get usage logs by user ID for period", err)
 		return nil, fmt.Errorf("failed to get usage logs by user ID for period: %w", err)
 	}
 	return usageLogs, nil
@@ -72,13 +70,11 @@ WHERE conversation_id = $2
 func (s *Store) UpdateUsageTokensByConversationID(ctx context.Context, conversationID uuid.UUID, delta int) error {
 	result, err := s.db.ExecContext(ctx, sqlUpdateUsageTokensByConversationID, delta, conversationID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment usage tokens", err)
 		return fmt.Errorf("failed to increment usage tokens: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 

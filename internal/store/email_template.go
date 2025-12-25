@@ -44,7 +44,6 @@ func (s *Store) CreateEmailTemplate(ctx context.Context, params CreateEmailTempl
 		params.VariantName,
 		params.VariantWeight)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create email template", err)
 		return EmailTemplate{}, fmt.Errorf("failed to create email template: %w", err)
 	}
 	return template, nil
@@ -64,7 +63,6 @@ func (s *Store) GetEmailTemplateByID(ctx context.Context, templateID uuid.UUID) 
 		if errors.Is(err, sql.ErrNoRows) {
 			return EmailTemplate{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get email template", err)
 		return EmailTemplate{}, fmt.Errorf("failed to get email template: %w", err)
 	}
 	return template, nil
@@ -82,7 +80,6 @@ func (s *Store) GetEmailTemplatesByCampaign(ctx context.Context, campaignID uuid
 	var templates []EmailTemplate
 	err := s.db.SelectContext(ctx, &templates, sqlGetEmailTemplatesByCampaign, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get email templates", err)
 		return nil, fmt.Errorf("failed to get email templates: %w", err)
 	}
 	return templates, nil
@@ -104,7 +101,6 @@ func (s *Store) GetEmailTemplateByType(ctx context.Context, campaignID uuid.UUID
 		if errors.Is(err, sql.ErrNoRows) {
 			return EmailTemplate{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get email template by type", err)
 		return EmailTemplate{}, fmt.Errorf("failed to get email template by type: %w", err)
 	}
 	return template, nil
@@ -148,7 +144,6 @@ func (s *Store) UpdateEmailTemplate(ctx context.Context, templateID uuid.UUID, p
 		if errors.Is(err, sql.ErrNoRows) {
 			return EmailTemplate{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update email template", err)
 		return EmailTemplate{}, fmt.Errorf("failed to update email template: %w", err)
 	}
 	return template, nil
@@ -164,13 +159,11 @@ WHERE id = $1 AND deleted_at IS NULL
 func (s *Store) DeleteEmailTemplate(ctx context.Context, templateID uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlDeleteEmailTemplate, templateID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete email template", err)
 		return fmt.Errorf("failed to delete email template: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -212,7 +205,6 @@ func (s *Store) CreateEmailLog(ctx context.Context, params CreateEmailLogParams)
 		params.Type,
 		params.ProviderMessageID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create email log", err)
 		return EmailLog{}, fmt.Errorf("failed to create email log: %w", err)
 	}
 	return log, nil
@@ -232,7 +224,6 @@ func (s *Store) GetEmailLogByID(ctx context.Context, logID uuid.UUID) (EmailLog,
 		if errors.Is(err, sql.ErrNoRows) {
 			return EmailLog{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get email log", err)
 		return EmailLog{}, fmt.Errorf("failed to get email log: %w", err)
 	}
 	return log, nil
@@ -251,7 +242,6 @@ func (s *Store) GetEmailLogsByUser(ctx context.Context, userID uuid.UUID, limit,
 	var logs []EmailLog
 	err := s.db.SelectContext(ctx, &logs, sqlGetEmailLogsByUser, userID, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get email logs by user", err)
 		return nil, fmt.Errorf("failed to get email logs by user: %w", err)
 	}
 	return logs, nil
@@ -270,7 +260,6 @@ func (s *Store) GetEmailLogsByCampaign(ctx context.Context, campaignID uuid.UUID
 	var logs []EmailLog
 	err := s.db.SelectContext(ctx, &logs, sqlGetEmailLogsByCampaign, campaignID, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get email logs by campaign", err)
 		return nil, fmt.Errorf("failed to get email logs by campaign: %w", err)
 	}
 	return logs, nil
@@ -293,13 +282,11 @@ WHERE id = $1
 func (s *Store) UpdateEmailLogStatus(ctx context.Context, logID uuid.UUID, status string) error {
 	res, err := s.db.ExecContext(ctx, sqlUpdateEmailLogStatus, logID, status)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update email log status", err)
 		return fmt.Errorf("failed to update email log status: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -323,7 +310,6 @@ WHERE id = $1
 func (s *Store) IncrementEmailOpenCount(ctx context.Context, logID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementEmailOpenCount, logID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment email open count", err)
 		return fmt.Errorf("failed to increment email open count: %w", err)
 	}
 	return nil
@@ -342,7 +328,6 @@ WHERE id = $1
 func (s *Store) IncrementEmailClickCount(ctx context.Context, logID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementEmailClickCount, logID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment email click count", err)
 		return fmt.Errorf("failed to increment email click count: %w", err)
 	}
 	return nil
@@ -362,7 +347,6 @@ func (s *Store) GetEmailLogByProviderMessageID(ctx context.Context, providerMess
 		if errors.Is(err, sql.ErrNoRows) {
 			return EmailLog{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get email log by provider message id", err)
 		return EmailLog{}, fmt.Errorf("failed to get email log by provider message id: %w", err)
 	}
 	return log, nil

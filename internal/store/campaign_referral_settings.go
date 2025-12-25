@@ -48,7 +48,6 @@ func (s *Store) CreateCampaignReferralSettings(ctx context.Context, params Creat
 		params.ReferrerPositionsToJump,
 		params.SharingChannels)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create campaign referral settings", err)
 		return CampaignReferralSettings{}, fmt.Errorf("failed to create campaign referral settings: %w", err)
 	}
 	return settings, nil
@@ -68,7 +67,6 @@ func (s *Store) GetCampaignReferralSettings(ctx context.Context, campaignID uuid
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignReferralSettings{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign referral settings", err)
 		return CampaignReferralSettings{}, fmt.Errorf("failed to get campaign referral settings: %w", err)
 	}
 	return settings, nil
@@ -102,7 +100,6 @@ func (s *Store) UpdateCampaignReferralSettings(ctx context.Context, campaignID u
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignReferralSettings{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update campaign referral settings", err)
 		return CampaignReferralSettings{}, fmt.Errorf("failed to update campaign referral settings: %w", err)
 	}
 	return settings, nil
@@ -116,13 +113,11 @@ DELETE FROM campaign_referral_settings WHERE campaign_id = $1
 func (s *Store) DeleteCampaignReferralSettings(ctx context.Context, campaignID uuid.UUID) error {
 	result, err := s.db.ExecContext(ctx, sqlDeleteCampaignReferralSettings, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign referral settings", err)
 		return fmt.Errorf("failed to delete campaign referral settings: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 

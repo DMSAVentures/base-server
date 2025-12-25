@@ -41,7 +41,6 @@ func (s *Store) CreateAPIKey(ctx context.Context, params CreateAPIKeyParams) (AP
 		params.ExpiresAt,
 		params.CreatedBy)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create api key", err)
 		return APIKey{}, fmt.Errorf("failed to create api key: %w", err)
 	}
 	return apiKey, nil
@@ -61,7 +60,6 @@ func (s *Store) GetAPIKeyByHash(ctx context.Context, keyHash string) (APIKey, er
 		if errors.Is(err, sql.ErrNoRows) {
 			return APIKey{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get api key by hash", err)
 		return APIKey{}, fmt.Errorf("failed to get api key by hash: %w", err)
 	}
 	return apiKey, nil
@@ -81,7 +79,6 @@ func (s *Store) GetAPIKeyByID(ctx context.Context, keyID uuid.UUID) (APIKey, err
 		if errors.Is(err, sql.ErrNoRows) {
 			return APIKey{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get api key by id", err)
 		return APIKey{}, fmt.Errorf("failed to get api key by id: %w", err)
 	}
 	return apiKey, nil
@@ -99,7 +96,6 @@ func (s *Store) GetAPIKeysByAccount(ctx context.Context, accountID uuid.UUID) ([
 	var apiKeys []APIKey
 	err := s.db.SelectContext(ctx, &apiKeys, sqlGetAPIKeysByAccount, accountID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get api keys by account", err)
 		return nil, fmt.Errorf("failed to get api keys by account: %w", err)
 	}
 	return apiKeys, nil
@@ -116,7 +112,6 @@ WHERE id = $1
 func (s *Store) UpdateAPIKeyUsage(ctx context.Context, keyID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlUpdateAPIKeyUsage, keyID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update api key usage", err)
 		return fmt.Errorf("failed to update api key usage: %w", err)
 	}
 	return nil
@@ -134,13 +129,11 @@ WHERE id = $1 AND status = 'active'
 func (s *Store) RevokeAPIKey(ctx context.Context, keyID uuid.UUID, revokedBy uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlRevokeAPIKey, keyID, revokedBy)
 	if err != nil {
-		s.logger.Error(ctx, "failed to revoke api key", err)
 		return fmt.Errorf("failed to revoke api key: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -161,13 +154,11 @@ WHERE id = $1
 func (s *Store) UpdateAPIKeyName(ctx context.Context, keyID uuid.UUID, name string) error {
 	res, err := s.db.ExecContext(ctx, sqlUpdateAPIKeyName, keyID, name)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update api key name", err)
 		return fmt.Errorf("failed to update api key name: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -215,7 +206,6 @@ func (s *Store) CreateAuditLog(ctx context.Context, params CreateAuditLogParams)
 		params.IPAddress,
 		params.UserAgent)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create audit log", err)
 		return AuditLog{}, fmt.Errorf("failed to create audit log: %w", err)
 	}
 	return log, nil
@@ -234,7 +224,6 @@ func (s *Store) GetAuditLogsByAccount(ctx context.Context, accountID uuid.UUID, 
 	var logs []AuditLog
 	err := s.db.SelectContext(ctx, &logs, sqlGetAuditLogsByAccount, accountID, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get audit logs by account", err)
 		return nil, fmt.Errorf("failed to get audit logs by account: %w", err)
 	}
 	return logs, nil
@@ -253,7 +242,6 @@ func (s *Store) GetAuditLogsByResource(ctx context.Context, resourceType string,
 	var logs []AuditLog
 	err := s.db.SelectContext(ctx, &logs, sqlGetAuditLogsByResource, resourceType, resourceID, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get audit logs by resource", err)
 		return nil, fmt.Errorf("failed to get audit logs by resource: %w", err)
 	}
 	return logs, nil
@@ -286,7 +274,6 @@ func (s *Store) CreateFraudDetection(ctx context.Context, params CreateFraudDete
 		params.ConfidenceScore,
 		params.Details)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create fraud detection", err)
 		return FraudDetection{}, fmt.Errorf("failed to create fraud detection: %w", err)
 	}
 	return detection, nil
@@ -305,7 +292,6 @@ func (s *Store) GetFraudDetectionsByCampaign(ctx context.Context, campaignID uui
 	var detections []FraudDetection
 	err := s.db.SelectContext(ctx, &detections, sqlGetFraudDetectionsByCampaign, campaignID, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get fraud detections by campaign", err)
 		return nil, fmt.Errorf("failed to get fraud detections by campaign: %w", err)
 	}
 	return detections, nil
@@ -323,7 +309,6 @@ func (s *Store) GetFraudDetectionsByUser(ctx context.Context, userID uuid.UUID) 
 	var detections []FraudDetection
 	err := s.db.SelectContext(ctx, &detections, sqlGetFraudDetectionsByUser, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get fraud detections by user", err)
 		return nil, fmt.Errorf("failed to get fraud detections by user: %w", err)
 	}
 	return detections, nil
@@ -342,13 +327,11 @@ WHERE id = $1
 func (s *Store) UpdateFraudDetectionStatus(ctx context.Context, detectionID, reviewedBy uuid.UUID, status string, reviewNotes *string) error {
 	res, err := s.db.ExecContext(ctx, sqlUpdateFraudDetectionStatus, detectionID, status, reviewedBy, reviewNotes)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update fraud detection status", err)
 		return fmt.Errorf("failed to update fraud detection status: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -372,7 +355,6 @@ func (s *Store) GetPendingFraudDetections(ctx context.Context, minConfidence flo
 	var detections []FraudDetection
 	err := s.db.SelectContext(ctx, &detections, sqlGetPendingFraudDetections, minConfidence, limit)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get pending fraud detections", err)
 		return nil, fmt.Errorf("failed to get pending fraud detections: %w", err)
 	}
 	return detections, nil

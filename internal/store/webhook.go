@@ -39,7 +39,6 @@ func (s *Store) CreateWebhook(ctx context.Context, params CreateWebhookParams) (
 		params.RetryEnabled,
 		params.MaxRetries)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create webhook", err)
 		return Webhook{}, fmt.Errorf("failed to create webhook: %w", err)
 	}
 	return webhook, nil
@@ -59,7 +58,6 @@ func (s *Store) GetWebhookByID(ctx context.Context, webhookID uuid.UUID) (Webhoo
 		if errors.Is(err, sql.ErrNoRows) {
 			return Webhook{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get webhook", err)
 		return Webhook{}, fmt.Errorf("failed to get webhook: %w", err)
 	}
 	return webhook, nil
@@ -77,7 +75,6 @@ func (s *Store) GetWebhooksByAccount(ctx context.Context, accountID uuid.UUID) (
 	var webhooks []Webhook
 	err := s.db.SelectContext(ctx, &webhooks, sqlGetWebhooksByAccount, accountID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get webhooks by account", err)
 		return nil, fmt.Errorf("failed to get webhooks by account: %w", err)
 	}
 	return webhooks, nil
@@ -95,7 +92,6 @@ func (s *Store) GetWebhooksByCampaign(ctx context.Context, campaignID uuid.UUID)
 	var webhooks []Webhook
 	err := s.db.SelectContext(ctx, &webhooks, sqlGetWebhooksByCampaign, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get webhooks by campaign", err)
 		return nil, fmt.Errorf("failed to get webhooks by campaign: %w", err)
 	}
 	return webhooks, nil
@@ -141,7 +137,6 @@ func (s *Store) UpdateWebhook(ctx context.Context, webhookID uuid.UUID, params U
 		if errors.Is(err, sql.ErrNoRows) {
 			return Webhook{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update webhook", err)
 		return Webhook{}, fmt.Errorf("failed to update webhook: %w", err)
 	}
 	return webhook, nil
@@ -157,13 +152,11 @@ WHERE id = $1 AND deleted_at IS NULL
 func (s *Store) DeleteWebhook(ctx context.Context, webhookID uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlDeleteWebhook, webhookID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete webhook", err)
 		return fmt.Errorf("failed to delete webhook: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -186,7 +179,6 @@ WHERE id = $1
 func (s *Store) IncrementWebhookSent(ctx context.Context, webhookID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementWebhookSent, webhookID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment webhook sent", err)
 		return fmt.Errorf("failed to increment webhook sent: %w", err)
 	}
 	return nil
@@ -204,7 +196,6 @@ WHERE id = $1
 func (s *Store) IncrementWebhookFailed(ctx context.Context, webhookID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementWebhookFailed, webhookID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment webhook failed", err)
 		return fmt.Errorf("failed to increment webhook failed: %w", err)
 	}
 	return nil
@@ -235,7 +226,6 @@ func (s *Store) CreateWebhookDelivery(ctx context.Context, params CreateWebhookD
 		params.Payload,
 		params.NextRetryAt)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create webhook delivery", err)
 		return WebhookDelivery{}, fmt.Errorf("failed to create webhook delivery: %w", err)
 	}
 	return delivery, nil
@@ -255,7 +245,6 @@ func (s *Store) GetWebhookDeliveryByID(ctx context.Context, deliveryID uuid.UUID
 		if errors.Is(err, sql.ErrNoRows) {
 			return WebhookDelivery{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get webhook delivery", err)
 		return WebhookDelivery{}, fmt.Errorf("failed to get webhook delivery: %w", err)
 	}
 	return delivery, nil
@@ -274,7 +263,6 @@ func (s *Store) GetWebhookDeliveriesByWebhook(ctx context.Context, webhookID uui
 	var deliveries []WebhookDelivery
 	err := s.db.SelectContext(ctx, &deliveries, sqlGetWebhookDeliveriesByWebhook, webhookID, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get webhook deliveries", err)
 		return nil, fmt.Errorf("failed to get webhook deliveries: %w", err)
 	}
 	return deliveries, nil
@@ -310,13 +298,11 @@ func (s *Store) UpdateWebhookDeliveryStatus(ctx context.Context, deliveryID uuid
 		params.DurationMs,
 		params.ErrorMessage)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update webhook delivery status", err)
 		return fmt.Errorf("failed to update webhook delivery status: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -341,7 +327,6 @@ func (s *Store) GetPendingWebhookDeliveries(ctx context.Context, limit int, maxA
 	var deliveries []WebhookDelivery
 	err := s.db.SelectContext(ctx, &deliveries, sqlGetPendingWebhookDeliveries, limit, maxAttempt)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get pending webhook deliveries", err)
 		return nil, fmt.Errorf("failed to get pending webhook deliveries: %w", err)
 	}
 	return deliveries, nil
@@ -358,7 +343,6 @@ WHERE id = $1
 func (s *Store) IncrementDeliveryAttempt(ctx context.Context, deliveryID uuid.UUID, nextRetryAt *time.Time) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementDeliveryAttempt, deliveryID, nextRetryAt)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment delivery attempt", err)
 		return fmt.Errorf("failed to increment delivery attempt: %w", err)
 	}
 	return nil

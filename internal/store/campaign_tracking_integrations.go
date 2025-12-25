@@ -41,7 +41,6 @@ func (s *Store) CreateCampaignTrackingIntegration(ctx context.Context, params Cr
 		params.TrackingID,
 		params.TrackingLabel)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create campaign tracking integration", err)
 		return CampaignTrackingIntegration{}, fmt.Errorf("failed to create campaign tracking integration: %w", err)
 	}
 	return integration, nil
@@ -61,7 +60,6 @@ func (s *Store) GetCampaignTrackingIntegrationByID(ctx context.Context, integrat
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignTrackingIntegration{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign tracking integration by id", err)
 		return CampaignTrackingIntegration{}, fmt.Errorf("failed to get campaign tracking integration by id: %w", err)
 	}
 	return integration, nil
@@ -81,7 +79,6 @@ func (s *Store) GetCampaignTrackingIntegrationByType(ctx context.Context, campai
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignTrackingIntegration{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign tracking integration by type", err)
 		return CampaignTrackingIntegration{}, fmt.Errorf("failed to get campaign tracking integration by type: %w", err)
 	}
 	return integration, nil
@@ -99,7 +96,6 @@ func (s *Store) GetCampaignTrackingIntegrations(ctx context.Context, campaignID 
 	var integrations []CampaignTrackingIntegration
 	err := s.db.SelectContext(ctx, &integrations, sqlGetCampaignTrackingIntegrations, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get campaign tracking integrations", err)
 		return nil, fmt.Errorf("failed to get campaign tracking integrations: %w", err)
 	}
 	return integrations, nil
@@ -117,7 +113,6 @@ func (s *Store) GetEnabledCampaignTrackingIntegrations(ctx context.Context, camp
 	var integrations []CampaignTrackingIntegration
 	err := s.db.SelectContext(ctx, &integrations, sqlGetEnabledCampaignTrackingIntegrations, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get enabled campaign tracking integrations", err)
 		return nil, fmt.Errorf("failed to get enabled campaign tracking integrations: %w", err)
 	}
 	return integrations, nil
@@ -145,7 +140,6 @@ func (s *Store) UpdateCampaignTrackingIntegration(ctx context.Context, integrati
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignTrackingIntegration{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update campaign tracking integration", err)
 		return CampaignTrackingIntegration{}, fmt.Errorf("failed to update campaign tracking integration: %w", err)
 	}
 	return integration, nil
@@ -159,13 +153,11 @@ DELETE FROM campaign_tracking_integrations WHERE id = $1
 func (s *Store) DeleteCampaignTrackingIntegration(ctx context.Context, integrationID uuid.UUID) error {
 	result, err := s.db.ExecContext(ctx, sqlDeleteCampaignTrackingIntegration, integrationID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign tracking integration", err)
 		return fmt.Errorf("failed to delete campaign tracking integration: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -184,7 +176,6 @@ DELETE FROM campaign_tracking_integrations WHERE campaign_id = $1
 func (s *Store) DeleteCampaignTrackingIntegrationsByCampaignID(ctx context.Context, campaignID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlDeleteCampaignTrackingIntegrationsByCampaignID, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign tracking integrations", err)
 		return fmt.Errorf("failed to delete campaign tracking integrations: %w", err)
 	}
 	return nil

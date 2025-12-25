@@ -45,7 +45,6 @@ func (s *Store) CreateCampaignEmailSettings(ctx context.Context, params CreateCa
 		params.VerificationRequired,
 		params.SendWelcomeEmail)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create campaign email settings", err)
 		return CampaignEmailSettings{}, fmt.Errorf("failed to create campaign email settings: %w", err)
 	}
 	return settings, nil
@@ -65,7 +64,6 @@ func (s *Store) GetCampaignEmailSettings(ctx context.Context, campaignID uuid.UU
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignEmailSettings{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign email settings", err)
 		return CampaignEmailSettings{}, fmt.Errorf("failed to get campaign email settings: %w", err)
 	}
 	return settings, nil
@@ -97,7 +95,6 @@ func (s *Store) UpdateCampaignEmailSettings(ctx context.Context, campaignID uuid
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignEmailSettings{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update campaign email settings", err)
 		return CampaignEmailSettings{}, fmt.Errorf("failed to update campaign email settings: %w", err)
 	}
 	return settings, nil
@@ -111,13 +108,11 @@ DELETE FROM campaign_email_settings WHERE campaign_id = $1
 func (s *Store) DeleteCampaignEmailSettings(ctx context.Context, campaignID uuid.UUID) error {
 	result, err := s.db.ExecContext(ctx, sqlDeleteCampaignEmailSettings, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign email settings", err)
 		return fmt.Errorf("failed to delete campaign email settings: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 

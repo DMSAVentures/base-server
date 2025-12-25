@@ -86,7 +86,6 @@ func (s *Store) CreateWaitlistUser(ctx context.Context, params CreateWaitlistUse
 		params.TermsAccepted,
 		params.VerificationToken)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create waitlist user", err)
 		return WaitlistUser{}, fmt.Errorf("failed to create waitlist user: %w", err)
 	}
 	return user, nil
@@ -106,7 +105,6 @@ func (s *Store) GetWaitlistUserByID(ctx context.Context, userID uuid.UUID) (Wait
 		if errors.Is(err, sql.ErrNoRows) {
 			return WaitlistUser{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get waitlist user by id", err)
 		return WaitlistUser{}, fmt.Errorf("failed to get waitlist user by id: %w", err)
 	}
 	return user, nil
@@ -126,7 +124,6 @@ func (s *Store) GetWaitlistUserByEmail(ctx context.Context, campaignID uuid.UUID
 		if errors.Is(err, sql.ErrNoRows) {
 			return WaitlistUser{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get waitlist user by email", err)
 		return WaitlistUser{}, fmt.Errorf("failed to get waitlist user by email: %w", err)
 	}
 	return user, nil
@@ -146,7 +143,6 @@ func (s *Store) GetWaitlistUserByReferralCode(ctx context.Context, referralCode 
 		if errors.Is(err, sql.ErrNoRows) {
 			return WaitlistUser{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get waitlist user by referral code", err)
 		return WaitlistUser{}, fmt.Errorf("failed to get waitlist user by referral code: %w", err)
 	}
 	return user, nil
@@ -171,7 +167,6 @@ func (s *Store) GetWaitlistUsersByCampaign(ctx context.Context, campaignID uuid.
 	var users []WaitlistUser
 	err := s.db.SelectContext(ctx, &users, sqlGetWaitlistUsersByCampaign, campaignID, params.Limit, params.Offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get waitlist users by campaign", err)
 		return nil, fmt.Errorf("failed to get waitlist users by campaign: %w", err)
 	}
 	return users, nil
@@ -189,7 +184,6 @@ func (s *Store) GetWaitlistUsersByStatus(ctx context.Context, campaignID uuid.UU
 	var users []WaitlistUser
 	err := s.db.SelectContext(ctx, &users, sqlGetWaitlistUsersByStatus, campaignID, status)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get waitlist users by status", err)
 		return nil, fmt.Errorf("failed to get waitlist users by status: %w", err)
 	}
 	return users, nil
@@ -206,7 +200,6 @@ func (s *Store) CountWaitlistUsersByCampaign(ctx context.Context, campaignID uui
 	var count int
 	err := s.db.GetContext(ctx, &count, sqlCountWaitlistUsersByCampaign, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to count waitlist users", err)
 		return 0, fmt.Errorf("failed to count waitlist users: %w", err)
 	}
 	return count, nil
@@ -240,7 +233,6 @@ func (s *Store) UpdateWaitlistUser(ctx context.Context, userID uuid.UUID, params
 		if errors.Is(err, sql.ErrNoRows) {
 			return WaitlistUser{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update waitlist user", err)
 		return WaitlistUser{}, fmt.Errorf("failed to update waitlist user: %w", err)
 	}
 	return user, nil
@@ -259,13 +251,11 @@ WHERE id = $1 AND deleted_at IS NULL
 func (s *Store) VerifyWaitlistUserEmail(ctx context.Context, userID uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlVerifyWaitlistUserEmail, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to verify waitlist user email", err)
 		return fmt.Errorf("failed to verify waitlist user email: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -287,7 +277,6 @@ WHERE id = $1
 func (s *Store) IncrementReferralCount(ctx context.Context, userID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementReferralCount, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment referral count", err)
 		return fmt.Errorf("failed to increment referral count: %w", err)
 	}
 	return nil
@@ -304,7 +293,6 @@ WHERE id = $1
 func (s *Store) IncrementVerifiedReferralCount(ctx context.Context, userID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementVerifiedReferralCount, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment verified referral count", err)
 		return fmt.Errorf("failed to increment verified referral count: %w", err)
 	}
 	return nil
@@ -321,7 +309,6 @@ WHERE id = $1
 func (s *Store) UpdateWaitlistUserPosition(ctx context.Context, userID uuid.UUID, position int) error {
 	_, err := s.db.ExecContext(ctx, sqlUpdateWaitlistUserPosition, userID, position)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update waitlist user position", err)
 		return fmt.Errorf("failed to update waitlist user position: %w", err)
 	}
 	return nil
@@ -338,7 +325,6 @@ WHERE id = $1
 func (s *Store) UpdateLastActivity(ctx context.Context, userID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlUpdateLastActivity, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update last activity", err)
 		return fmt.Errorf("failed to update last activity: %w", err)
 	}
 	return nil
@@ -354,13 +340,11 @@ WHERE id = $1 AND deleted_at IS NULL
 func (s *Store) DeleteWaitlistUser(ctx context.Context, userID uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlDeleteWaitlistUser, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete waitlist user", err)
 		return fmt.Errorf("failed to delete waitlist user: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -383,13 +367,11 @@ WHERE id = $1 AND deleted_at IS NULL
 func (s *Store) UpdateVerificationToken(ctx context.Context, userID uuid.UUID, token string) error {
 	res, err := s.db.ExecContext(ctx, sqlUpdateVerificationToken, userID, token)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update verification token", err)
 		return fmt.Errorf("failed to update verification token: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -414,7 +396,6 @@ func (s *Store) GetWaitlistUserByVerificationToken(ctx context.Context, token st
 		if errors.Is(err, sql.ErrNoRows) {
 			return WaitlistUser{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get waitlist user by verification token", err)
 		return WaitlistUser{}, fmt.Errorf("failed to get waitlist user by verification token: %w", err)
 	}
 	return user, nil
@@ -511,7 +492,6 @@ func (s *Store) SearchWaitlistUsers(ctx context.Context, params SearchWaitlistUs
 	var users []WaitlistUser
 	err := s.db.SelectContext(ctx, &users, query, args...)
 	if err != nil {
-		s.logger.Error(ctx, "failed to search waitlist users", err)
 		return nil, fmt.Errorf("failed to search waitlist users: %w", err)
 	}
 
@@ -524,7 +504,6 @@ func (s *Store) CountWaitlistUsersByStatus(ctx context.Context, campaignID uuid.
 	var count int
 	err := s.db.GetContext(ctx, &count, query, campaignID, status)
 	if err != nil {
-		s.logger.Error(ctx, "failed to count waitlist users by status", err)
 		return 0, fmt.Errorf("failed to count waitlist users by status: %w", err)
 	}
 	return count, nil
@@ -594,7 +573,6 @@ func (s *Store) GetWaitlistUsersByCampaignWithFilters(ctx context.Context, param
 	var users []WaitlistUser
 	err := s.db.SelectContext(ctx, &users, query, args...)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get waitlist users with filters", err)
 		return nil, fmt.Errorf("failed to get waitlist users with filters: %w", err)
 	}
 
@@ -622,7 +600,6 @@ func (s *Store) CountWaitlistUsersWithFilters(ctx context.Context, campaignID uu
 	var count int
 	err := s.db.GetContext(ctx, &count, query, args...)
 	if err != nil {
-		s.logger.Error(ctx, "failed to count waitlist users with filters", err)
 		return 0, fmt.Errorf("failed to count waitlist users with filters: %w", err)
 	}
 	return count, nil
@@ -641,7 +618,6 @@ func (s *Store) GetAllWaitlistUsersForPositionCalculation(ctx context.Context, c
 	var users []WaitlistUser
 	err := s.db.SelectContext(ctx, &users, sqlGetAllWaitlistUsersForPositionCalculation, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get all waitlist users for position calculation", err)
 		return nil, fmt.Errorf("failed to get all waitlist users for position calculation: %w", err)
 	}
 	return users, nil
@@ -672,7 +648,6 @@ func (s *Store) BulkUpdateWaitlistUserPositions(ctx context.Context, userIDs []u
 
 	_, err := s.db.ExecContext(ctx, sqlBulkUpdateWaitlistUserPositions, userIDStrings, positions)
 	if err != nil {
-		s.logger.Error(ctx, "failed to bulk update waitlist user positions", err)
 		return fmt.Errorf("failed to bulk update waitlist user positions: %w", err)
 	}
 	return nil
@@ -689,13 +664,11 @@ WHERE id = $1 AND deleted_at IS NULL
 func (s *Store) BlockWaitlistUser(ctx context.Context, userID uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlBlockWaitlistUser, userID, WaitlistUserStatusBlocked)
 	if err != nil {
-		s.logger.Error(ctx, "failed to block waitlist user", err)
 		return fmt.Errorf("failed to block waitlist user: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -717,7 +690,6 @@ func (s *Store) CountRecentSignupsByIP(ctx context.Context, campaignID uuid.UUID
 	var count int
 	err := s.db.GetContext(ctx, &count, sqlCountRecentSignupsByIP, campaignID, ip, since)
 	if err != nil {
-		s.logger.Error(ctx, "failed to count recent signups by IP", err)
 		return 0, fmt.Errorf("failed to count recent signups by IP: %w", err)
 	}
 	return count, nil

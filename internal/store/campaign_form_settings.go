@@ -51,7 +51,6 @@ func (s *Store) CreateCampaignFormSettings(ctx context.Context, params CreateCam
 		params.SuccessTitle,
 		params.SuccessMessage)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create campaign form settings", err)
 		return CampaignFormSettings{}, fmt.Errorf("failed to create campaign form settings: %w", err)
 	}
 	return settings, nil
@@ -71,7 +70,6 @@ func (s *Store) GetCampaignFormSettings(ctx context.Context, campaignID uuid.UUI
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignFormSettings{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign form settings", err)
 		return CampaignFormSettings{}, fmt.Errorf("failed to get campaign form settings: %w", err)
 	}
 	return settings, nil
@@ -107,7 +105,6 @@ func (s *Store) UpdateCampaignFormSettings(ctx context.Context, campaignID uuid.
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignFormSettings{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update campaign form settings", err)
 		return CampaignFormSettings{}, fmt.Errorf("failed to update campaign form settings: %w", err)
 	}
 	return settings, nil
@@ -121,13 +118,11 @@ DELETE FROM campaign_form_settings WHERE campaign_id = $1
 func (s *Store) DeleteCampaignFormSettings(ctx context.Context, campaignID uuid.UUID) error {
 	result, err := s.db.ExecContext(ctx, sqlDeleteCampaignFormSettings, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign form settings", err)
 		return fmt.Errorf("failed to delete campaign form settings: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 

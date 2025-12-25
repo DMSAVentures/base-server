@@ -44,7 +44,6 @@ func (s *Store) CreateAccount(ctx context.Context, params CreateAccountParams) (
 		params.StripeCustomerID,
 		JSONB{})
 	if err != nil {
-		s.logger.Error(ctx, "failed to create account", err)
 		return Account{}, fmt.Errorf("failed to create account: %w", err)
 	}
 	return account, nil
@@ -64,7 +63,6 @@ func (s *Store) GetAccountByID(ctx context.Context, accountID uuid.UUID) (Accoun
 		if errors.Is(err, sql.ErrNoRows) {
 			return Account{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get account by id", err)
 		return Account{}, fmt.Errorf("failed to get account by id: %w", err)
 	}
 	return account, nil
@@ -84,7 +82,6 @@ func (s *Store) GetAccountBySlug(ctx context.Context, slug string) (Account, err
 		if errors.Is(err, sql.ErrNoRows) {
 			return Account{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get account by slug", err)
 		return Account{}, fmt.Errorf("failed to get account by slug: %w", err)
 	}
 	return account, nil
@@ -102,7 +99,6 @@ func (s *Store) GetAccountsByOwnerUserID(ctx context.Context, userID uuid.UUID) 
 	var accounts []Account
 	err := s.db.SelectContext(ctx, &accounts, sqlGetAccountsByOwnerUserID, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get accounts by owner user id", err)
 		return nil, fmt.Errorf("failed to get accounts by owner user id: %w", err)
 	}
 	return accounts, nil
@@ -134,7 +130,6 @@ func (s *Store) UpdateAccount(ctx context.Context, accountID uuid.UUID, params U
 		if errors.Is(err, sql.ErrNoRows) {
 			return Account{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update account", err)
 		return Account{}, fmt.Errorf("failed to update account: %w", err)
 	}
 	return account, nil
@@ -150,13 +145,11 @@ WHERE id = $1 AND deleted_at IS NULL
 func (s *Store) DeleteAccount(ctx context.Context, accountID uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlDeleteAccount, accountID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete account", err)
 		return fmt.Errorf("failed to delete account: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -177,13 +170,11 @@ WHERE id = $1 AND deleted_at IS NULL
 func (s *Store) UpdateAccountStripeCustomerID(ctx context.Context, accountID uuid.UUID, stripeCustomerID string) error {
 	res, err := s.db.ExecContext(ctx, sqlUpdateAccountStripeCustomerID, accountID, stripeCustomerID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update account stripe customer id", err)
 		return fmt.Errorf("failed to update account stripe customer id: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -221,7 +212,6 @@ func (s *Store) CreateTeamMember(ctx context.Context, params CreateTeamMemberPar
 		params.Permissions,
 		params.InvitedBy)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create team member", err)
 		return TeamMember{}, fmt.Errorf("failed to create team member: %w", err)
 	}
 	return teamMember, nil
@@ -239,7 +229,6 @@ func (s *Store) GetTeamMembersByAccountID(ctx context.Context, accountID uuid.UU
 	var members []TeamMember
 	err := s.db.SelectContext(ctx, &members, sqlGetTeamMembersByAccountID, accountID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get team members", err)
 		return nil, fmt.Errorf("failed to get team members: %w", err)
 	}
 	return members, nil
@@ -259,7 +248,6 @@ func (s *Store) GetTeamMemberByAccountAndUserID(ctx context.Context, accountID, 
 		if errors.Is(err, sql.ErrNoRows) {
 			return TeamMember{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get team member", err)
 		return TeamMember{}, fmt.Errorf("failed to get team member: %w", err)
 	}
 	return member, nil
@@ -275,13 +263,11 @@ WHERE account_id = $1 AND user_id = $2
 func (s *Store) UpdateTeamMemberRole(ctx context.Context, accountID, userID uuid.UUID, role string) error {
 	res, err := s.db.ExecContext(ctx, sqlUpdateTeamMemberRole, accountID, userID, role)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update team member role", err)
 		return fmt.Errorf("failed to update team member role: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -301,13 +287,11 @@ WHERE account_id = $1 AND user_id = $2
 func (s *Store) DeleteTeamMember(ctx context.Context, accountID, userID uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlDeleteTeamMember, accountID, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete team member", err)
 		return fmt.Errorf("failed to delete team member: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 

@@ -19,7 +19,6 @@ func (s *Store) GetUserByExternalID(ctx context.Context, externalID uuid.UUID) (
 	var user User
 	err := s.db.GetContext(ctx, &user, sqlSelectUserByID, externalID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get user by external ID", err)
 		return User{}, fmt.Errorf("failed to get user by external ID: %w", err)
 	}
 
@@ -34,13 +33,11 @@ WHERE id = $2`
 func (s *Store) UpdateStripeCustomerIDByUserID(ctx context.Context, userID uuid.UUID, stripeCustomerID string) error {
 	result, err := s.db.ExecContext(ctx, sqlUpdateStripeCustomerIDByUserID, stripeCustomerID, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update stripe customer ID by user ID", err)
 		return fmt.Errorf("failed to update stripe customer ID by user ID: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -60,7 +57,6 @@ func (s *Store) GetStripeCustomerIDByUserExternalID(ctx context.Context, ID uuid
 	var stripeCustomerID string
 	err := s.db.GetContext(ctx, &stripeCustomerID, sqlGetStripeCustomerIDByUserID, ID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get stripe customer ID by user ID", err)
 		return "", fmt.Errorf("failed to get stripe customer ID by user ID: %w", err)
 	}
 
@@ -79,7 +75,6 @@ func (s *Store) GetUserByStripeCustomerID(ctx context.Context, stripeID string) 
 	var user User
 	err := s.db.GetContext(ctx, &user, sqlSelectUserByStripeCustomerID, stripeID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get user by stripe customer ID", err)
 		return User{}, fmt.Errorf("failed to get user by stripe customer ID: %w", err)
 	}
 

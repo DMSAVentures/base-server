@@ -42,7 +42,6 @@ func (s *Store) CreateCampaignBrandingSettings(ctx context.Context, params Creat
 		params.FontFamily,
 		params.CustomDomain)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create campaign branding settings", err)
 		return CampaignBrandingSettings{}, fmt.Errorf("failed to create campaign branding settings: %w", err)
 	}
 	return settings, nil
@@ -62,7 +61,6 @@ func (s *Store) GetCampaignBrandingSettings(ctx context.Context, campaignID uuid
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignBrandingSettings{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign branding settings", err)
 		return CampaignBrandingSettings{}, fmt.Errorf("failed to get campaign branding settings: %w", err)
 	}
 	return settings, nil
@@ -92,7 +90,6 @@ func (s *Store) UpdateCampaignBrandingSettings(ctx context.Context, campaignID u
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignBrandingSettings{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update campaign branding settings", err)
 		return CampaignBrandingSettings{}, fmt.Errorf("failed to update campaign branding settings: %w", err)
 	}
 	return settings, nil
@@ -106,13 +103,11 @@ DELETE FROM campaign_branding_settings WHERE campaign_id = $1
 func (s *Store) DeleteCampaignBrandingSettings(ctx context.Context, campaignID uuid.UUID) error {
 	result, err := s.db.ExecContext(ctx, sqlDeleteCampaignBrandingSettings, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign branding settings", err)
 		return fmt.Errorf("failed to delete campaign branding settings: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 

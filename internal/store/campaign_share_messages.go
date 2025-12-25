@@ -35,7 +35,6 @@ func (s *Store) CreateCampaignShareMessage(ctx context.Context, params CreateCam
 		params.Channel,
 		params.Message)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create campaign share message", err)
 		return CampaignShareMessage{}, fmt.Errorf("failed to create campaign share message: %w", err)
 	}
 	return message, nil
@@ -55,7 +54,6 @@ func (s *Store) GetCampaignShareMessageByID(ctx context.Context, messageID uuid.
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignShareMessage{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign share message by id", err)
 		return CampaignShareMessage{}, fmt.Errorf("failed to get campaign share message by id: %w", err)
 	}
 	return message, nil
@@ -75,7 +73,6 @@ func (s *Store) GetCampaignShareMessageByChannel(ctx context.Context, campaignID
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignShareMessage{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign share message by channel", err)
 		return CampaignShareMessage{}, fmt.Errorf("failed to get campaign share message by channel: %w", err)
 	}
 	return message, nil
@@ -93,7 +90,6 @@ func (s *Store) GetCampaignShareMessages(ctx context.Context, campaignID uuid.UU
 	var messages []CampaignShareMessage
 	err := s.db.SelectContext(ctx, &messages, sqlGetCampaignShareMessages, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get campaign share messages", err)
 		return nil, fmt.Errorf("failed to get campaign share messages: %w", err)
 	}
 	return messages, nil
@@ -117,7 +113,6 @@ func (s *Store) UpdateCampaignShareMessage(ctx context.Context, messageID uuid.U
 		if errors.Is(err, sql.ErrNoRows) {
 			return CampaignShareMessage{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update campaign share message", err)
 		return CampaignShareMessage{}, fmt.Errorf("failed to update campaign share message: %w", err)
 	}
 	return message, nil
@@ -131,13 +126,11 @@ DELETE FROM campaign_share_messages WHERE id = $1
 func (s *Store) DeleteCampaignShareMessage(ctx context.Context, messageID uuid.UUID) error {
 	result, err := s.db.ExecContext(ctx, sqlDeleteCampaignShareMessage, messageID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign share message", err)
 		return fmt.Errorf("failed to delete campaign share message: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -156,7 +149,6 @@ DELETE FROM campaign_share_messages WHERE campaign_id = $1
 func (s *Store) DeleteCampaignShareMessagesByCampaignID(ctx context.Context, campaignID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlDeleteCampaignShareMessagesByCampaignID, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign share messages", err)
 		return fmt.Errorf("failed to delete campaign share messages: %w", err)
 	}
 	return nil

@@ -42,7 +42,6 @@ func (s *Store) CreatePaymentMethod(ctx context.Context, params CreatePaymentMet
 	var paymentMethod PaymentMethod
 	err := s.db.GetContext(ctx, &paymentMethod, sqlCreatePaymentMethod, params.UserID, params.StripeID, params.CardBrand, params.CardLast4, params.CardExpMonth, params.CardExpYear)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create payment method", err)
 		return nil, fmt.Errorf("failed to create payment method: %w", err)
 	}
 	return &paymentMethod, nil
@@ -59,7 +58,6 @@ func (s *Store) GetPaymentMethodByUserID(ctx context.Context, userID uuid.UUID) 
 	var paymentMethod PaymentMethod
 	err := s.db.GetContext(ctx, &paymentMethod, sqlGetPaymentMethodByUserID, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get payment method by user id", err)
 		return nil, fmt.Errorf("failed to get payment method by user id: %w", err)
 	}
 	return &paymentMethod, nil
@@ -79,12 +77,10 @@ func (s *Store) UpdatePaymentMethodByUserID(ctx context.Context, userID uuid.UUI
 		cardExpYear,
 		userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update payment method by user id", err)
 		return fmt.Errorf("failed to update payment method by user id: %w", err)
 	}
 
 	if rows, _ := res.RowsAffected(); rows == 0 {
-		s.logger.Error(ctx, "payment method not found", nil)
 		return fmt.Errorf("payment method not found")
 	}
 	return nil

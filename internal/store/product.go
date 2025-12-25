@@ -35,7 +35,6 @@ func (s *Store) CreateProduct(ctx context.Context, productID, name, description 
 	var product Product
 	err := s.db.GetContext(ctx, &product, sqlCreateProduct, productID, name, description)
 	if err != nil {
-		s.logger.Error(ctx, "failed to insert product", err)
 		return Product{}, fmt.Errorf("failed to insert product: %w", err)
 	}
 
@@ -53,7 +52,6 @@ func (s *Store) GetProductByStripeID(ctx context.Context, stripeID string) (Prod
 	var product Product
 	err := s.db.GetContext(ctx, &product, sqlGetProductByStripeID, stripeID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get product", err)
 		return Product{}, fmt.Errorf("failed to get product: %w", err)
 	}
 	return product, nil

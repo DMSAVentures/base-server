@@ -51,7 +51,6 @@ func (s *Store) CreateReward(ctx context.Context, params CreateRewardParams) (Re
 		params.StartsAt,
 		params.ExpiresAt)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create reward", err)
 		return Reward{}, fmt.Errorf("failed to create reward: %w", err)
 	}
 	return reward, nil
@@ -71,7 +70,6 @@ func (s *Store) GetRewardByID(ctx context.Context, rewardID uuid.UUID) (Reward, 
 		if errors.Is(err, sql.ErrNoRows) {
 			return Reward{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get reward by id", err)
 		return Reward{}, fmt.Errorf("failed to get reward by id: %w", err)
 	}
 	return reward, nil
@@ -89,7 +87,6 @@ func (s *Store) GetRewardsByCampaign(ctx context.Context, campaignID uuid.UUID) 
 	var rewards []Reward
 	err := s.db.SelectContext(ctx, &rewards, sqlGetRewardsByCampaign, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rewards by campaign", err)
 		return nil, fmt.Errorf("failed to get rewards by campaign: %w", err)
 	}
 	return rewards, nil
@@ -109,7 +106,6 @@ func (s *Store) GetActiveRewardsByCampaign(ctx context.Context, campaignID uuid.
 	var rewards []Reward
 	err := s.db.SelectContext(ctx, &rewards, sqlGetActiveRewardsByCampaign, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get active rewards", err)
 		return nil, fmt.Errorf("failed to get active rewards: %w", err)
 	}
 	return rewards, nil
@@ -153,7 +149,6 @@ func (s *Store) UpdateReward(ctx context.Context, rewardID uuid.UUID, params Upd
 		if errors.Is(err, sql.ErrNoRows) {
 			return Reward{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update reward", err)
 		return Reward{}, fmt.Errorf("failed to update reward: %w", err)
 	}
 	return reward, nil
@@ -169,13 +164,11 @@ WHERE id = $1 AND deleted_at IS NULL
 func (s *Store) DeleteReward(ctx context.Context, rewardID uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlDeleteReward, rewardID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete reward", err)
 		return fmt.Errorf("failed to delete reward: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -197,7 +190,6 @@ WHERE id = $1
 func (s *Store) IncrementRewardClaimed(ctx context.Context, rewardID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementRewardClaimed, rewardID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment reward claimed", err)
 		return fmt.Errorf("failed to increment reward claimed: %w", err)
 	}
 	return nil
@@ -230,7 +222,6 @@ func (s *Store) CreateUserReward(ctx context.Context, params CreateUserRewardPar
 		params.RewardData,
 		params.ExpiresAt)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create user reward", err)
 		return UserReward{}, fmt.Errorf("failed to create user reward: %w", err)
 	}
 	return userReward, nil
@@ -248,7 +239,6 @@ func (s *Store) GetUserRewardsByUser(ctx context.Context, userID uuid.UUID) ([]U
 	var rewards []UserReward
 	err := s.db.SelectContext(ctx, &rewards, sqlGetUserRewardsByUser, userID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get user rewards", err)
 		return nil, fmt.Errorf("failed to get user rewards: %w", err)
 	}
 	return rewards, nil
@@ -267,7 +257,6 @@ func (s *Store) GetUserRewardsByCampaign(ctx context.Context, campaignID uuid.UU
 	var rewards []UserReward
 	err := s.db.SelectContext(ctx, &rewards, sqlGetUserRewardsByCampaign, campaignID, limit, offset)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get user rewards by campaign", err)
 		return nil, fmt.Errorf("failed to get user rewards by campaign: %w", err)
 	}
 	return rewards, nil
@@ -286,13 +275,11 @@ WHERE id = $1
 func (s *Store) UpdateUserRewardStatus(ctx context.Context, userRewardID uuid.UUID, status string) error {
 	res, err := s.db.ExecContext(ctx, sqlUpdateUserRewardStatus, userRewardID, status)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update user reward status", err)
 		return fmt.Errorf("failed to update user reward status: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -316,7 +303,6 @@ WHERE id = $1
 func (s *Store) IncrementDeliveryAttempts(ctx context.Context, userRewardID uuid.UUID, errorMsg string) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementDeliveryAttempts, userRewardID, errorMsg)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment delivery attempts", err)
 		return fmt.Errorf("failed to increment delivery attempts: %w", err)
 	}
 	return nil
@@ -335,7 +321,6 @@ func (s *Store) GetPendingUserRewards(ctx context.Context, limit int) ([]UserRew
 	var rewards []UserReward
 	err := s.db.SelectContext(ctx, &rewards, sqlGetPendingUserRewards, limit)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get pending user rewards", err)
 		return nil, fmt.Errorf("failed to get pending user rewards: %w", err)
 	}
 	return rewards, nil

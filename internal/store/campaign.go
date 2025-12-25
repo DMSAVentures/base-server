@@ -53,7 +53,6 @@ func (s *Store) CreateCampaign(ctx context.Context, params CreateCampaignParams)
 		params.TermsURL,
 		params.MaxSignups)
 	if err != nil {
-		s.logger.Error(ctx, "failed to create campaign", err)
 		return Campaign{}, fmt.Errorf("failed to create campaign: %w", err)
 	}
 	return campaign, nil
@@ -81,7 +80,6 @@ func (s *Store) GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (Camp
 		if errors.Is(err, sql.ErrNoRows) {
 			return Campaign{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign by id", err)
 		return Campaign{}, fmt.Errorf("failed to get campaign by id: %w", err)
 	}
 	return campaign, nil
@@ -109,7 +107,6 @@ func (s *Store) GetCampaignBySlug(ctx context.Context, accountID uuid.UUID, slug
 		if errors.Is(err, sql.ErrNoRows) {
 			return Campaign{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to get campaign by slug", err)
 		return Campaign{}, fmt.Errorf("failed to get campaign by slug: %w", err)
 	}
 	return campaign, nil
@@ -135,7 +132,6 @@ func (s *Store) GetCampaignsByAccountID(ctx context.Context, accountID uuid.UUID
 	var campaigns []Campaign
 	err := s.db.SelectContext(ctx, &campaigns, sqlGetCampaignsByAccountID, accountID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get campaigns by account id", err)
 		return nil, fmt.Errorf("failed to get campaigns by account id: %w", err)
 	}
 	return campaigns, nil
@@ -161,7 +157,6 @@ func (s *Store) GetCampaignsByStatus(ctx context.Context, accountID uuid.UUID, s
 	var campaigns []Campaign
 	err := s.db.SelectContext(ctx, &campaigns, sqlGetCampaignsByStatus, accountID, status)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get campaigns by status", err)
 		return nil, fmt.Errorf("failed to get campaigns by status: %w", err)
 	}
 	return campaigns, nil
@@ -222,7 +217,6 @@ func (s *Store) ListCampaigns(ctx context.Context, params ListCampaignsParams) (
 	var totalCount int
 	err := s.db.GetContext(ctx, &totalCount, countQuery, args...)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get total campaign count", err)
 		return ListCampaignsResult{}, fmt.Errorf("failed to get total campaign count: %w", err)
 	}
 
@@ -235,7 +229,6 @@ func (s *Store) ListCampaigns(ctx context.Context, params ListCampaignsParams) (
 	var campaigns []Campaign
 	err = s.db.SelectContext(ctx, &campaigns, query, args...)
 	if err != nil {
-		s.logger.Error(ctx, "failed to list campaigns", err)
 		return ListCampaignsResult{}, fmt.Errorf("failed to list campaigns: %w", err)
 	}
 
@@ -283,7 +276,6 @@ func (s *Store) UpdateCampaign(ctx context.Context, accountID, campaignID uuid.U
 		if errors.Is(err, sql.ErrNoRows) {
 			return Campaign{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update campaign", err)
 		return Campaign{}, fmt.Errorf("failed to update campaign: %w", err)
 	}
 	return campaign, nil
@@ -304,7 +296,6 @@ func (s *Store) UpdateCampaignStatus(ctx context.Context, accountID, campaignID 
 		if errors.Is(err, sql.ErrNoRows) {
 			return Campaign{}, ErrNotFound
 		}
-		s.logger.Error(ctx, "failed to update campaign status", err)
 		return Campaign{}, fmt.Errorf("failed to update campaign status: %w", err)
 	}
 	return campaign, nil
@@ -320,13 +311,11 @@ WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
 func (s *Store) DeleteCampaign(ctx context.Context, accountID, campaignID uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, sqlDeleteCampaign, campaignID, accountID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to delete campaign", err)
 		return fmt.Errorf("failed to delete campaign: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
 	if err != nil {
-		s.logger.Error(ctx, "failed to get rows affected", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
@@ -347,7 +336,6 @@ WHERE id = $1
 func (s *Store) IncrementCampaignSignups(ctx context.Context, campaignID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementCampaignSignups, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment campaign signups", err)
 		return fmt.Errorf("failed to increment campaign signups: %w", err)
 	}
 	return nil
@@ -363,7 +351,6 @@ WHERE id = $1
 func (s *Store) IncrementCampaignVerified(ctx context.Context, campaignID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementCampaignVerified, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment campaign verified", err)
 		return fmt.Errorf("failed to increment campaign verified: %w", err)
 	}
 	return nil
@@ -379,7 +366,6 @@ WHERE id = $1
 func (s *Store) IncrementCampaignReferrals(ctx context.Context, campaignID uuid.UUID) error {
 	_, err := s.db.ExecContext(ctx, sqlIncrementCampaignReferrals, campaignID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to increment campaign referrals", err)
 		return fmt.Errorf("failed to increment campaign referrals: %w", err)
 	}
 	return nil

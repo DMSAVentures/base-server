@@ -56,7 +56,6 @@ func (s *Store) CreateSubscription(ctx context.Context, subscriptionCreated Crea
 		subscriptionCreated.EndDate,
 		subscriptionCreated.NextBillingDate)
 	if err != nil {
-		s.logger.Error(ctx, "failed to insert subscription", err)
 		return fmt.Errorf("failed to insert subscription: %w", err)
 	}
 	return nil
@@ -73,7 +72,6 @@ RETURNING id, user_id, price_id, stripe_id, status, start_date, end_date, next_b
 func (s *Store) UpdateSubscription(ctx context.Context, subscriptionUpdated UpdateSubscriptionParams) error {
 	price, err := s.GetPriceByStripeID(ctx, subscriptionUpdated.StripePriceID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get price by stripe id", err)
 		return fmt.Errorf("failed to get price by stripe id: %w", err)
 	}
 
@@ -84,12 +82,10 @@ func (s *Store) UpdateSubscription(ctx context.Context, subscriptionUpdated Upda
 		price.ID,
 		subscriptionUpdated.StripeID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to update subscription", err)
 		return fmt.Errorf("failed to update subscription: %w", err)
 	}
 
 	if rows, _ := res.RowsAffected(); rows == 0 {
-		s.logger.Error(ctx, "subscription not found", nil)
 		return fmt.Errorf("subscription not found")
 	}
 
@@ -105,7 +101,6 @@ WHERE stripe_id = $2`
 func (s *Store) CancelSubscription(ctx context.Context, subscriptionID string, cancelAt time.Time) error {
 	_, err := s.db.ExecContext(ctx, sqlCancelSubscription, cancelAt, subscriptionID)
 	if err != nil {
-		s.logger.Error(ctx, "failed to cancel subscription", err)
 		return fmt.Errorf("failed to cancel subscription: %w", err)
 	}
 
@@ -123,7 +118,6 @@ func (s *Store) GetSubscription(ctx context.Context, subscriptionID string) (Sub
 	var subscription Subscription
 	err := s.db.QueryRowxContext(ctx, sqlGetSubscriptionByStripeID, subscriptionID).StructScan(&subscription)
 	if err != nil {
-		s.logger.Error(ctx, "failed to get subscription", err)
 		return Subscription{}, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
@@ -142,11 +136,9 @@ func (s *Store) GetSubscriptionByUserID(ctx context.Context, userID uuid.UUID) (
 	err := s.db.QueryRowxContext(ctx, sqlGetSubscriptionByUserID, userID).StructScan(&subscription)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			s.logger.Error(ctx, "subscription not found", err)
 			return Subscription{}, ErrNotFound
 		}
 
-		s.logger.Error(ctx, "failed to get subscription", err)
 		return Subscription{}, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
