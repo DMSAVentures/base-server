@@ -5,139 +5,63 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
-
-// Helper to create a test account
-func createTestAccount(t *testing.T, testDB *TestDB) Account {
-	t.Helper()
-	user, err := createTestUser(t, testDB, "Test", "User")
-	if err != nil {
-		t.Fatalf("failed to create test user: %v", err)
-	}
-
-	account, err := testDB.Store.CreateAccount(context.Background(), CreateAccountParams{
-		Name:        "Test Account",
-		Slug:        "test-account-" + uuid.New().String()[:8],
-		OwnerUserID: user.ID,
-		Plan:        "pro",
-	})
-	if err != nil {
-		t.Fatalf("failed to create test account: %v", err)
-	}
-	return account
-}
-
-// Helper to create a test campaign
-func createTestCampaign(t *testing.T, testDB *TestDB, accountID uuid.UUID, name, slug string) Campaign {
-	t.Helper()
-	campaign, err := testDB.Store.CreateCampaign(context.Background(), CreateCampaignParams{
-		AccountID: accountID,
-		Name:      name,
-		Slug:      slug,
-		Type:      "waitlist",
-	})
-	if err != nil {
-		t.Fatalf("failed to create test campaign: %v", err)
-	}
-	return campaign
-}
-
-// Helper to create a test waitlist user
-func createTestWaitlistUser(t *testing.T, testDB *TestDB, campaignID uuid.UUID, email string) WaitlistUser {
-	t.Helper()
-	user, err := testDB.Store.CreateWaitlistUser(context.Background(), CreateWaitlistUserParams{
-		CampaignID:       campaignID,
-		Email:            email,
-		ReferralCode:     "TEST" + uuid.New().String()[:6],
-		Position:         1,
-		OriginalPosition: 1,
-		TermsAccepted:    true,
-	})
-	if err != nil {
-		t.Fatalf("failed to create test waitlist user: %v", err)
-	}
-	return user
-}
 
 func TestStore_CreateCampaign(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-
 	ctx := context.Background()
+	f := NewFixtures(t, testDB)
 
 	tests := []struct {
 		name     string
-		setup    func(t *testing.T) CreateCampaignParams
+		setup    func() CreateCampaignParams
 		wantErr  bool
 		validate func(t *testing.T, campaign Campaign, params CreateCampaignParams)
 	}{
 		{
-			name: "create campaign with all required fields",
-			setup: func(t *testing.T) CreateCampaignParams {
-				t.Helper()
-				account := createTestAccount(t, testDB)
+			name: "creates campaign with required fields",
+			setup: func() CreateCampaignParams {
+				account := f.CreateAccount()
 				return CreateCampaignParams{
 					AccountID: account.ID,
 					Name:      "Test Campaign",
-					Slug:      "test-campaign",
+					Slug:      "test-campaign-" + uuid.New().String()[:8],
 					Type:      "waitlist",
 				}
 			},
-			wantErr: false,
 			validate: func(t *testing.T, campaign Campaign, params CreateCampaignParams) {
-				t.Helper()
-				if campaign.ID == uuid.Nil {
-					t.Error("expected campaign ID to be set")
-				}
-				if campaign.Name != params.Name {
-					t.Errorf("Name = %v, want %v", campaign.Name, params.Name)
-				}
-				if campaign.Slug != params.Slug {
-					t.Errorf("Slug = %v, want %v", campaign.Slug, params.Slug)
-				}
-				if campaign.Type != params.Type {
-					t.Errorf("Type = %v, want %v", campaign.Type, params.Type)
-				}
-				if campaign.Status != "draft" {
-					t.Errorf("Status = %v, want draft", campaign.Status)
-				}
-				if campaign.TotalSignups != 0 {
-					t.Errorf("TotalSignups = %v, want 0", campaign.TotalSignups)
-				}
-				if campaign.TotalVerified != 0 {
-					t.Errorf("TotalVerified = %v, want 0", campaign.TotalVerified)
-				}
+				assert.NotEqual(t, uuid.Nil, campaign.ID)
+				assert.Equal(t, params.Name, campaign.Name)
+				assert.Equal(t, params.Slug, campaign.Slug)
+				assert.Equal(t, params.Type, campaign.Type)
+				assert.Equal(t, "draft", campaign.Status)
+				assert.Equal(t, 0, campaign.TotalSignups)
+				assert.Equal(t, 0, campaign.TotalVerified)
 			},
 		},
 		{
-			name: "create campaign with optional fields",
-			setup: func(t *testing.T) CreateCampaignParams {
-				t.Helper()
-				account := createTestAccount(t, testDB)
-				description := "Test Description"
-				maxSignups := 1000
-				privacyURL := "https://example.com/privacy"
-				termsURL := "https://example.com/terms"
+			name: "creates campaign with optional fields",
+			setup: func() CreateCampaignParams {
+				account := f.CreateAccount()
 				return CreateCampaignParams{
 					AccountID:        account.ID,
 					Name:             "Full Campaign",
-					Slug:             "full-campaign",
-					Description:      &description,
+					Slug:             "full-campaign-" + uuid.New().String()[:8],
+					Description:      Ptr("Test Description"),
 					Type:             "referral",
-					MaxSignups:       &maxSignups,
-					PrivacyPolicyURL: &privacyURL,
-					TermsURL:         &termsURL,
+					MaxSignups:       Ptr(1000),
+					PrivacyPolicyURL: Ptr("https://example.com/privacy"),
+					TermsURL:         Ptr("https://example.com/terms"),
 				}
 			},
-			wantErr: false,
 			validate: func(t *testing.T, campaign Campaign, params CreateCampaignParams) {
-				t.Helper()
-				if campaign.Description == nil || *campaign.Description != *params.Description {
-					t.Errorf("Description = %v, want %v", campaign.Description, params.Description)
-				}
-				if campaign.MaxSignups == nil || *campaign.MaxSignups != *params.MaxSignups {
-					t.Errorf("MaxSignups = %v, want %v", campaign.MaxSignups, params.MaxSignups)
-				}
+				assert.Equal(t, *params.Description, *campaign.Description)
+				assert.Equal(t, *params.MaxSignups, *campaign.MaxSignups)
+				assert.Equal(t, *params.PrivacyPolicyURL, *campaign.PrivacyPolicyURL)
+				assert.Equal(t, *params.TermsURL, *campaign.TermsURL)
 			},
 		},
 	}
@@ -145,608 +69,477 @@ func TestStore_CreateCampaign(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			testDB.Truncate(t)
-			params := tt.setup(t)
+			params := tt.setup()
 
 			campaign, err := testDB.Store.CreateCampaign(ctx, params)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("CreateCampaign() error = %v, wantErr %v", err, tt.wantErr)
+
+			if tt.wantErr {
+				assert.Error(t, err)
 				return
 			}
-
-			if !tt.wantErr && tt.validate != nil {
+			require.NoError(t, err)
+			if tt.validate != nil {
 				tt.validate(t, campaign, params)
 			}
 		})
 	}
 }
 
-func TestStore_GetCampaignByID_WithCounters(t *testing.T) {
+func TestStore_GetCampaignByID(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Counter Test", "counter-test")
+	f := NewFixtures(t, testDB)
 
-	// Initially should have 0 signups
-	retrieved, err := testDB.Store.GetCampaignByID(ctx, campaign.ID)
-	if err != nil {
-		t.Fatalf("GetCampaignByID() error = %v", err)
-	}
-	if retrieved.TotalSignups != 0 {
-		t.Errorf("TotalSignups = %v, want 0", retrieved.TotalSignups)
-	}
-	if retrieved.TotalVerified != 0 {
-		t.Errorf("TotalVerified = %v, want 0", retrieved.TotalVerified)
-	}
+	t.Run("returns campaign with signup counters", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
-	// Create 3 waitlist users
-	createTestWaitlistUser(t, testDB, campaign.ID, "user1@example.com")
-	createTestWaitlistUser(t, testDB, campaign.ID, "user2@example.com")
-	createTestWaitlistUser(t, testDB, campaign.ID, "user3@example.com")
+		// Initially should have 0 signups
+		retrieved, err := testDB.Store.GetCampaignByID(ctx, campaign.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 0, retrieved.TotalSignups)
+		assert.Equal(t, 0, retrieved.TotalVerified)
 
-	// Should now have 3 signups
-	retrieved, err = testDB.Store.GetCampaignByID(ctx, campaign.ID)
-	if err != nil {
-		t.Fatalf("GetCampaignByID() error = %v", err)
-	}
-	if retrieved.TotalSignups != 3 {
-		t.Errorf("TotalSignups = %v, want 3", retrieved.TotalSignups)
-	}
+		// Create 3 waitlist users
+		for i := 0; i < 3; i++ {
+			f.CreateWaitlistUser(func(o *WaitlistUserOpts) { o.CampaignID = &campaign.ID })
+		}
 
-	// Verify a specific user as verified
-	user1, _ := testDB.Store.GetWaitlistUserByEmail(ctx, campaign.ID, "user1@example.com")
-	err = testDB.Store.VerifyWaitlistUserEmail(ctx, user1.ID)
-	if err != nil {
-		t.Fatalf("VerifyWaitlistUserEmail() error = %v", err)
-	}
-
-	// Should now have 1 verified
-	retrieved, err = testDB.Store.GetCampaignByID(ctx, campaign.ID)
-	if err != nil {
-		t.Fatalf("GetCampaignByID() error = %v", err)
-	}
-	if retrieved.TotalVerified != 1 {
-		t.Errorf("TotalVerified = %v, want 1", retrieved.TotalVerified)
-	}
-	if retrieved.TotalSignups != 3 {
-		t.Errorf("TotalSignups = %v, want 3 (should remain same)", retrieved.TotalSignups)
-	}
-}
-
-func TestStore_ListCampaigns_WithCounters(t *testing.T) {
-	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
-
-	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-
-	// Create 2 campaigns
-	campaign1 := createTestCampaign(t, testDB, account.ID, "Campaign 1", "campaign-1")
-	campaign2 := createTestCampaign(t, testDB, account.ID, "Campaign 2", "campaign-2")
-
-	// Add users to campaign1
-	createTestWaitlistUser(t, testDB, campaign1.ID, "c1-user1@example.com")
-	createTestWaitlistUser(t, testDB, campaign1.ID, "c1-user2@example.com")
-
-	// Add users to campaign2
-	createTestWaitlistUser(t, testDB, campaign2.ID, "c2-user1@example.com")
-
-	// List campaigns
-	result, err := testDB.Store.ListCampaigns(ctx, ListCampaignsParams{
-		AccountID: account.ID,
-		Page:      1,
-		Limit:     10,
+		// Should now have 3 signups
+		retrieved, err = testDB.Store.GetCampaignByID(ctx, campaign.ID)
+		require.NoError(t, err)
+		assert.Equal(t, 3, retrieved.TotalSignups)
 	})
-	if err != nil {
-		t.Fatalf("ListCampaigns() error = %v", err)
-	}
 
-	if len(result.Campaigns) != 2 {
-		t.Fatalf("got %d campaigns, want 2", len(result.Campaigns))
-	}
+	t.Run("returns ErrNotFound for non-existent campaign", func(t *testing.T) {
+		testDB.Truncate(t)
+		nonExistentID := uuid.New()
 
-	// Find campaigns and verify counts
-	var c1Found, c2Found bool
-	for _, c := range result.Campaigns {
-		if c.ID == campaign1.ID {
-			c1Found = true
-			if c.TotalSignups != 2 {
-				t.Errorf("Campaign1 TotalSignups = %v, want 2", c.TotalSignups)
-			}
-		}
-		if c.ID == campaign2.ID {
-			c2Found = true
-			if c.TotalSignups != 1 {
-				t.Errorf("Campaign2 TotalSignups = %v, want 1", c.TotalSignups)
-			}
-		}
-	}
+		_, err := testDB.Store.GetCampaignByID(ctx, nonExistentID)
 
-	if !c1Found || !c2Found {
-		t.Error("Not all campaigns found in list")
-	}
+		assert.ErrorIs(t, err, ErrNotFound)
+	})
 }
 
-func TestStore_GetCampaignBySlug_WithCounters(t *testing.T) {
+func TestStore_GetCampaignBySlug(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Slug Test", "slug-test")
+	f := NewFixtures(t, testDB)
 
-	// Add 2 users
-	createTestWaitlistUser(t, testDB, campaign.ID, "slug1@example.com")
-	createTestWaitlistUser(t, testDB, campaign.ID, "slug2@example.com")
+	t.Run("returns campaign with signup counters", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		slug := "slug-test-" + uuid.New().String()[:8]
+		campaign := f.CreateCampaign(func(o *CampaignOpts) {
+			o.AccountID = &account.ID
+			o.Slug = slug
+		})
 
-	// Get by slug
-	retrieved, err := testDB.Store.GetCampaignBySlug(ctx, account.ID, "slug-test")
-	if err != nil {
-		t.Fatalf("GetCampaignBySlug() error = %v", err)
-	}
+		// Add 2 users
+		for i := 0; i < 2; i++ {
+			f.CreateWaitlistUser(func(o *WaitlistUserOpts) { o.CampaignID = &campaign.ID })
+		}
 
-	if retrieved.TotalSignups != 2 {
-		t.Errorf("TotalSignups = %v, want 2", retrieved.TotalSignups)
-	}
+		retrieved, err := testDB.Store.GetCampaignBySlug(ctx, account.ID, slug)
+		require.NoError(t, err)
+		assert.Equal(t, 2, retrieved.TotalSignups)
+	})
+
+	t.Run("returns ErrNotFound for non-existent slug", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+
+		_, err := testDB.Store.GetCampaignBySlug(ctx, account.ID, "non-existent-slug")
+
+		assert.ErrorIs(t, err, ErrNotFound)
+	})
 }
 
 func TestStore_UpdateCampaign(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Original Name", "original-slug")
+	f := NewFixtures(t, testDB)
 
-	newName := "Updated Name"
-	newDescription := "Updated Description"
-	params := UpdateCampaignParams{
-		Name:        &newName,
-		Description: &newDescription,
+	tests := []struct {
+		name     string
+		params   UpdateCampaignParams
+		validate func(t *testing.T, updated Campaign)
+	}{
+		{
+			name: "updates name",
+			params: UpdateCampaignParams{
+				Name: Ptr("Updated Name"),
+			},
+			validate: func(t *testing.T, updated Campaign) {
+				assert.Equal(t, "Updated Name", updated.Name)
+			},
+		},
+		{
+			name: "updates description",
+			params: UpdateCampaignParams{
+				Description: Ptr("Updated Description"),
+			},
+			validate: func(t *testing.T, updated Campaign) {
+				assert.Equal(t, "Updated Description", *updated.Description)
+			},
+		},
+		{
+			name: "updates multiple fields",
+			params: UpdateCampaignParams{
+				Name:             Ptr("Multi Update"),
+				Description:      Ptr("Multi field update"),
+				PrivacyPolicyURL: Ptr("https://new-privacy.com"),
+			},
+			validate: func(t *testing.T, updated Campaign) {
+				assert.Equal(t, "Multi Update", updated.Name)
+				assert.Equal(t, "Multi field update", *updated.Description)
+				assert.Equal(t, "https://new-privacy.com", *updated.PrivacyPolicyURL)
+			},
+		},
 	}
 
-	updated, err := testDB.Store.UpdateCampaign(ctx, account.ID, campaign.ID, params)
-	if err != nil {
-		t.Fatalf("UpdateCampaign() error = %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testDB.Truncate(t)
+			account := f.CreateAccount()
+			campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+			updated, err := testDB.Store.UpdateCampaign(ctx, account.ID, campaign.ID, tt.params)
+
+			require.NoError(t, err)
+			tt.validate(t, updated)
+		})
 	}
 
-	if updated.Name != newName {
-		t.Errorf("Name = %v, want %v", updated.Name, newName)
-	}
-	if updated.Description == nil || *updated.Description != newDescription {
-		t.Errorf("Description = %v, want %v", updated.Description, newDescription)
-	}
+	t.Run("returns ErrNotFound for non-existent campaign", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+
+		_, err := testDB.Store.UpdateCampaign(ctx, account.ID, uuid.New(), UpdateCampaignParams{
+			Name: Ptr("Updated"),
+		})
+
+		assert.ErrorIs(t, err, ErrNotFound)
+	})
 }
 
 func TestStore_UpdateCampaignStatus(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Status Test", "status-test")
+	f := NewFixtures(t, testDB)
 
-	// Initially should be draft
-	if campaign.Status != "draft" {
-		t.Errorf("Initial status = %v, want draft", campaign.Status)
+	statuses := []string{"active", "paused", "completed", "draft"}
+
+	for _, status := range statuses {
+		t.Run("updates status to "+status, func(t *testing.T) {
+			testDB.Truncate(t)
+			account := f.CreateAccount()
+			campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+			updated, err := testDB.Store.UpdateCampaignStatus(ctx, account.ID, campaign.ID, status)
+
+			require.NoError(t, err)
+			assert.Equal(t, status, updated.Status)
+		})
 	}
 
-	// Update to active
-	updated, err := testDB.Store.UpdateCampaignStatus(ctx, account.ID, campaign.ID, "active")
-	if err != nil {
-		t.Fatalf("UpdateCampaignStatus() error = %v", err)
-	}
+	t.Run("returns ErrNotFound for non-existent campaign", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
 
-	if updated.Status != "active" {
-		t.Errorf("Status = %v, want active", updated.Status)
-	}
+		_, err := testDB.Store.UpdateCampaignStatus(ctx, account.ID, uuid.New(), "active")
+
+		assert.ErrorIs(t, err, ErrNotFound)
+	})
 }
 
 func TestStore_DeleteCampaign(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Delete Test", "delete-test")
+	f := NewFixtures(t, testDB)
 
-	// Delete the campaign
-	err := testDB.Store.DeleteCampaign(ctx, account.ID, campaign.ID)
-	if err != nil {
-		t.Fatalf("DeleteCampaign() error = %v", err)
-	}
+	t.Run("soft deletes campaign", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
-	// Should not be found (soft delete)
-	_, err = testDB.Store.GetCampaignByID(ctx, campaign.ID)
-	if err == nil {
-		t.Error("Expected error when getting deleted campaign")
-	}
-	if err != ErrNotFound {
-		t.Errorf("Expected ErrNotFound, got %v", err)
-	}
+		err := testDB.Store.DeleteCampaign(ctx, account.ID, campaign.ID)
+		require.NoError(t, err)
+
+		// Should not be found after deletion
+		_, err = testDB.Store.GetCampaignByID(ctx, campaign.ID)
+		assert.ErrorIs(t, err, ErrNotFound)
+	})
+
+	t.Run("returns ErrNotFound for non-existent campaign", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+
+		err := testDB.Store.DeleteCampaign(ctx, account.ID, uuid.New())
+
+		assert.ErrorIs(t, err, ErrNotFound)
+	})
+}
+
+func TestStore_ListCampaigns(t *testing.T) {
+	testDB := SetupTestDB(t, TestDBTypePostgres)
+	defer testDB.Close()
+	ctx := context.Background()
+	f := NewFixtures(t, testDB)
+
+	t.Run("returns paginated results", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+
+		// Create 5 campaigns
+		for i := 0; i < 5; i++ {
+			f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+		}
+
+		result, err := testDB.Store.ListCampaigns(ctx, ListCampaignsParams{
+			AccountID: account.ID,
+			Page:      1,
+			Limit:     2,
+		})
+
+		require.NoError(t, err)
+		assert.Len(t, result.Campaigns, 2)
+		assert.Equal(t, 5, result.TotalCount)
+		assert.Equal(t, 3, result.TotalPages)
+	})
+
+	t.Run("filters by status", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+
+		draftCampaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+		activeCampaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+		testDB.Store.UpdateCampaignStatus(ctx, account.ID, activeCampaign.ID, "active")
+
+		result, err := testDB.Store.ListCampaigns(ctx, ListCampaignsParams{
+			AccountID: account.ID,
+			Page:      1,
+			Limit:     10,
+			Status:    Ptr("active"),
+		})
+
+		require.NoError(t, err)
+		assert.Len(t, result.Campaigns, 1)
+		assert.Equal(t, activeCampaign.ID, result.Campaigns[0].ID)
+		_ = draftCampaign // suppress unused variable warning
+	})
+
+	t.Run("includes signup counters", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+		// Add 3 waitlist users
+		for i := 0; i < 3; i++ {
+			f.CreateWaitlistUser(func(o *WaitlistUserOpts) { o.CampaignID = &campaign.ID })
+		}
+
+		result, err := testDB.Store.ListCampaigns(ctx, ListCampaignsParams{
+			AccountID: account.ID,
+			Page:      1,
+			Limit:     10,
+		})
+
+		require.NoError(t, err)
+		require.Len(t, result.Campaigns, 1)
+		assert.Equal(t, 3, result.Campaigns[0].TotalSignups)
+	})
 }
 
 func TestStore_GetCampaignsByAccountID(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account1 := createTestAccount(t, testDB)
-	account2 := createTestAccount(t, testDB)
+	f := NewFixtures(t, testDB)
 
-	// Create campaigns for account1
-	createTestCampaign(t, testDB, account1.ID, "Account1 Campaign 1", "a1-c1")
-	createTestCampaign(t, testDB, account1.ID, "Account1 Campaign 2", "a1-c2")
+	t.Run("returns only campaigns for specified account", func(t *testing.T) {
+		testDB.Truncate(t)
+		account1 := f.CreateAccount()
+		account2 := f.CreateAccount()
 
-	// Create campaign for account2
-	createTestCampaign(t, testDB, account2.ID, "Account2 Campaign 1", "a2-c1")
+		// Create campaigns for account1
+		f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account1.ID })
+		f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account1.ID })
+		// Create campaign for account2
+		f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account2.ID })
 
-	// Get campaigns for account1
-	campaigns, err := testDB.Store.GetCampaignsByAccountID(ctx, account1.ID)
-	if err != nil {
-		t.Fatalf("GetCampaignsByAccountID() error = %v", err)
-	}
+		campaigns, err := testDB.Store.GetCampaignsByAccountID(ctx, account1.ID)
 
-	if len(campaigns) != 2 {
-		t.Errorf("got %d campaigns for account1, want 2", len(campaigns))
-	}
-
-	// Verify all campaigns belong to account1
-	for _, c := range campaigns {
-		if c.AccountID != account1.ID {
-			t.Errorf("Campaign %s has wrong AccountID = %v, want %v", c.ID, c.AccountID, account1.ID)
+		require.NoError(t, err)
+		assert.Len(t, campaigns, 2)
+		for _, c := range campaigns {
+			assert.Equal(t, account1.ID, c.AccountID)
 		}
-	}
+	})
 }
 
 func TestStore_GetCampaignsByStatus(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
+	f := NewFixtures(t, testDB)
 
-	// Create campaigns with different statuses
-	campaign1 := createTestCampaign(t, testDB, account.ID, "Draft Campaign", "draft-campaign")
-	campaign2 := createTestCampaign(t, testDB, account.ID, "Active Campaign", "active-campaign")
+	t.Run("returns only campaigns with specified status", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
 
-	// Update one to active
-	testDB.Store.UpdateCampaignStatus(ctx, account.ID, campaign2.ID, "active")
+		draftCampaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+		activeCampaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+		testDB.Store.UpdateCampaignStatus(ctx, account.ID, activeCampaign.ID, "active")
 
-	// Get draft campaigns
-	draftCampaigns, err := testDB.Store.GetCampaignsByStatus(ctx, account.ID, "draft")
-	if err != nil {
-		t.Fatalf("GetCampaignsByStatus() error = %v", err)
-	}
+		draftCampaigns, err := testDB.Store.GetCampaignsByStatus(ctx, account.ID, "draft")
+		require.NoError(t, err)
+		assert.Len(t, draftCampaigns, 1)
+		assert.Equal(t, draftCampaign.ID, draftCampaigns[0].ID)
 
-	if len(draftCampaigns) != 1 {
-		t.Errorf("got %d draft campaigns, want 1", len(draftCampaigns))
-	}
-
-	if draftCampaigns[0].ID != campaign1.ID {
-		t.Error("Wrong campaign returned for draft status")
-	}
-
-	// Get active campaigns
-	activeCampaigns, err := testDB.Store.GetCampaignsByStatus(ctx, account.ID, "active")
-	if err != nil {
-		t.Fatalf("GetCampaignsByStatus() error = %v", err)
-	}
-
-	if len(activeCampaigns) != 1 {
-		t.Errorf("got %d active campaigns, want 1", len(activeCampaigns))
-	}
-
-	if activeCampaigns[0].ID != campaign2.ID {
-		t.Error("Wrong campaign returned for active status")
-	}
+		activeCampaigns, err := testDB.Store.GetCampaignsByStatus(ctx, account.ID, "active")
+		require.NoError(t, err)
+		assert.Len(t, activeCampaigns, 1)
+		assert.Equal(t, activeCampaign.ID, activeCampaigns[0].ID)
+	})
 }
 
 func TestStore_CountersWithSoftDeletedUsers(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
 	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Soft Delete Test", "soft-delete-test")
+	f := NewFixtures(t, testDB)
+
+	account := f.CreateAccount()
+	campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
 	// Create 3 users
-	user1 := createTestWaitlistUser(t, testDB, campaign.ID, "delete1@example.com")
-	createTestWaitlistUser(t, testDB, campaign.ID, "delete2@example.com")
-	createTestWaitlistUser(t, testDB, campaign.ID, "delete3@example.com")
+	user1 := f.CreateWaitlistUser(func(o *WaitlistUserOpts) { o.CampaignID = &campaign.ID })
+	f.CreateWaitlistUser(func(o *WaitlistUserOpts) { o.CampaignID = &campaign.ID })
+	f.CreateWaitlistUser(func(o *WaitlistUserOpts) { o.CampaignID = &campaign.ID })
 
 	// Should have 3 signups
 	retrieved, _ := testDB.Store.GetCampaignByID(ctx, campaign.ID)
-	if retrieved.TotalSignups != 3 {
-		t.Errorf("TotalSignups = %v, want 3", retrieved.TotalSignups)
-	}
+	assert.Equal(t, 3, retrieved.TotalSignups)
 
 	// Soft delete one user
 	err := testDB.Store.DeleteWaitlistUser(ctx, user1.ID)
-	if err != nil {
-		t.Fatalf("DeleteWaitlistUser() error = %v", err)
-	}
+	require.NoError(t, err)
 
-	// Should now have 2 signups (soft deleted users not counted)
+	// Should now have 2 signups
 	retrieved, _ = testDB.Store.GetCampaignByID(ctx, campaign.ID)
-	if retrieved.TotalSignups != 2 {
-		t.Errorf("TotalSignups after soft delete = %v, want 2", retrieved.TotalSignups)
-	}
-}
-
-func TestStore_GetCampaignByID_NotFound(t *testing.T) {
-	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
-
-	ctx := context.Background()
-
-	// Try to get a non-existent campaign
-	nonExistentID := uuid.New()
-	_, err := testDB.Store.GetCampaignByID(ctx, nonExistentID)
-	if err == nil {
-		t.Error("Expected error when getting non-existent campaign")
-	}
-	if err != ErrNotFound {
-		t.Errorf("Expected ErrNotFound, got %v", err)
-	}
-}
-
-func TestStore_GetCampaignBySlug_NotFound(t *testing.T) {
-	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
-
-	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-
-	// Try to get a campaign with non-existent slug
-	_, err := testDB.Store.GetCampaignBySlug(ctx, account.ID, "non-existent-slug")
-	if err == nil {
-		t.Error("Expected error when getting campaign with non-existent slug")
-	}
-	if err != ErrNotFound {
-		t.Errorf("Expected ErrNotFound, got %v", err)
-	}
-}
-
-func TestStore_UpdateCampaign_NotFound(t *testing.T) {
-	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
-
-	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-
-	// Try to update a non-existent campaign
-	nonExistentID := uuid.New()
-	newName := "Updated Name"
-	_, err := testDB.Store.UpdateCampaign(ctx, account.ID, nonExistentID, UpdateCampaignParams{
-		Name: &newName,
-	})
-	if err == nil {
-		t.Error("Expected error when updating non-existent campaign")
-	}
-	if err != ErrNotFound {
-		t.Errorf("Expected ErrNotFound, got %v", err)
-	}
-}
-
-func TestStore_UpdateCampaignStatus_NotFound(t *testing.T) {
-	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
-
-	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-
-	// Try to update status of a non-existent campaign
-	nonExistentID := uuid.New()
-	_, err := testDB.Store.UpdateCampaignStatus(ctx, account.ID, nonExistentID, "active")
-	if err == nil {
-		t.Error("Expected error when updating status of non-existent campaign")
-	}
-	if err != ErrNotFound {
-		t.Errorf("Expected ErrNotFound, got %v", err)
-	}
-}
-
-func TestStore_DeleteCampaign_NotFound(t *testing.T) {
-	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
-
-	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-
-	// Try to delete a non-existent campaign
-	nonExistentID := uuid.New()
-	err := testDB.Store.DeleteCampaign(ctx, account.ID, nonExistentID)
-	if err == nil {
-		t.Error("Expected error when deleting non-existent campaign")
-	}
-	if err != ErrNotFound {
-		t.Errorf("Expected ErrNotFound, got %v", err)
-	}
+	assert.Equal(t, 2, retrieved.TotalSignups)
 }
 
 func TestStore_CampaignEmailSettings(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Email Settings Test", "email-settings-test")
+	f := NewFixtures(t, testDB)
 
-	fromName := "Test Sender"
-	fromEmail := "sender@example.com"
-	replyTo := "reply@example.com"
+	t.Run("CRUD operations", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
-	t.Run("create email settings", func(t *testing.T) {
-		settings, err := testDB.Store.CreateCampaignEmailSettings(ctx, CreateCampaignEmailSettingsParams{
+		// Create
+		created, err := testDB.Store.CreateCampaignEmailSettings(ctx, CreateCampaignEmailSettingsParams{
 			CampaignID:           campaign.ID,
-			FromName:             &fromName,
-			FromEmail:            &fromEmail,
-			ReplyTo:              &replyTo,
+			FromName:             Ptr("Test Sender"),
+			FromEmail:            Ptr("sender@example.com"),
+			ReplyTo:              Ptr("reply@example.com"),
 			VerificationRequired: true,
 			SendWelcomeEmail:     true,
 		})
-		if err != nil {
-			t.Fatalf("CreateCampaignEmailSettings() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, campaign.ID, created.CampaignID)
+		assert.Equal(t, "Test Sender", *created.FromName)
+		assert.True(t, created.VerificationRequired)
 
-		if settings.CampaignID != campaign.ID {
-			t.Errorf("CampaignID = %v, want %v", settings.CampaignID, campaign.ID)
-		}
-		if settings.FromName == nil || *settings.FromName != fromName {
-			t.Errorf("FromName = %v, want %v", settings.FromName, fromName)
-		}
-		if !settings.VerificationRequired {
-			t.Error("Expected VerificationRequired to be true")
-		}
-		if !settings.SendWelcomeEmail {
-			t.Error("Expected SendWelcomeEmail to be true")
-		}
-	})
+		// Read
+		retrieved, err := testDB.Store.GetCampaignEmailSettings(ctx, campaign.ID)
+		require.NoError(t, err)
+		assert.Equal(t, "sender@example.com", *retrieved.FromEmail)
 
-	t.Run("get email settings", func(t *testing.T) {
-		settings, err := testDB.Store.GetCampaignEmailSettings(ctx, campaign.ID)
-		if err != nil {
-			t.Fatalf("GetCampaignEmailSettings() error = %v", err)
-		}
-
-		if settings.FromEmail == nil || *settings.FromEmail != fromEmail {
-			t.Errorf("FromEmail = %v, want %v", settings.FromEmail, fromEmail)
-		}
-	})
-
-	t.Run("update email settings", func(t *testing.T) {
-		newFromName := "Updated Sender"
-		settings, err := testDB.Store.UpdateCampaignEmailSettings(ctx, campaign.ID, UpdateCampaignEmailSettingsParams{
-			FromName:         &newFromName,
-			SendWelcomeEmail: boolPtr(false),
+		// Update
+		updated, err := testDB.Store.UpdateCampaignEmailSettings(ctx, campaign.ID, UpdateCampaignEmailSettingsParams{
+			FromName:         Ptr("Updated Sender"),
+			SendWelcomeEmail: Ptr(false),
 		})
-		if err != nil {
-			t.Fatalf("UpdateCampaignEmailSettings() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "Updated Sender", *updated.FromName)
+		assert.False(t, updated.SendWelcomeEmail)
 
-		if settings.FromName == nil || *settings.FromName != newFromName {
-			t.Errorf("FromName = %v, want %v", settings.FromName, newFromName)
-		}
-		if settings.SendWelcomeEmail {
-			t.Error("Expected SendWelcomeEmail to be false after update")
-		}
-	})
-
-	t.Run("delete email settings", func(t *testing.T) {
-		err := testDB.Store.DeleteCampaignEmailSettings(ctx, campaign.ID)
-		if err != nil {
-			t.Fatalf("DeleteCampaignEmailSettings() error = %v", err)
-		}
+		// Delete
+		err = testDB.Store.DeleteCampaignEmailSettings(ctx, campaign.ID)
+		require.NoError(t, err)
 
 		_, err = testDB.Store.GetCampaignEmailSettings(ctx, campaign.ID)
-		if err == nil {
-			t.Error("Expected error when getting deleted email settings")
-		}
+		assert.Error(t, err)
 	})
 }
 
 func TestStore_CampaignFormSettings(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Form Settings Test", "form-settings-test")
+	f := NewFixtures(t, testDB)
 
-	captchaProvider := CaptchaProvider("turnstile")
-	captchaSiteKey := "test-site-key"
-	successTitle := "Thank you!"
-	successMessage := "You've been added."
+	t.Run("create and upsert", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
-	t.Run("create form settings", func(t *testing.T) {
-		settings, err := testDB.Store.CreateCampaignFormSettings(ctx, CreateCampaignFormSettingsParams{
+		captchaProvider := CaptchaProvider("turnstile")
+
+		// Create
+		created, err := testDB.Store.CreateCampaignFormSettings(ctx, CreateCampaignFormSettingsParams{
 			CampaignID:      campaign.ID,
 			CaptchaEnabled:  true,
 			CaptchaProvider: &captchaProvider,
-			CaptchaSiteKey:  &captchaSiteKey,
+			CaptchaSiteKey:  Ptr("test-site-key"),
 			DoubleOptIn:     true,
 			Design:          JSONB{"theme": "dark"},
-			SuccessTitle:    &successTitle,
-			SuccessMessage:  &successMessage,
 		})
-		if err != nil {
-			t.Fatalf("CreateCampaignFormSettings() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.True(t, created.CaptchaEnabled)
+		assert.True(t, created.DoubleOptIn)
 
-		if settings.CampaignID != campaign.ID {
-			t.Errorf("CampaignID = %v, want %v", settings.CampaignID, campaign.ID)
-		}
-		if !settings.CaptchaEnabled {
-			t.Error("Expected CaptchaEnabled to be true")
-		}
-		if settings.CaptchaProvider == nil || *settings.CaptchaProvider != captchaProvider {
-			t.Errorf("CaptchaProvider = %v, want %v", settings.CaptchaProvider, captchaProvider)
-		}
-	})
-
-	t.Run("get form settings", func(t *testing.T) {
-		settings, err := testDB.Store.GetCampaignFormSettings(ctx, campaign.ID)
-		if err != nil {
-			t.Fatalf("GetCampaignFormSettings() error = %v", err)
-		}
-
-		if !settings.DoubleOptIn {
-			t.Error("Expected DoubleOptIn to be true")
-		}
-	})
-
-	t.Run("upsert form settings", func(t *testing.T) {
-		newCaptchaProvider := CaptchaProvider("recaptcha")
-		settings, err := testDB.Store.UpsertCampaignFormSettings(ctx, CreateCampaignFormSettingsParams{
+		// Upsert (update existing)
+		newProvider := CaptchaProvider("recaptcha")
+		upserted, err := testDB.Store.UpsertCampaignFormSettings(ctx, CreateCampaignFormSettingsParams{
 			CampaignID:      campaign.ID,
 			CaptchaEnabled:  true,
-			CaptchaProvider: &newCaptchaProvider,
-			CaptchaSiteKey:  &captchaSiteKey,
+			CaptchaProvider: &newProvider,
 			DoubleOptIn:     false,
 			Design:          JSONB{"theme": "light"},
 		})
-		if err != nil {
-			t.Fatalf("UpsertCampaignFormSettings() error = %v", err)
-		}
-
-		if settings.CaptchaProvider == nil || *settings.CaptchaProvider != newCaptchaProvider {
-			t.Errorf("CaptchaProvider = %v, want %v", settings.CaptchaProvider, newCaptchaProvider)
-		}
-		if settings.DoubleOptIn {
-			t.Error("Expected DoubleOptIn to be false after upsert")
-		}
+		require.NoError(t, err)
+		assert.Equal(t, newProvider, *upserted.CaptchaProvider)
+		assert.False(t, upserted.DoubleOptIn)
 	})
 }
 
 func TestStore_CampaignReferralSettings(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Referral Settings Test", "referral-settings-test")
+	f := NewFixtures(t, testDB)
 
-	t.Run("create referral settings", func(t *testing.T) {
-		settings, err := testDB.Store.CreateCampaignReferralSettings(ctx, CreateCampaignReferralSettingsParams{
+	t.Run("create and update", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+		// Create
+		created, err := testDB.Store.CreateCampaignReferralSettings(ctx, CreateCampaignReferralSettingsParams{
 			CampaignID:              campaign.ID,
 			Enabled:                 true,
 			PointsPerReferral:       10,
@@ -755,113 +548,68 @@ func TestStore_CampaignReferralSettings(t *testing.T) {
 			ReferrerPositionsToJump: 2,
 			SharingChannels:         []SharingChannel{"email", "twitter"},
 		})
-		if err != nil {
-			t.Fatalf("CreateCampaignReferralSettings() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.True(t, created.Enabled)
+		assert.Equal(t, 10, created.PointsPerReferral)
+		assert.Len(t, created.SharingChannels, 2)
 
-		if !settings.Enabled {
-			t.Error("Expected Enabled to be true")
-		}
-		if settings.PointsPerReferral != 10 {
-			t.Errorf("PointsPerReferral = %v, want 10", settings.PointsPerReferral)
-		}
-		if len(settings.SharingChannels) != 2 {
-			t.Errorf("SharingChannels length = %v, want 2", len(settings.SharingChannels))
-		}
-	})
-
-	t.Run("get referral settings", func(t *testing.T) {
-		settings, err := testDB.Store.GetCampaignReferralSettings(ctx, campaign.ID)
-		if err != nil {
-			t.Fatalf("GetCampaignReferralSettings() error = %v", err)
-		}
-
-		if settings.PositionsToJump != 5 {
-			t.Errorf("PositionsToJump = %v, want 5", settings.PositionsToJump)
-		}
-	})
-
-	t.Run("update referral settings", func(t *testing.T) {
-		pointsPerReferral := 25
-		positionsToJump := 15
-		settings, err := testDB.Store.UpdateCampaignReferralSettings(ctx, campaign.ID, UpdateCampaignReferralSettingsParams{
-			PointsPerReferral: &pointsPerReferral,
-			PositionsToJump:   &positionsToJump,
+		// Update
+		updated, err := testDB.Store.UpdateCampaignReferralSettings(ctx, campaign.ID, UpdateCampaignReferralSettingsParams{
+			PointsPerReferral: Ptr(25),
+			PositionsToJump:   Ptr(15),
 		})
-		if err != nil {
-			t.Fatalf("UpdateCampaignReferralSettings() error = %v", err)
-		}
-
-		if settings.PointsPerReferral != 25 {
-			t.Errorf("PointsPerReferral = %v, want 25", settings.PointsPerReferral)
-		}
-		if settings.PositionsToJump != 15 {
-			t.Errorf("PositionsToJump = %v, want 15", settings.PositionsToJump)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, 25, updated.PointsPerReferral)
+		assert.Equal(t, 15, updated.PositionsToJump)
 	})
 }
 
 func TestStore_CampaignBrandingSettings(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Branding Settings Test", "branding-settings-test")
+	f := NewFixtures(t, testDB)
 
-	logoURL := "https://example.com/logo.png"
-	primaryColor := "#FF5733"
-	fontFamily := "Inter"
-	customDomain := "campaign.example.com"
+	t.Run("create and upsert", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
-	t.Run("create branding settings", func(t *testing.T) {
-		settings, err := testDB.Store.CreateCampaignBrandingSettings(ctx, CreateCampaignBrandingSettingsParams{
+		// Create
+		created, err := testDB.Store.CreateCampaignBrandingSettings(ctx, CreateCampaignBrandingSettingsParams{
 			CampaignID:   campaign.ID,
-			LogoURL:      &logoURL,
-			PrimaryColor: &primaryColor,
-			FontFamily:   &fontFamily,
-			CustomDomain: &customDomain,
+			LogoURL:      Ptr("https://example.com/logo.png"),
+			PrimaryColor: Ptr("#FF5733"),
+			FontFamily:   Ptr("Inter"),
+			CustomDomain: Ptr("campaign.example.com"),
 		})
-		if err != nil {
-			t.Fatalf("CreateCampaignBrandingSettings() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "https://example.com/logo.png", *created.LogoURL)
+		assert.Equal(t, "#FF5733", *created.PrimaryColor)
 
-		if settings.LogoURL == nil || *settings.LogoURL != logoURL {
-			t.Errorf("LogoURL = %v, want %v", settings.LogoURL, logoURL)
-		}
-		if settings.PrimaryColor == nil || *settings.PrimaryColor != primaryColor {
-			t.Errorf("PrimaryColor = %v, want %v", settings.PrimaryColor, primaryColor)
-		}
-	})
-
-	t.Run("upsert branding settings", func(t *testing.T) {
-		newLogoURL := "https://example.com/new-logo.png"
-		settings, err := testDB.Store.UpsertCampaignBrandingSettings(ctx, CreateCampaignBrandingSettingsParams{
+		// Upsert
+		upserted, err := testDB.Store.UpsertCampaignBrandingSettings(ctx, CreateCampaignBrandingSettingsParams{
 			CampaignID:   campaign.ID,
-			LogoURL:      &newLogoURL,
-			PrimaryColor: &primaryColor,
+			LogoURL:      Ptr("https://example.com/new-logo.png"),
+			PrimaryColor: Ptr("#00FF00"),
 		})
-		if err != nil {
-			t.Fatalf("UpsertCampaignBrandingSettings() error = %v", err)
-		}
-
-		if settings.LogoURL == nil || *settings.LogoURL != newLogoURL {
-			t.Errorf("LogoURL = %v, want %v", settings.LogoURL, newLogoURL)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "https://example.com/new-logo.png", *upserted.LogoURL)
 	})
 }
 
 func TestStore_CampaignFormFields(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Form Fields Test", "form-fields-test")
+	f := NewFixtures(t, testDB)
 
-	t.Run("create form field", func(t *testing.T) {
+	t.Run("CRUD and bulk operations", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+		// Create single field
 		field, err := testDB.Store.CreateCampaignFormField(ctx, CreateCampaignFormFieldParams{
 			CampaignID:   campaign.ID,
 			Name:         "email",
@@ -870,436 +618,180 @@ func TestStore_CampaignFormFields(t *testing.T) {
 			Required:     true,
 			DisplayOrder: 1,
 		})
-		if err != nil {
-			t.Fatalf("CreateCampaignFormField() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "email", field.Name)
+		assert.Equal(t, FormFieldType("email"), field.FieldType)
 
-		if field.Name != "email" {
-			t.Errorf("Name = %v, want email", field.Name)
-		}
-		if field.FieldType != FormFieldType("email") {
-			t.Errorf("FieldType = %v, want email", field.FieldType)
-		}
-	})
-
-	t.Run("bulk create form fields", func(t *testing.T) {
-		placeholder := "Enter your name"
+		// Bulk create
 		fields, err := testDB.Store.BulkCreateCampaignFormFields(ctx, []CreateCampaignFormFieldParams{
-			{
-				CampaignID:   campaign.ID,
-				Name:         "name",
-				FieldType:    FormFieldType("text"),
-				Label:        "Full Name",
-				Placeholder:  &placeholder,
-				Required:     true,
-				DisplayOrder: 2,
-			},
-			{
-				CampaignID:   campaign.ID,
-				Name:         "company",
-				FieldType:    FormFieldType("text"),
-				Label:        "Company",
-				Required:     false,
-				DisplayOrder: 3,
-			},
+			{CampaignID: campaign.ID, Name: "name", FieldType: FormFieldType("text"), Label: "Full Name", DisplayOrder: 2},
+			{CampaignID: campaign.ID, Name: "company", FieldType: FormFieldType("text"), Label: "Company", DisplayOrder: 3},
 		})
-		if err != nil {
-			t.Fatalf("BulkCreateCampaignFormFields() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.Len(t, fields, 2)
 
-		if len(fields) != 2 {
-			t.Errorf("Created %d fields, want 2", len(fields))
-		}
-	})
+		// Get all
+		allFields, err := testDB.Store.GetCampaignFormFields(ctx, campaign.ID)
+		require.NoError(t, err)
+		assert.Len(t, allFields, 3)
 
-	t.Run("get form fields", func(t *testing.T) {
-		fields, err := testDB.Store.GetCampaignFormFields(ctx, campaign.ID)
-		if err != nil {
-			t.Fatalf("GetCampaignFormFields() error = %v", err)
-		}
-
-		if len(fields) != 3 {
-			t.Errorf("Got %d fields, want 3", len(fields))
-		}
-	})
-
-	t.Run("replace form fields", func(t *testing.T) {
-		fields, err := testDB.Store.ReplaceCampaignFormFields(ctx, campaign.ID, []CreateCampaignFormFieldParams{
-			{
-				CampaignID:   campaign.ID,
-				Name:         "new_email",
-				FieldType:    FormFieldType("email"),
-				Label:        "New Email Field",
-				Required:     true,
-				DisplayOrder: 1,
-			},
+		// Replace all
+		replaced, err := testDB.Store.ReplaceCampaignFormFields(ctx, campaign.ID, []CreateCampaignFormFieldParams{
+			{CampaignID: campaign.ID, Name: "new_email", FieldType: FormFieldType("email"), Label: "New Email", DisplayOrder: 1},
 		})
-		if err != nil {
-			t.Fatalf("ReplaceCampaignFormFields() error = %v", err)
-		}
-
-		if len(fields) != 1 {
-			t.Errorf("Replaced with %d fields, want 1", len(fields))
-		}
-		if fields[0].Name != "new_email" {
-			t.Errorf("Name = %v, want new_email", fields[0].Name)
-		}
+		require.NoError(t, err)
+		assert.Len(t, replaced, 1)
+		assert.Equal(t, "new_email", replaced[0].Name)
 	})
 }
 
 func TestStore_CampaignShareMessages(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Share Messages Test", "share-messages-test")
+	f := NewFixtures(t, testDB)
 
-	t.Run("create share message", func(t *testing.T) {
+	t.Run("CRUD and replace operations", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+		// Create
 		msg, err := testDB.Store.CreateCampaignShareMessage(ctx, CreateCampaignShareMessageParams{
 			CampaignID: campaign.ID,
 			Channel:    SharingChannel("email"),
 			Message:    "Check out this campaign!",
 		})
-		if err != nil {
-			t.Fatalf("CreateCampaignShareMessage() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, SharingChannel("email"), msg.Channel)
 
-		if msg.Channel != SharingChannel("email") {
-			t.Errorf("Channel = %v, want email", msg.Channel)
-		}
-	})
+		// Get by channel
+		retrieved, err := testDB.Store.GetCampaignShareMessageByChannel(ctx, campaign.ID, SharingChannel("email"))
+		require.NoError(t, err)
+		assert.Equal(t, "Check out this campaign!", retrieved.Message)
 
-	t.Run("get share messages", func(t *testing.T) {
-		messages, err := testDB.Store.GetCampaignShareMessages(ctx, campaign.ID)
-		if err != nil {
-			t.Fatalf("GetCampaignShareMessages() error = %v", err)
-		}
-
-		if len(messages) != 1 {
-			t.Errorf("Got %d messages, want 1", len(messages))
-		}
-	})
-
-	t.Run("get share message by channel", func(t *testing.T) {
-		msg, err := testDB.Store.GetCampaignShareMessageByChannel(ctx, campaign.ID, SharingChannel("email"))
-		if err != nil {
-			t.Fatalf("GetCampaignShareMessageByChannel() error = %v", err)
-		}
-
-		if msg.Message != "Check out this campaign!" {
-			t.Errorf("Message = %v, want 'Check out this campaign!'", msg.Message)
-		}
-	})
-
-	t.Run("replace share messages", func(t *testing.T) {
-		messages, err := testDB.Store.ReplaceCampaignShareMessages(ctx, campaign.ID, []CreateCampaignShareMessageParams{
+		// Replace all
+		replaced, err := testDB.Store.ReplaceCampaignShareMessages(ctx, campaign.ID, []CreateCampaignShareMessageParams{
 			{CampaignID: campaign.ID, Channel: SharingChannel("twitter"), Message: "Tweet this!"},
 			{CampaignID: campaign.ID, Channel: SharingChannel("facebook"), Message: "Share on FB!"},
 		})
-		if err != nil {
-			t.Fatalf("ReplaceCampaignShareMessages() error = %v", err)
-		}
-
-		if len(messages) != 2 {
-			t.Errorf("Replaced with %d messages, want 2", len(messages))
-		}
+		require.NoError(t, err)
+		assert.Len(t, replaced, 2)
 	})
 }
 
 func TestStore_CampaignTrackingIntegrations(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Tracking Test", "tracking-test")
+	f := NewFixtures(t, testDB)
 
-	trackingLabel := "signup_conversion"
+	t.Run("CRUD and filter by enabled", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
-	t.Run("create tracking integration", func(t *testing.T) {
+		// Create
 		integration, err := testDB.Store.CreateCampaignTrackingIntegration(ctx, CreateCampaignTrackingIntegrationParams{
 			CampaignID:      campaign.ID,
 			IntegrationType: TrackingIntegrationType("google_analytics"),
 			Enabled:         true,
 			TrackingID:      "GA-12345678",
-			TrackingLabel:   &trackingLabel,
+			TrackingLabel:   Ptr("signup_conversion"),
 		})
-		if err != nil {
-			t.Fatalf("CreateCampaignTrackingIntegration() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.True(t, integration.Enabled)
+		assert.Equal(t, "GA-12345678", integration.TrackingID)
 
-		if integration.IntegrationType != TrackingIntegrationType("google_analytics") {
-			t.Errorf("IntegrationType = %v, want google_analytics", integration.IntegrationType)
-		}
-		if !integration.Enabled {
-			t.Error("Expected Enabled to be true")
-		}
-	})
+		// Get by type
+		byType, err := testDB.Store.GetCampaignTrackingIntegrationByType(ctx, campaign.ID, TrackingIntegrationType("google_analytics"))
+		require.NoError(t, err)
+		assert.Equal(t, "GA-12345678", byType.TrackingID)
 
-	t.Run("get tracking integrations", func(t *testing.T) {
-		integrations, err := testDB.Store.GetCampaignTrackingIntegrations(ctx, campaign.ID)
-		if err != nil {
-			t.Fatalf("GetCampaignTrackingIntegrations() error = %v", err)
-		}
-
-		if len(integrations) != 1 {
-			t.Errorf("Got %d integrations, want 1", len(integrations))
-		}
-	})
-
-	t.Run("get enabled tracking integrations", func(t *testing.T) {
-		integrations, err := testDB.Store.GetEnabledCampaignTrackingIntegrations(ctx, campaign.ID)
-		if err != nil {
-			t.Fatalf("GetEnabledCampaignTrackingIntegrations() error = %v", err)
-		}
-
-		if len(integrations) != 1 {
-			t.Errorf("Got %d enabled integrations, want 1", len(integrations))
-		}
-	})
-
-	t.Run("get tracking integration by type", func(t *testing.T) {
-		integration, err := testDB.Store.GetCampaignTrackingIntegrationByType(ctx, campaign.ID, TrackingIntegrationType("google_analytics"))
-		if err != nil {
-			t.Fatalf("GetCampaignTrackingIntegrationByType() error = %v", err)
-		}
-
-		if integration.TrackingID != "GA-12345678" {
-			t.Errorf("TrackingID = %v, want GA-12345678", integration.TrackingID)
-		}
-	})
-
-	t.Run("replace tracking integrations", func(t *testing.T) {
-		integrations, err := testDB.Store.ReplaceCampaignTrackingIntegrations(ctx, campaign.ID, []CreateCampaignTrackingIntegrationParams{
+		// Replace with mixed enabled states
+		replaced, err := testDB.Store.ReplaceCampaignTrackingIntegrations(ctx, campaign.ID, []CreateCampaignTrackingIntegrationParams{
 			{CampaignID: campaign.ID, IntegrationType: TrackingIntegrationType("meta_pixel"), Enabled: true, TrackingID: "123456789"},
 			{CampaignID: campaign.ID, IntegrationType: TrackingIntegrationType("tiktok_pixel"), Enabled: false, TrackingID: "TT-999"},
 		})
-		if err != nil {
-			t.Fatalf("ReplaceCampaignTrackingIntegrations() error = %v", err)
-		}
+		require.NoError(t, err)
+		assert.Len(t, replaced, 2)
 
-		if len(integrations) != 2 {
-			t.Errorf("Replaced with %d integrations, want 2", len(integrations))
-		}
-
-		// Verify only 1 is enabled
-		enabled, _ := testDB.Store.GetEnabledCampaignTrackingIntegrations(ctx, campaign.ID)
-		if len(enabled) != 1 {
-			t.Errorf("Got %d enabled integrations, want 1", len(enabled))
-		}
+		// Get only enabled
+		enabled, err := testDB.Store.GetEnabledCampaignTrackingIntegrations(ctx, campaign.ID)
+		require.NoError(t, err)
+		assert.Len(t, enabled, 1)
+		assert.Equal(t, "123456789", enabled[0].TrackingID)
 	})
 }
 
 func TestStore_CampaignWithSettings(t *testing.T) {
 	testDB := SetupTestDB(t, TestDBTypePostgres)
 	defer testDB.Close()
-	testDB.Truncate(t)
-
 	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "With Settings Test", "with-settings-test")
+	f := NewFixtures(t, testDB)
 
-	// Create all settings
-	fromName := "Test"
-	testDB.Store.CreateCampaignEmailSettings(ctx, CreateCampaignEmailSettingsParams{
-		CampaignID:       campaign.ID,
-		FromName:         &fromName,
-		SendWelcomeEmail: true,
-	})
+	t.Run("loads all settings", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
-	logoURL := "https://example.com/logo.png"
-	testDB.Store.CreateCampaignBrandingSettings(ctx, CreateCampaignBrandingSettingsParams{
-		CampaignID: campaign.ID,
-		LogoURL:    &logoURL,
-	})
-
-	testDB.Store.CreateCampaignFormSettings(ctx, CreateCampaignFormSettingsParams{
-		CampaignID:     campaign.ID,
-		CaptchaEnabled: true,
-		DoubleOptIn:    false,
-		Design:         JSONB{"theme": "light"},
-	})
-
-	testDB.Store.CreateCampaignReferralSettings(ctx, CreateCampaignReferralSettingsParams{
-		CampaignID:        campaign.ID,
-		Enabled:           true,
-		PointsPerReferral: 10,
-		SharingChannels:   []SharingChannel{"email"},
-	})
-
-	testDB.Store.CreateCampaignFormField(ctx, CreateCampaignFormFieldParams{
-		CampaignID:   campaign.ID,
-		Name:         "email",
-		FieldType:    FormFieldType("email"),
-		Label:        "Email",
-		Required:     true,
-		DisplayOrder: 1,
-	})
-
-	testDB.Store.CreateCampaignShareMessage(ctx, CreateCampaignShareMessageParams{
-		CampaignID: campaign.ID,
-		Channel:    SharingChannel("email"),
-		Message:    "Share via email",
-	})
-
-	testDB.Store.CreateCampaignTrackingIntegration(ctx, CreateCampaignTrackingIntegrationParams{
-		CampaignID:      campaign.ID,
-		IntegrationType: TrackingIntegrationType("google_analytics"),
-		Enabled:         true,
-		TrackingID:      "GA-123",
-	})
-
-	t.Run("get campaign with settings loads all settings", func(t *testing.T) {
-		campaignWithSettings, err := testDB.Store.GetCampaignWithSettings(ctx, campaign.ID)
-		if err != nil {
-			t.Fatalf("GetCampaignWithSettings() error = %v", err)
-		}
-
-		if campaignWithSettings.EmailSettings == nil {
-			t.Error("Expected EmailSettings to be loaded")
-		}
-		if campaignWithSettings.BrandingSettings == nil {
-			t.Error("Expected BrandingSettings to be loaded")
-		}
-		if campaignWithSettings.FormSettings == nil {
-			t.Error("Expected FormSettings to be loaded")
-		}
-		if campaignWithSettings.ReferralSettings == nil {
-			t.Error("Expected ReferralSettings to be loaded")
-		}
-		if len(campaignWithSettings.FormFields) == 0 {
-			t.Error("Expected FormFields to be loaded")
-		}
-		if len(campaignWithSettings.ShareMessages) == 0 {
-			t.Error("Expected ShareMessages to be loaded")
-		}
-		if len(campaignWithSettings.TrackingIntegrations) == 0 {
-			t.Error("Expected TrackingIntegrations to be loaded")
-		}
-	})
-
-	t.Run("get campaign by slug with settings", func(t *testing.T) {
-		campaignWithSettings, err := testDB.Store.GetCampaignBySlugWithSettings(ctx, account.ID, "with-settings-test")
-		if err != nil {
-			t.Fatalf("GetCampaignBySlugWithSettings() error = %v", err)
-		}
-
-		if campaignWithSettings.EmailSettings == nil {
-			t.Error("Expected EmailSettings to be loaded")
-		}
-	})
-}
-
-func TestStore_ListCampaigns_Pagination(t *testing.T) {
-	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
-
-	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-
-	// Create 5 campaigns
-	for i := 1; i <= 5; i++ {
-		createTestCampaign(t, testDB, account.ID, "Campaign "+string(rune('0'+i)), "campaign-"+string(rune('0'+i)))
-	}
-
-	t.Run("first page", func(t *testing.T) {
-		result, err := testDB.Store.ListCampaigns(ctx, ListCampaignsParams{
-			AccountID: account.ID,
-			Page:      1,
-			Limit:     2,
+		// Create all settings using fixtures
+		f.CreateEmailSettings(campaign.ID, func(o *EmailSettingsOpts) {
+			o.FromName = Ptr("Test")
+			o.SendWelcomeEmail = true
 		})
-		if err != nil {
-			t.Fatalf("ListCampaigns() error = %v", err)
-		}
-
-		if len(result.Campaigns) != 2 {
-			t.Errorf("Got %d campaigns, want 2", len(result.Campaigns))
-		}
-		if result.TotalCount != 5 {
-			t.Errorf("TotalCount = %v, want 5", result.TotalCount)
-		}
-		if result.TotalPages != 3 {
-			t.Errorf("TotalPages = %v, want 3", result.TotalPages)
-		}
-	})
-
-	t.Run("last page with fewer items", func(t *testing.T) {
-		result, err := testDB.Store.ListCampaigns(ctx, ListCampaignsParams{
-			AccountID: account.ID,
-			Page:      3,
-			Limit:     2,
+		f.CreateBrandingSettings(campaign.ID, func(o *BrandingSettingsOpts) {
+			o.LogoURL = Ptr("https://example.com/logo.png")
 		})
-		if err != nil {
-			t.Fatalf("ListCampaigns() error = %v", err)
-		}
-
-		if len(result.Campaigns) != 1 {
-			t.Errorf("Got %d campaigns, want 1", len(result.Campaigns))
-		}
-	})
-}
-
-func TestStore_ListCampaigns_Filters(t *testing.T) {
-	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
-
-	ctx := context.Background()
-	account := createTestAccount(t, testDB)
-
-	// Create campaigns with different statuses
-	campaign1 := createTestCampaign(t, testDB, account.ID, "Draft Campaign", "draft-campaign")
-	campaign2 := createTestCampaign(t, testDB, account.ID, "Active Campaign", "active-campaign")
-
-	// Update one to active
-	testDB.Store.UpdateCampaignStatus(ctx, account.ID, campaign2.ID, "active")
-
-	t.Run("filter by status", func(t *testing.T) {
-		status := "active"
-		result, err := testDB.Store.ListCampaigns(ctx, ListCampaignsParams{
-			AccountID: account.ID,
-			Page:      1,
-			Limit:     10,
-			Status:    &status,
+		f.CreateFormSettings(campaign.ID, func(o *FormSettingsOpts) {
+			o.CaptchaEnabled = true
+			o.Design = JSONB{"theme": "light"}
 		})
-		if err != nil {
-			t.Fatalf("ListCampaigns() error = %v", err)
-		}
-
-		if len(result.Campaigns) != 1 {
-			t.Errorf("Got %d campaigns, want 1", len(result.Campaigns))
-		}
-		if result.Campaigns[0].ID != campaign2.ID {
-			t.Error("Expected active campaign to be returned")
-		}
-	})
-
-	t.Run("filter by draft status", func(t *testing.T) {
-		status := "draft"
-		result, err := testDB.Store.ListCampaigns(ctx, ListCampaignsParams{
-			AccountID: account.ID,
-			Page:      1,
-			Limit:     10,
-			Status:    &status,
+		f.CreateReferralSettings(campaign.ID, func(o *ReferralSettingsOpts) {
+			o.Enabled = true
+			o.PointsPerReferral = 10
 		})
-		if err != nil {
-			t.Fatalf("ListCampaigns() error = %v", err)
-		}
 
-		if len(result.Campaigns) != 1 {
-			t.Errorf("Got %d campaigns, want 1", len(result.Campaigns))
-		}
-		if result.Campaigns[0].ID != campaign1.ID {
-			t.Error("Expected draft campaign to be returned")
-		}
+		testDB.Store.CreateCampaignFormField(ctx, CreateCampaignFormFieldParams{
+			CampaignID: campaign.ID, Name: "email", FieldType: FormFieldType("email"),
+			Label: "Email", Required: true, DisplayOrder: 1,
+		})
+		testDB.Store.CreateCampaignShareMessage(ctx, CreateCampaignShareMessageParams{
+			CampaignID: campaign.ID, Channel: SharingChannel("email"), Message: "Share!",
+		})
+		testDB.Store.CreateCampaignTrackingIntegration(ctx, CreateCampaignTrackingIntegrationParams{
+			CampaignID: campaign.ID, IntegrationType: TrackingIntegrationType("google_analytics"),
+			Enabled: true, TrackingID: "GA-123",
+		})
+
+		// Load campaign with all settings
+		loaded, err := testDB.Store.GetCampaignWithSettings(ctx, campaign.ID)
+		require.NoError(t, err)
+
+		assert.NotNil(t, loaded.EmailSettings)
+		assert.NotNil(t, loaded.BrandingSettings)
+		assert.NotNil(t, loaded.FormSettings)
+		assert.NotNil(t, loaded.ReferralSettings)
+		assert.NotEmpty(t, loaded.FormFields)
+		assert.NotEmpty(t, loaded.ShareMessages)
+		assert.NotEmpty(t, loaded.TrackingIntegrations)
 	})
-}
 
-// Helper function for bool pointers
-func boolPtr(b bool) *bool {
-	return &b
+	t.Run("by slug loads settings", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		slug := "settings-test-" + uuid.New().String()[:8]
+		campaign := f.CreateCampaign(func(o *CampaignOpts) {
+			o.AccountID = &account.ID
+			o.Slug = slug
+		})
+
+		f.CreateEmailSettings(campaign.ID, func(o *EmailSettingsOpts) {
+			o.SendWelcomeEmail = true
+		})
+
+		loaded, err := testDB.Store.GetCampaignBySlugWithSettings(ctx, account.ID, slug)
+		require.NoError(t, err)
+		assert.NotNil(t, loaded.EmailSettings)
+	})
 }

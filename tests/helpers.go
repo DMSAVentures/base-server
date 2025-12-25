@@ -18,6 +18,8 @@ import (
 	"base-server/internal/store"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -304,4 +306,166 @@ func getKeys(m map[string]interface{}) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// --- Testify-based Assertion Helpers ---
+
+// APIResponse wraps an HTTP response for fluent assertions.
+type APIResponse struct {
+	t          *testing.T
+	Response   *http.Response
+	Body       []byte
+	parsedJSON map[string]interface{}
+}
+
+// NewAPIResponse creates a new APIResponse wrapper.
+func NewAPIResponse(t *testing.T, resp *http.Response, body []byte) *APIResponse {
+	t.Helper()
+	return &APIResponse{t: t, Response: resp, Body: body}
+}
+
+// RequireStatus asserts the response has the expected status code (fails test immediately if not).
+func (r *APIResponse) RequireStatus(expected int) *APIResponse {
+	r.t.Helper()
+	require.Equal(r.t, expected, r.Response.StatusCode,
+		"unexpected status code, body: %s", string(r.Body))
+	return r
+}
+
+// AssertStatus asserts the response has the expected status code.
+func (r *APIResponse) AssertStatus(expected int) *APIResponse {
+	r.t.Helper()
+	assert.Equal(r.t, expected, r.Response.StatusCode,
+		"unexpected status code, body: %s", string(r.Body))
+	return r
+}
+
+// JSON parses the response body as JSON and returns the parsed map.
+func (r *APIResponse) JSON() map[string]interface{} {
+	r.t.Helper()
+	if r.parsedJSON == nil {
+		r.parsedJSON = make(map[string]interface{})
+		require.NoError(r.t, json.Unmarshal(r.Body, &r.parsedJSON),
+			"failed to parse JSON response: %s", string(r.Body))
+	}
+	return r.parsedJSON
+}
+
+// AssertJSONField asserts a field exists and has the expected value.
+func (r *APIResponse) AssertJSONField(field string, expected interface{}) *APIResponse {
+	r.t.Helper()
+	data := r.JSON()
+	assert.Contains(r.t, data, field, "field %s not found in response", field)
+	if expected != nil {
+		assert.Equal(r.t, expected, data[field], "field %s has unexpected value", field)
+	}
+	return r
+}
+
+// AssertJSONFieldExists asserts a field exists (value can be anything).
+func (r *APIResponse) AssertJSONFieldExists(field string) *APIResponse {
+	r.t.Helper()
+	data := r.JSON()
+	assert.Contains(r.t, data, field, "field %s not found in response", field)
+	return r
+}
+
+// AssertJSONFieldNotNil asserts a field exists and is not nil.
+func (r *APIResponse) AssertJSONFieldNotNil(field string) *APIResponse {
+	r.t.Helper()
+	data := r.JSON()
+	assert.Contains(r.t, data, field, "field %s not found in response", field)
+	assert.NotNil(r.t, data[field], "field %s is nil", field)
+	return r
+}
+
+// AssertError asserts the response contains an error field.
+func (r *APIResponse) AssertError() *APIResponse {
+	r.t.Helper()
+	data := r.JSON()
+	assert.Contains(r.t, data, "error", "expected error field in response")
+	return r
+}
+
+// --- Request Builder ---
+
+// APIRequest helps build and execute API requests.
+type APIRequest struct {
+	t       *testing.T
+	method  string
+	path    string
+	body    interface{}
+	token   string
+	headers map[string]string
+}
+
+// NewRequest creates a new API request builder.
+func NewRequest(t *testing.T, method, path string) *APIRequest {
+	t.Helper()
+	return &APIRequest{
+		t:       t,
+		method:  method,
+		path:    path,
+		headers: make(map[string]string),
+	}
+}
+
+// WithBody sets the request body.
+func (r *APIRequest) WithBody(body interface{}) *APIRequest {
+	r.body = body
+	return r
+}
+
+// WithToken sets the authentication token.
+func (r *APIRequest) WithToken(token string) *APIRequest {
+	r.token = token
+	return r
+}
+
+// WithHeader adds a header to the request.
+func (r *APIRequest) WithHeader(key, value string) *APIRequest {
+	r.headers[key] = value
+	return r
+}
+
+// Do executes the request and returns an APIResponse.
+func (r *APIRequest) Do() *APIResponse {
+	r.t.Helper()
+	var resp *http.Response
+	var body []byte
+
+	if r.token != "" {
+		resp, body = makeAuthenticatedRequest(r.t, r.method, r.path, r.body, r.token)
+	} else {
+		resp, body = makeRequest(r.t, r.method, r.path, r.body, r.headers)
+	}
+
+	return NewAPIResponse(r.t, resp, body)
+}
+
+// --- Convenience Functions ---
+
+// GET creates a GET request.
+func GET(t *testing.T, path string) *APIRequest {
+	return NewRequest(t, http.MethodGet, path)
+}
+
+// POST creates a POST request.
+func POST(t *testing.T, path string) *APIRequest {
+	return NewRequest(t, http.MethodPost, path)
+}
+
+// PUT creates a PUT request.
+func PUT(t *testing.T, path string) *APIRequest {
+	return NewRequest(t, http.MethodPut, path)
+}
+
+// DELETE creates a DELETE request.
+func DELETE(t *testing.T, path string) *APIRequest {
+	return NewRequest(t, http.MethodDelete, path)
+}
+
+// PATCH creates a PATCH request.
+func PATCH(t *testing.T, path string) *APIRequest {
+	return NewRequest(t, http.MethodPatch, path)
 }
