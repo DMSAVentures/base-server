@@ -104,6 +104,115 @@ func (a *StringArray) Scan(value interface{}) error {
 	return nil
 }
 
+// ============================================================================
+// Campaign Settings Types
+// ============================================================================
+
+// FormFieldType represents form field types
+type FormFieldType string
+
+const (
+	FormFieldTypeEmail    FormFieldType = "email"
+	FormFieldTypeText     FormFieldType = "text"
+	FormFieldTypeTextarea FormFieldType = "textarea"
+	FormFieldTypeSelect   FormFieldType = "select"
+	FormFieldTypeCheckbox FormFieldType = "checkbox"
+	FormFieldTypeRadio    FormFieldType = "radio"
+	FormFieldTypePhone    FormFieldType = "phone"
+	FormFieldTypeURL      FormFieldType = "url"
+	FormFieldTypeDate     FormFieldType = "date"
+	FormFieldTypeNumber   FormFieldType = "number"
+)
+
+// CaptchaProvider represents captcha provider types
+type CaptchaProvider string
+
+const (
+	CaptchaProviderTurnstile CaptchaProvider = "turnstile"
+	CaptchaProviderRecaptcha CaptchaProvider = "recaptcha"
+	CaptchaProviderHCaptcha  CaptchaProvider = "hcaptcha"
+)
+
+// SharingChannel represents referral sharing channels
+type SharingChannel string
+
+const (
+	SharingChannelEmail    SharingChannel = "email"
+	SharingChannelTwitter  SharingChannel = "twitter"
+	SharingChannelFacebook SharingChannel = "facebook"
+	SharingChannelLinkedIn SharingChannel = "linkedin"
+	SharingChannelWhatsApp SharingChannel = "whatsapp"
+)
+
+// TrackingIntegrationType represents tracking integration types
+type TrackingIntegrationType string
+
+const (
+	TrackingIntegrationGoogleAnalytics TrackingIntegrationType = "google_analytics"
+	TrackingIntegrationMetaPixel       TrackingIntegrationType = "meta_pixel"
+	TrackingIntegrationGoogleAds       TrackingIntegrationType = "google_ads"
+	TrackingIntegrationTikTokPixel     TrackingIntegrationType = "tiktok_pixel"
+	TrackingIntegrationLinkedInInsight TrackingIntegrationType = "linkedin_insight"
+)
+
+// SharingChannelArray is a custom type for PostgreSQL sharing_channel[] arrays
+type SharingChannelArray []SharingChannel
+
+// Value implements the driver.Valuer interface for SharingChannelArray
+func (a SharingChannelArray) Value() (driver.Value, error) {
+	if a == nil {
+		return nil, nil
+	}
+	if len(a) == 0 {
+		return "{}", nil
+	}
+	// PostgreSQL array format: {item1,item2,item3}
+	strVals := make([]string, len(a))
+	for i, v := range a {
+		strVals[i] = string(v)
+	}
+	return "{" + strings.Join(strVals, ",") + "}", nil
+}
+
+// Scan implements the sql.Scanner interface for SharingChannelArray
+func (a *SharingChannelArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = nil
+		return nil
+	}
+
+	var str string
+	switch v := value.(type) {
+	case []byte:
+		str = string(v)
+	case string:
+		str = v
+	default:
+		return fmt.Errorf("unsupported type for SharingChannelArray: %T", value)
+	}
+
+	// Handle empty array
+	if str == "" || str == "{}" {
+		*a = []SharingChannel{}
+		return nil
+	}
+
+	// Remove curly braces and split
+	str = strings.Trim(str, "{}")
+	if str == "" {
+		*a = []SharingChannel{}
+		return nil
+	}
+
+	// Split by comma and convert to SharingChannel
+	parts := strings.Split(str, ",")
+	*a = make([]SharingChannel, len(parts))
+	for i, p := range parts {
+		(*a)[i] = SharingChannel(p)
+	}
+	return nil
+}
+
 // Account represents a customer account
 type Account struct {
 	ID               uuid.UUID  `db:"id" json:"id"`
@@ -146,11 +255,6 @@ type Campaign struct {
 	LaunchDate  *time.Time `db:"launch_date" json:"launch_date,omitempty"`
 	EndDate     *time.Time `db:"end_date" json:"end_date,omitempty"`
 
-	FormConfig     JSONB `db:"form_config" json:"form_config"`
-	ReferralConfig JSONB `db:"referral_config" json:"referral_config"`
-	EmailConfig    JSONB `db:"email_config" json:"email_config"`
-	BrandingConfig JSONB `db:"branding_config" json:"branding_config"`
-
 	PrivacyPolicyURL *string `db:"privacy_policy_url" json:"privacy_policy_url,omitempty"`
 	TermsURL         *string `db:"terms_url" json:"terms_url,omitempty"`
 	MaxSignups       *int    `db:"max_signups" json:"max_signups,omitempty"`
@@ -162,6 +266,114 @@ type Campaign struct {
 	CreatedAt time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
 	DeletedAt *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
+
+	// Relationships (loaded separately, not from DB)
+	EmailSettings        *CampaignEmailSettings        `db:"-" json:"email_settings,omitempty"`
+	BrandingSettings     *CampaignBrandingSettings     `db:"-" json:"branding_settings,omitempty"`
+	FormSettings         *CampaignFormSettings         `db:"-" json:"form_settings,omitempty"`
+	ReferralSettings     *CampaignReferralSettings     `db:"-" json:"referral_settings,omitempty"`
+	FormFields           []CampaignFormField           `db:"-" json:"form_fields,omitempty"`
+	ShareMessages        []CampaignShareMessage        `db:"-" json:"share_messages,omitempty"`
+	TrackingIntegrations []CampaignTrackingIntegration `db:"-" json:"tracking_integrations,omitempty"`
+}
+
+// ============================================================================
+// Campaign Settings Models (1:1 relationships)
+// ============================================================================
+
+// CampaignEmailSettings represents email configuration for a campaign
+type CampaignEmailSettings struct {
+	ID                   uuid.UUID `db:"id" json:"id"`
+	CampaignID           uuid.UUID `db:"campaign_id" json:"campaign_id"`
+	FromName             *string   `db:"from_name" json:"from_name,omitempty"`
+	FromEmail            *string   `db:"from_email" json:"from_email,omitempty"`
+	ReplyTo              *string   `db:"reply_to" json:"reply_to,omitempty"`
+	VerificationRequired bool      `db:"verification_required" json:"verification_required"`
+	CreatedAt            time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt            time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// CampaignBrandingSettings represents branding configuration for a campaign
+type CampaignBrandingSettings struct {
+	ID           uuid.UUID `db:"id" json:"id"`
+	CampaignID   uuid.UUID `db:"campaign_id" json:"campaign_id"`
+	LogoURL      *string   `db:"logo_url" json:"logo_url,omitempty"`
+	PrimaryColor *string   `db:"primary_color" json:"primary_color,omitempty"`
+	FontFamily   *string   `db:"font_family" json:"font_family,omitempty"`
+	CustomDomain *string   `db:"custom_domain" json:"custom_domain,omitempty"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// CampaignFormSettings represents form configuration for a campaign
+type CampaignFormSettings struct {
+	ID              uuid.UUID        `db:"id" json:"id"`
+	CampaignID      uuid.UUID        `db:"campaign_id" json:"campaign_id"`
+	CaptchaEnabled  bool             `db:"captcha_enabled" json:"captcha_enabled"`
+	CaptchaProvider *CaptchaProvider `db:"captcha_provider" json:"captcha_provider,omitempty"`
+	CaptchaSiteKey  *string          `db:"captcha_site_key" json:"captcha_site_key,omitempty"`
+	DoubleOptIn     bool             `db:"double_opt_in" json:"double_opt_in"`
+	Design          JSONB            `db:"design" json:"design"` // Stores layout, colors, typography, spacing, borderRadius, submitButtonText
+	SuccessTitle    *string          `db:"success_title" json:"success_title,omitempty"`
+	SuccessMessage  *string          `db:"success_message" json:"success_message,omitempty"`
+	CreatedAt       time.Time        `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time        `db:"updated_at" json:"updated_at"`
+}
+
+// CampaignReferralSettings represents referral configuration for a campaign
+type CampaignReferralSettings struct {
+	ID                      uuid.UUID           `db:"id" json:"id"`
+	CampaignID              uuid.UUID           `db:"campaign_id" json:"campaign_id"`
+	Enabled                 bool                `db:"enabled" json:"enabled"`
+	PointsPerReferral       int                 `db:"points_per_referral" json:"points_per_referral"`
+	VerifiedOnly            bool                `db:"verified_only" json:"verified_only"`
+	PositionsToJump         int                 `db:"positions_to_jump" json:"positions_to_jump"`
+	ReferrerPositionsToJump int                 `db:"referrer_positions_to_jump" json:"referrer_positions_to_jump"`
+	SharingChannels         SharingChannelArray `db:"sharing_channels" json:"sharing_channels"`
+	CreatedAt               time.Time           `db:"created_at" json:"created_at"`
+	UpdatedAt               time.Time           `db:"updated_at" json:"updated_at"`
+}
+
+// ============================================================================
+// Campaign Settings Models (1:N relationships)
+// ============================================================================
+
+// CampaignFormField represents a form field definition
+type CampaignFormField struct {
+	ID                uuid.UUID     `db:"id" json:"id"`
+	CampaignID        uuid.UUID     `db:"campaign_id" json:"campaign_id"`
+	Name              string        `db:"name" json:"name"`
+	FieldType         FormFieldType `db:"field_type" json:"type"`
+	Label             string        `db:"label" json:"label"`
+	Placeholder       *string       `db:"placeholder" json:"placeholder,omitempty"`
+	Required          bool          `db:"required" json:"required"`
+	ValidationPattern *string       `db:"validation_pattern" json:"validation,omitempty"`
+	Options           StringArray   `db:"options" json:"options,omitempty"`
+	DisplayOrder      int           `db:"display_order" json:"display_order"`
+	CreatedAt         time.Time     `db:"created_at" json:"created_at"`
+	UpdatedAt         time.Time     `db:"updated_at" json:"updated_at"`
+}
+
+// CampaignShareMessage represents a custom share message for a referral channel
+type CampaignShareMessage struct {
+	ID         uuid.UUID      `db:"id" json:"id"`
+	CampaignID uuid.UUID      `db:"campaign_id" json:"campaign_id"`
+	Channel    SharingChannel `db:"channel" json:"channel"`
+	Message    string         `db:"message" json:"message"`
+	CreatedAt  time.Time      `db:"created_at" json:"created_at"`
+	UpdatedAt  time.Time      `db:"updated_at" json:"updated_at"`
+}
+
+// CampaignTrackingIntegration represents a tracking integration configuration
+type CampaignTrackingIntegration struct {
+	ID              uuid.UUID               `db:"id" json:"id"`
+	CampaignID      uuid.UUID               `db:"campaign_id" json:"campaign_id"`
+	IntegrationType TrackingIntegrationType `db:"integration_type" json:"type"`
+	Enabled         bool                    `db:"enabled" json:"enabled"`
+	TrackingID      string                  `db:"tracking_id" json:"tracking_id"`
+	TrackingLabel   *string                 `db:"tracking_label" json:"label,omitempty"`
+	CreatedAt       time.Time               `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time               `db:"updated_at" json:"updated_at"`
 }
 
 // WaitlistUser represents a user on a waitlist
