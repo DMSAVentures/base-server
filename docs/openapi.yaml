@@ -1989,14 +1989,29 @@ components:
         end_date:
           type: string
           format: date-time
-        form_config:
-          $ref: '#/components/schemas/FormConfig'
-        referral_config:
-          $ref: '#/components/schemas/ReferralConfig'
-        email_config:
-          $ref: '#/components/schemas/EmailConfig'
-        branding_config:
-          $ref: '#/components/schemas/BrandingConfig'
+        email_settings:
+          $ref: '#/components/schemas/EmailSettings'
+        branding_settings:
+          $ref: '#/components/schemas/BrandingSettings'
+        form_settings:
+          $ref: '#/components/schemas/FormSettings'
+        referral_settings:
+          $ref: '#/components/schemas/ReferralSettings'
+        form_fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormField'
+          description: Form field definitions
+        share_messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShareMessage'
+          description: Custom share messages per channel
+        tracking_integrations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingIntegration'
+          description: Third-party tracking integrations
         privacy_policy_url:
           type: string
           format: uri
@@ -2447,103 +2462,206 @@ components:
           format: date-time
 
     # ==================== CONFIGURATION SCHEMAS ====================
-    FormConfig:
+    EmailSettings:
       type: object
+      description: Email configuration for the campaign
       properties:
-        fields:
-          type: array
-          items:
-            $ref: '#/components/schemas/FormField'
+        from_name:
+          type: string
+          description: Display name for sent emails
+        from_email:
+          type: string
+          format: email
+          description: Email address to send from
+        reply_to:
+          type: string
+          format: email
+          description: Reply-to email address
+        verification_required:
+          type: boolean
+          default: true
+          description: Whether email verification is required
+        send_welcome_email:
+          type: boolean
+          default: true
+          description: Whether to send welcome email after signup
+
+    BrandingSettings:
+      type: object
+      description: Branding configuration for the campaign
+      properties:
+        logo_url:
+          type: string
+          format: uri
+          description: URL to campaign logo
+        primary_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          default: '#2563EB'
+          description: Primary color in hex format
+        font_family:
+          type: string
+          default: 'Inter'
+          description: Font family for campaign pages
+        custom_domain:
+          type: string
+          format: hostname
+          description: Custom domain for campaign
+
+    FormSettings:
+      type: object
+      description: Form configuration for the campaign (scalars only, fields are separate)
+      properties:
         captcha_enabled:
           type: boolean
           default: false
+          description: Whether CAPTCHA is enabled
+        captcha_provider:
+          type: string
+          enum: [turnstile, recaptcha, hcaptcha]
+          description: CAPTCHA provider to use
+        captcha_site_key:
+          type: string
+          description: CAPTCHA site key
         double_opt_in:
           type: boolean
           default: true
-        custom_css:
+          description: Whether double opt-in is required
+        design:
+          type: object
+          additionalProperties: true
+          description: Form design configuration (JSON object)
+        success_title:
           type: string
+          description: Title shown after successful signup
+        success_message:
+          type: string
+          description: Message shown after successful signup
 
-    FormField:
+    ReferralSettings:
       type: object
-      required:
-        - name
-        - type
-        - label
-      properties:
-        name:
-          type: string
-        type:
-          type: string
-          enum: [email, text, select, checkbox, textarea, number]
-        label:
-          type: string
-        placeholder:
-          type: string
-        required:
-          type: boolean
-          default: false
-        options:
-          type: array
-          items:
-            type: string
-          description: Options for select fields
-        validation:
-          type: string
-          description: Regex pattern for validation
-
-    ReferralConfig:
-      type: object
+      description: Referral program configuration (scalars only, share messages are separate)
       properties:
         enabled:
           type: boolean
-          default: true
+          default: false
+          description: Whether referral program is enabled
         points_per_referral:
           type: integer
           default: 1
+          description: Points awarded per successful referral
         verified_only:
           type: boolean
           default: true
+          description: Whether only verified referrals count
+        positions_to_jump:
+          type: integer
+          default: 5
+          description: Positions referred user jumps
+        referrer_positions_to_jump:
+          type: integer
+          default: 3
+          description: Positions referrer jumps per successful referral
         sharing_channels:
           type: array
           items:
             type: string
             enum: [email, twitter, facebook, linkedin, whatsapp]
-        custom_share_messages:
-          type: object
-          additionalProperties:
-            type: string
+          default: [email]
+          description: Enabled sharing channels
 
-    EmailConfig:
+    FormField:
       type: object
+      description: Form field definition
+      required:
+        - name
+        - field_type
+        - label
       properties:
-        from_name:
+        id:
           type: string
-        from_email:
+          format: uuid
+          readOnly: true
+        name:
           type: string
-          format: email
-        reply_to:
+          maxLength: 100
+          description: Field name (unique per campaign)
+        field_type:
           type: string
-          format: email
-        verification_required:
+          enum: [email, text, textarea, select, checkbox, radio, phone, url, date, number]
+          description: Type of form field
+        label:
+          type: string
+          maxLength: 255
+          description: Field label shown to users
+        placeholder:
+          type: string
+          maxLength: 255
+          description: Placeholder text
+        required:
+          type: boolean
+          default: false
+          description: Whether field is required
+        validation_pattern:
+          type: string
+          maxLength: 500
+          description: Regex pattern for validation
+        options:
+          type: array
+          items:
+            type: string
+          description: Options for select/radio fields
+        display_order:
+          type: integer
+          default: 0
+          description: Order in which field appears
+
+    ShareMessage:
+      type: object
+      description: Custom share message for a specific channel
+      required:
+        - channel
+        - message
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        channel:
+          type: string
+          enum: [email, twitter, facebook, linkedin, whatsapp]
+          description: Sharing channel
+        message:
+          type: string
+          description: Custom share message for this channel
+
+    TrackingIntegration:
+      type: object
+      description: Third-party tracking integration
+      required:
+        - integration_type
+        - tracking_id
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        integration_type:
+          type: string
+          enum: [google_analytics, meta_pixel, google_ads, tiktok_pixel, linkedin_insight]
+          description: Type of tracking integration
+        enabled:
           type: boolean
           default: true
-
-    BrandingConfig:
-      type: object
-      properties:
-        logo_url:
+          description: Whether integration is active
+        tracking_id:
           type: string
-          format: uri
-        primary_color:
+          maxLength: 100
+          description: Tracking ID (e.g., GA measurement ID)
+        tracking_label:
           type: string
-          pattern: '^#[0-9A-Fa-f]{6}$'
-          default: '#2563EB'
-        font_family:
-          type: string
-          default: 'Inter'
-        custom_domain:
-          type: string
-          format: hostname
+          maxLength: 100
+          description: Optional label for tracking events
 
     RewardConfig:
       type: object
@@ -2596,14 +2714,38 @@ components:
         type:
           type: string
           enum: [waitlist, referral, contest]
-        form_config:
-          $ref: '#/components/schemas/FormConfig'
-        referral_config:
-          $ref: '#/components/schemas/ReferralConfig'
-        email_config:
-          $ref: '#/components/schemas/EmailConfig'
-        branding_config:
-          $ref: '#/components/schemas/BrandingConfig'
+        privacy_policy_url:
+          type: string
+          format: uri
+        terms_url:
+          type: string
+          format: uri
+        max_signups:
+          type: integer
+          description: Maximum number of signups allowed
+        email_settings:
+          $ref: '#/components/schemas/EmailSettings'
+        branding_settings:
+          $ref: '#/components/schemas/BrandingSettings'
+        form_settings:
+          $ref: '#/components/schemas/FormSettings'
+        referral_settings:
+          $ref: '#/components/schemas/ReferralSettings'
+        form_fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormField'
+          description: Form field definitions
+        share_messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShareMessage'
+          description: Custom share messages per channel
+        tracking_integrations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingIntegration'
+          description: Third-party tracking integrations
 
     UpdateCampaignRequest:
       type: object
@@ -2620,16 +2762,38 @@ components:
         end_date:
           type: string
           format: date-time
-        form_config:
-          $ref: '#/components/schemas/FormConfig'
-        referral_config:
-          $ref: '#/components/schemas/ReferralConfig'
-        email_config:
-          $ref: '#/components/schemas/EmailConfig'
-        branding_config:
-          $ref: '#/components/schemas/BrandingConfig'
+        privacy_policy_url:
+          type: string
+          format: uri
+        terms_url:
+          type: string
+          format: uri
         max_signups:
           type: integer
+          description: Maximum number of signups allowed
+        email_settings:
+          $ref: '#/components/schemas/EmailSettings'
+        branding_settings:
+          $ref: '#/components/schemas/BrandingSettings'
+        form_settings:
+          $ref: '#/components/schemas/FormSettings'
+        referral_settings:
+          $ref: '#/components/schemas/ReferralSettings'
+        form_fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/FormField'
+          description: Form field definitions
+        share_messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShareMessage'
+          description: Custom share messages per channel
+        tracking_integrations:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrackingIntegration'
+          description: Third-party tracking integrations
 
     SignupRequest:
       type: object
