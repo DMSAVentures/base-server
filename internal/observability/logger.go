@@ -69,34 +69,22 @@ func mergeFields(ctx context.Context, fields []MetricField) []zapcore.Field {
 }
 
 // GetRealClientIP extracts the real client IP from CloudFront headers.
-// CloudFront passes the original client IP in X-Forwarded-For header.
-// Falls back to c.ClientIP() if CloudFront headers are not present.
+// CloudFront-Viewer-Address contains the client IP in "IP:port" format.
+// Falls back to c.ClientIP() if the header is not present.
 func GetRealClientIP(c *gin.Context) string {
-	// CloudFront sends the original client IP in X-Forwarded-For
-	// Format: "client-ip, proxy1-ip, proxy2-ip"
-	// We want the first IP in the list
-	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
-		// Get the first IP from the comma-separated list
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
+	if viewerAddr := c.GetHeader("CloudFront-Viewer-Address"); viewerAddr != "" {
+		// Extract IP from "IP:port" format
+		if colonIdx := strings.LastIndex(viewerAddr, ":"); colonIdx > 0 {
+			return viewerAddr[:colonIdx]
 		}
+		return viewerAddr
 	}
-
-	// Fallback to Gin's ClientIP method
 	return c.ClientIP()
 }
 
-// GetRealUserAgent extracts the real user agent from CloudFront headers.
-// CloudFront passes the original user agent in CloudFront-Viewer-User-Agent header.
-// Falls back to c.Request.UserAgent() if CloudFront headers are not present.
+// GetRealUserAgent extracts the user agent.
+// CloudFront forwards the original User-Agent header, so we use the standard method.
 func GetRealUserAgent(c *gin.Context) string {
-	// CloudFront sends the original user agent in CloudFront-Viewer-User-Agent
-	if viewerUA := c.GetHeader("CloudFront-Viewer-User-Agent"); viewerUA != "" {
-		return viewerUA
-	}
-
-	// Fallback to standard User-Agent header
 	return c.Request.UserAgent()
 }
 
