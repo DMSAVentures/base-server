@@ -13,15 +13,21 @@ import (
 )
 
 // MockStore implements a minimal store.Store interface for testing
-type MockStore struct{}
+type MockStore struct {
+	WebhookURL string // Configurable URL for testing
+}
 
 func (m *MockStore) GetWebhooksByAccount(ctx context.Context, accountID uuid.UUID) ([]store.Webhook, error) {
+	url := m.WebhookURL
+	if url == "" {
+		url = "https://example.com/webhook"
+	}
 	return []store.Webhook{
 		{
 			ID:           uuid.New(),
 			AccountID:    accountID,
 			CampaignID:   nil,
-			URL:          "https://example.com/webhook",
+			URL:          url,
 			Secret:       "test-secret",
 			Events:       []string{"user.created", "user.verified"},
 			Status:       "active",
@@ -62,11 +68,15 @@ func (m *MockStore) IncrementDeliveryAttempt(ctx context.Context, deliveryID uui
 }
 
 func (m *MockStore) GetWebhookByID(ctx context.Context, webhookID uuid.UUID) (store.Webhook, error) {
+	url := m.WebhookURL
+	if url == "" {
+		url = "https://example.com/webhook"
+	}
 	return store.Webhook{
 		ID:           webhookID,
 		AccountID:    uuid.New(),
 		CampaignID:   nil,
-		URL:          "https://example.com/webhook",
+		URL:          url,
 		Secret:       "test-secret",
 		Events:       []string{"webhook.test"},
 		Status:       "active",
@@ -181,9 +191,9 @@ func TestDispatchEvent(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	// Create service with custom HTTP client
+	// Create service with mock store pointing to test server
 	logger := observability.NewLogger()
-	mockStore := &MockStore{}
+	mockStore := &MockStore{WebhookURL: testServer.URL}
 	service := New(mockStore, logger)
 
 	// Test dispatch
@@ -201,9 +211,9 @@ func TestDispatchEvent(t *testing.T) {
 		t.Errorf("DispatchEvent failed: %v", err)
 	}
 
-	// Note: In this test, the webhook won't actually be sent to the test server
-	// because the mock store returns a different URL. This test mainly verifies
-	// that the dispatch logic runs without errors.
+	if receivedWebhooks != 1 {
+		t.Errorf("Expected 1 webhook to be received, got %d", receivedWebhooks)
+	}
 }
 
 func TestTestWebhook(t *testing.T) {
@@ -214,19 +224,14 @@ func TestTestWebhook(t *testing.T) {
 	defer testServer.Close()
 
 	logger := observability.NewLogger()
-	mockStore := &MockStore{}
+	mockStore := &MockStore{WebhookURL: testServer.URL}
 	service := New(mockStore, logger)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
 
-	// This will use the mock store which returns a different URL
 	err := service.TestWebhook(ctx, webhookID)
-
-	// The test will fail to connect to example.com, but we can verify it tried
-	if err == nil {
-		t.Log("TestWebhook completed (note: mock URL used)")
-	} else {
-		t.Logf("TestWebhook returned error (expected with mock URL): %v", err)
+	if err != nil {
+		t.Errorf("TestWebhook failed: %v", err)
 	}
 }
