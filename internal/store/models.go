@@ -344,11 +344,11 @@ type CampaignFormField struct {
 	ID                uuid.UUID     `db:"id" json:"id"`
 	CampaignID        uuid.UUID     `db:"campaign_id" json:"campaign_id"`
 	Name              string        `db:"name" json:"name"`
-	FieldType         FormFieldType `db:"field_type" json:"type"`
+	FieldType         FormFieldType `db:"field_type" json:"field_type"`
 	Label             string        `db:"label" json:"label"`
 	Placeholder       *string       `db:"placeholder" json:"placeholder,omitempty"`
 	Required          bool          `db:"required" json:"required"`
-	ValidationPattern *string       `db:"validation_pattern" json:"validation,omitempty"`
+	ValidationPattern *string       `db:"validation_pattern" json:"validation_pattern,omitempty"`
 	Options           StringArray   `db:"options" json:"options,omitempty"`
 	DisplayOrder      int           `db:"display_order" json:"display_order"`
 	CreatedAt         time.Time     `db:"created_at" json:"created_at"`
