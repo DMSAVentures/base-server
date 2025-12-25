@@ -31,14 +31,10 @@ func createTestAccount(t *testing.T, testDB *TestDB) Account {
 func createTestCampaign(t *testing.T, testDB *TestDB, accountID uuid.UUID, name, slug string) Campaign {
 	t.Helper()
 	campaign, err := testDB.Store.CreateCampaign(context.Background(), CreateCampaignParams{
-		AccountID:      accountID,
-		Name:           name,
-		Slug:           slug,
-		Type:           "waitlist",
-		FormConfig:     JSONB{},
-		ReferralConfig: JSONB{},
-		EmailConfig:    JSONB{},
-		BrandingConfig: JSONB{},
+		AccountID: accountID,
+		Name:      name,
+		Slug:      slug,
+		Type:      "waitlist",
 	})
 	if err != nil {
 		t.Fatalf("failed to create test campaign: %v", err)
@@ -81,14 +77,10 @@ func TestStore_CreateCampaign(t *testing.T) {
 				t.Helper()
 				account := createTestAccount(t, testDB)
 				return CreateCampaignParams{
-					AccountID:      account.ID,
-					Name:           "Test Campaign",
-					Slug:           "test-campaign",
-					Type:           "waitlist",
-					FormConfig:     JSONB{},
-					ReferralConfig: JSONB{},
-					EmailConfig:    JSONB{},
-					BrandingConfig: JSONB{},
+					AccountID: account.ID,
+					Name:      "Test Campaign",
+					Slug:      "test-campaign",
+					Type:      "waitlist",
 				}
 			},
 			wantErr: false,
@@ -135,10 +127,6 @@ func TestStore_CreateCampaign(t *testing.T) {
 					MaxSignups:       &maxSignups,
 					PrivacyPolicyURL: &privacyURL,
 					TermsURL:         &termsURL,
-					FormConfig:       JSONB{"enabled": true},
-					ReferralConfig:   JSONB{"points": 10},
-					EmailConfig:      JSONB{},
-					BrandingConfig:   JSONB{},
 				}
 			},
 			wantErr: false,

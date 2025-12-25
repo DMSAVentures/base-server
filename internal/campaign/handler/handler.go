@@ -1,12 +1,12 @@
 package handler
 
 import (
+	"fmt"
+	"net/http"
+
 	"base-server/internal/apierrors"
 	"base-server/internal/campaign/processor"
 	"base-server/internal/observability"
-	"base-server/internal/store"
-	"fmt"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -43,13 +43,13 @@ type BrandingSettingsRequest struct {
 
 // FormSettingsRequest represents form settings in HTTP request
 type FormSettingsRequest struct {
-	CaptchaEnabled  bool        `json:"captcha_enabled"`
-	CaptchaProvider *string     `json:"captcha_provider,omitempty"`
-	CaptchaSiteKey  *string     `json:"captcha_site_key,omitempty"`
-	DoubleOptIn     bool        `json:"double_opt_in"`
-	Design          store.JSONB `json:"design"`
-	SuccessTitle    *string     `json:"success_title,omitempty"`
-	SuccessMessage  *string     `json:"success_message,omitempty"`
+	CaptchaEnabled  bool           `json:"captcha_enabled"`
+	CaptchaProvider *string        `json:"captcha_provider,omitempty"`
+	CaptchaSiteKey  *string        `json:"captcha_site_key,omitempty"`
+	DoubleOptIn     bool           `json:"double_opt_in"`
+	Design          map[string]any `json:"design"`
+	SuccessTitle    *string        `json:"success_title,omitempty"`
+	SuccessMessage  *string        `json:"success_message,omitempty"`
 }
 
 // ReferralSettingsRequest represents referral settings in HTTP request
@@ -165,7 +165,7 @@ func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 		observability.Field{Key: "campaign_type", Value: req.Type},
 	)
 
-	processorReq := processor.CreateCampaignRequest{
+	params := processor.CreateCampaignParams{
 		Name:             req.Name,
 		Slug:             req.Slug,
 		Description:      req.Description,
@@ -173,93 +173,10 @@ func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 		PrivacyPolicyURL: req.PrivacyPolicyURL,
 		TermsURL:         req.TermsURL,
 		MaxSignups:       req.MaxSignups,
+		Settings:         convertSettingsRequest(req.EmailSettings, req.BrandingSettings, req.FormSettings, req.ReferralSettings, req.FormFields, req.ShareMessages, req.TrackingIntegrations),
 	}
 
-	// Convert settings
-	if req.EmailSettings != nil {
-		processorReq.EmailSettings = &processor.EmailSettingsInput{
-			FromName:             req.EmailSettings.FromName,
-			FromEmail:            req.EmailSettings.FromEmail,
-			ReplyTo:              req.EmailSettings.ReplyTo,
-			VerificationRequired: req.EmailSettings.VerificationRequired,
-			SendWelcomeEmail:     req.EmailSettings.SendWelcomeEmail,
-		}
-	}
-
-	if req.BrandingSettings != nil {
-		processorReq.BrandingSettings = &processor.BrandingSettingsInput{
-			LogoURL:      req.BrandingSettings.LogoURL,
-			PrimaryColor: req.BrandingSettings.PrimaryColor,
-			FontFamily:   req.BrandingSettings.FontFamily,
-			CustomDomain: req.BrandingSettings.CustomDomain,
-		}
-	}
-
-	if req.FormSettings != nil {
-		var captchaProvider *store.CaptchaProvider
-		if req.FormSettings.CaptchaProvider != nil {
-			cp := store.CaptchaProvider(*req.FormSettings.CaptchaProvider)
-			captchaProvider = &cp
-		}
-		processorReq.FormSettings = &processor.FormSettingsInput{
-			CaptchaEnabled:  req.FormSettings.CaptchaEnabled,
-			CaptchaProvider: captchaProvider,
-			CaptchaSiteKey:  req.FormSettings.CaptchaSiteKey,
-			DoubleOptIn:     req.FormSettings.DoubleOptIn,
-			Design:          req.FormSettings.Design,
-			SuccessTitle:    req.FormSettings.SuccessTitle,
-			SuccessMessage:  req.FormSettings.SuccessMessage,
-		}
-	}
-
-	if req.ReferralSettings != nil {
-		sharingChannels := make([]store.SharingChannel, len(req.ReferralSettings.SharingChannels))
-		for i, ch := range req.ReferralSettings.SharingChannels {
-			sharingChannels[i] = store.SharingChannel(ch)
-		}
-		processorReq.ReferralSettings = &processor.ReferralSettingsInput{
-			Enabled:                 req.ReferralSettings.Enabled,
-			PointsPerReferral:       req.ReferralSettings.PointsPerReferral,
-			VerifiedOnly:            req.ReferralSettings.VerifiedOnly,
-			PositionsToJump:         req.ReferralSettings.PositionsToJump,
-			ReferrerPositionsToJump: req.ReferralSettings.ReferrerPositionsToJump,
-			SharingChannels:         sharingChannels,
-		}
-	}
-
-	// Convert form fields
-	for _, f := range req.FormFields {
-		processorReq.FormFields = append(processorReq.FormFields, processor.FormFieldInput{
-			Name:              f.Name,
-			FieldType:         store.FormFieldType(f.FieldType),
-			Label:             f.Label,
-			Placeholder:       f.Placeholder,
-			Required:          f.Required,
-			ValidationPattern: f.ValidationPattern,
-			Options:           f.Options,
-			DisplayOrder:      f.DisplayOrder,
-		})
-	}
-
-	// Convert share messages
-	for _, m := range req.ShareMessages {
-		processorReq.ShareMessages = append(processorReq.ShareMessages, processor.ShareMessageInput{
-			Channel: store.SharingChannel(m.Channel),
-			Message: m.Message,
-		})
-	}
-
-	// Convert tracking integrations
-	for _, t := range req.TrackingIntegrations {
-		processorReq.TrackingIntegrations = append(processorReq.TrackingIntegrations, processor.TrackingIntegrationInput{
-			IntegrationType: store.TrackingIntegrationType(t.IntegrationType),
-			Enabled:         t.Enabled,
-			TrackingID:      t.TrackingID,
-			TrackingLabel:   t.TrackingLabel,
-		})
-	}
-
-	campaign, err := h.processor.CreateCampaign(ctx, accountID, processorReq)
+	campaign, err := h.processor.CreateCampaign(ctx, accountID, params)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
@@ -432,7 +349,7 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 		return
 	}
 
-	processorReq := processor.UpdateCampaignRequest{
+	params := processor.UpdateCampaignParams{
 		Name:             req.Name,
 		Description:      req.Description,
 		LaunchDate:       req.LaunchDate,
@@ -440,93 +357,10 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 		PrivacyPolicyURL: req.PrivacyPolicyURL,
 		TermsURL:         req.TermsURL,
 		MaxSignups:       req.MaxSignups,
+		Settings:         convertSettingsRequest(req.EmailSettings, req.BrandingSettings, req.FormSettings, req.ReferralSettings, req.FormFields, req.ShareMessages, req.TrackingIntegrations),
 	}
 
-	// Convert settings
-	if req.EmailSettings != nil {
-		processorReq.EmailSettings = &processor.EmailSettingsInput{
-			FromName:             req.EmailSettings.FromName,
-			FromEmail:            req.EmailSettings.FromEmail,
-			ReplyTo:              req.EmailSettings.ReplyTo,
-			VerificationRequired: req.EmailSettings.VerificationRequired,
-			SendWelcomeEmail:     req.EmailSettings.SendWelcomeEmail,
-		}
-	}
-
-	if req.BrandingSettings != nil {
-		processorReq.BrandingSettings = &processor.BrandingSettingsInput{
-			LogoURL:      req.BrandingSettings.LogoURL,
-			PrimaryColor: req.BrandingSettings.PrimaryColor,
-			FontFamily:   req.BrandingSettings.FontFamily,
-			CustomDomain: req.BrandingSettings.CustomDomain,
-		}
-	}
-
-	if req.FormSettings != nil {
-		var captchaProvider *store.CaptchaProvider
-		if req.FormSettings.CaptchaProvider != nil {
-			cp := store.CaptchaProvider(*req.FormSettings.CaptchaProvider)
-			captchaProvider = &cp
-		}
-		processorReq.FormSettings = &processor.FormSettingsInput{
-			CaptchaEnabled:  req.FormSettings.CaptchaEnabled,
-			CaptchaProvider: captchaProvider,
-			CaptchaSiteKey:  req.FormSettings.CaptchaSiteKey,
-			DoubleOptIn:     req.FormSettings.DoubleOptIn,
-			Design:          req.FormSettings.Design,
-			SuccessTitle:    req.FormSettings.SuccessTitle,
-			SuccessMessage:  req.FormSettings.SuccessMessage,
-		}
-	}
-
-	if req.ReferralSettings != nil {
-		sharingChannels := make([]store.SharingChannel, len(req.ReferralSettings.SharingChannels))
-		for i, ch := range req.ReferralSettings.SharingChannels {
-			sharingChannels[i] = store.SharingChannel(ch)
-		}
-		processorReq.ReferralSettings = &processor.ReferralSettingsInput{
-			Enabled:                 req.ReferralSettings.Enabled,
-			PointsPerReferral:       req.ReferralSettings.PointsPerReferral,
-			VerifiedOnly:            req.ReferralSettings.VerifiedOnly,
-			PositionsToJump:         req.ReferralSettings.PositionsToJump,
-			ReferrerPositionsToJump: req.ReferralSettings.ReferrerPositionsToJump,
-			SharingChannels:         sharingChannels,
-		}
-	}
-
-	// Convert form fields
-	for _, f := range req.FormFields {
-		processorReq.FormFields = append(processorReq.FormFields, processor.FormFieldInput{
-			Name:              f.Name,
-			FieldType:         store.FormFieldType(f.FieldType),
-			Label:             f.Label,
-			Placeholder:       f.Placeholder,
-			Required:          f.Required,
-			ValidationPattern: f.ValidationPattern,
-			Options:           f.Options,
-			DisplayOrder:      f.DisplayOrder,
-		})
-	}
-
-	// Convert share messages
-	for _, m := range req.ShareMessages {
-		processorReq.ShareMessages = append(processorReq.ShareMessages, processor.ShareMessageInput{
-			Channel: store.SharingChannel(m.Channel),
-			Message: m.Message,
-		})
-	}
-
-	// Convert tracking integrations
-	for _, t := range req.TrackingIntegrations {
-		processorReq.TrackingIntegrations = append(processorReq.TrackingIntegrations, processor.TrackingIntegrationInput{
-			IntegrationType: store.TrackingIntegrationType(t.IntegrationType),
-			Enabled:         t.Enabled,
-			TrackingID:      t.TrackingID,
-			TrackingLabel:   t.TrackingLabel,
-		})
-	}
-
-	campaign, err := h.processor.UpdateCampaign(ctx, accountID, campaignID, processorReq)
+	campaign, err := h.processor.UpdateCampaign(ctx, accountID, campaignID, params)
 	if err != nil {
 		apierrors.RespondWithError(c, err)
 		return
@@ -622,4 +456,90 @@ func (h *Handler) HandleUpdateCampaignStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, campaign)
+}
+
+// convertSettingsRequest converts HTTP request settings to processor params
+func convertSettingsRequest(
+	emailSettings *EmailSettingsRequest,
+	brandingSettings *BrandingSettingsRequest,
+	formSettings *FormSettingsRequest,
+	referralSettings *ReferralSettingsRequest,
+	formFields []FormFieldRequest,
+	shareMessages []ShareMessageRequest,
+	trackingIntegrations []TrackingIntegrationRequest,
+) processor.CampaignSettingsParams {
+	settings := processor.CampaignSettingsParams{}
+
+	if emailSettings != nil {
+		settings.EmailSettings = &processor.EmailSettingsParams{
+			FromName:             emailSettings.FromName,
+			FromEmail:            emailSettings.FromEmail,
+			ReplyTo:              emailSettings.ReplyTo,
+			VerificationRequired: emailSettings.VerificationRequired,
+			SendWelcomeEmail:     emailSettings.SendWelcomeEmail,
+		}
+	}
+
+	if brandingSettings != nil {
+		settings.BrandingSettings = &processor.BrandingSettingsParams{
+			LogoURL:      brandingSettings.LogoURL,
+			PrimaryColor: brandingSettings.PrimaryColor,
+			FontFamily:   brandingSettings.FontFamily,
+			CustomDomain: brandingSettings.CustomDomain,
+		}
+	}
+
+	if formSettings != nil {
+		settings.FormSettings = &processor.FormSettingsParams{
+			CaptchaEnabled:  formSettings.CaptchaEnabled,
+			CaptchaProvider: formSettings.CaptchaProvider,
+			CaptchaSiteKey:  formSettings.CaptchaSiteKey,
+			DoubleOptIn:     formSettings.DoubleOptIn,
+			Design:          formSettings.Design,
+			SuccessTitle:    formSettings.SuccessTitle,
+			SuccessMessage:  formSettings.SuccessMessage,
+		}
+	}
+
+	if referralSettings != nil {
+		settings.ReferralSettings = &processor.ReferralSettingsParams{
+			Enabled:                 referralSettings.Enabled,
+			PointsPerReferral:       referralSettings.PointsPerReferral,
+			VerifiedOnly:            referralSettings.VerifiedOnly,
+			PositionsToJump:         referralSettings.PositionsToJump,
+			ReferrerPositionsToJump: referralSettings.ReferrerPositionsToJump,
+			SharingChannels:         referralSettings.SharingChannels,
+		}
+	}
+
+	for _, f := range formFields {
+		settings.FormFields = append(settings.FormFields, processor.FormFieldParams{
+			Name:              f.Name,
+			FieldType:         f.FieldType,
+			Label:             f.Label,
+			Placeholder:       f.Placeholder,
+			Required:          f.Required,
+			ValidationPattern: f.ValidationPattern,
+			Options:           f.Options,
+			DisplayOrder:      f.DisplayOrder,
+		})
+	}
+
+	for _, m := range shareMessages {
+		settings.ShareMessages = append(settings.ShareMessages, processor.ShareMessageParams{
+			Channel: m.Channel,
+			Message: m.Message,
+		})
+	}
+
+	for _, t := range trackingIntegrations {
+		settings.TrackingIntegrations = append(settings.TrackingIntegrations, processor.TrackingIntegrationParams{
+			IntegrationType: t.IntegrationType,
+			Enabled:         t.Enabled,
+			TrackingID:      t.TrackingID,
+			TrackingLabel:   t.TrackingLabel,
+		})
+	}
+
+	return settings
 }
