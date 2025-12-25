@@ -210,13 +210,18 @@ func (p *CampaignProcessor) upsertCampaignSettings(ctx context.Context, campaign
 			cp := store.CaptchaProvider(*settings.FormSettings.CaptchaProvider)
 			captchaProvider = &cp
 		}
+		// Ensure Design is never nil (database column has NOT NULL constraint)
+		design := store.JSONB{}
+		if settings.FormSettings.Design != nil {
+			design = store.JSONB(settings.FormSettings.Design)
+		}
 		_, err := p.store.UpsertCampaignFormSettings(ctx, store.CreateCampaignFormSettingsParams{
 			CampaignID:      campaignID,
 			CaptchaEnabled:  settings.FormSettings.CaptchaEnabled,
 			CaptchaProvider: captchaProvider,
 			CaptchaSiteKey:  settings.FormSettings.CaptchaSiteKey,
 			DoubleOptIn:     settings.FormSettings.DoubleOptIn,
-			Design:          store.JSONB(settings.FormSettings.Design),
+			Design:          design,
 			SuccessTitle:    settings.FormSettings.SuccessTitle,
 			SuccessMessage:  settings.FormSettings.SuccessMessage,
 		})
