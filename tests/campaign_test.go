@@ -1232,6 +1232,23 @@ func TestAPI_Campaign_CreateWithFormSettings(t *testing.T) {
 			expectedStatus: http.StatusCreated,
 		},
 		{
+			name: "create campaign with form settings but no design field",
+			request: map[string]interface{}{
+				"name": "Campaign without Design",
+				"slug": generateTestCampaignSlug(),
+				"type": "waitlist",
+				"form_settings": map[string]interface{}{
+					"captcha_enabled": true,
+					"captcha_provider": "turnstile",
+					"captcha_site_key": "0x123456789",
+					"double_opt_in":    true,
+					"success_title":    "Welcome!",
+					"success_message":  "Thanks for signing up.",
+				},
+			},
+			expectedStatus: http.StatusCreated,
+		},
+		{
 			name: "create fails with invalid captcha_provider",
 			request: map[string]interface{}{
 				"name": "Campaign with Invalid Captcha Provider",

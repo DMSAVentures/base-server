@@ -525,6 +525,27 @@ func TestStore_CampaignFormSettings(t *testing.T) {
 		assert.Equal(t, newProvider, *upserted.CaptchaProvider)
 		assert.False(t, upserted.DoubleOptIn)
 	})
+
+	t.Run("create with empty design", func(t *testing.T) {
+		testDB.Truncate(t)
+		account := f.CreateAccount()
+		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+		captchaProvider := CaptchaProvider("turnstile")
+
+		// Create with empty JSONB for design (NOT nil)
+		created, err := testDB.Store.CreateCampaignFormSettings(ctx, CreateCampaignFormSettingsParams{
+			CampaignID:      campaign.ID,
+			CaptchaEnabled:  true,
+			CaptchaProvider: &captchaProvider,
+			CaptchaSiteKey:  Ptr("test-site-key"),
+			DoubleOptIn:     true,
+			Design:          JSONB{}, // Empty but not nil
+		})
+		require.NoError(t, err, "should create form settings with empty design")
+		assert.True(t, created.CaptchaEnabled)
+		assert.NotNil(t, created.Design)
+	})
 }
 
 func TestStore_CampaignReferralSettings(t *testing.T) {
