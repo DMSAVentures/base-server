@@ -63,7 +63,9 @@ func (p *EmailEventProcessor) Process(ctx context.Context, event workers.EventMe
 	}
 }
 
-// handleUserCreated sends verification email for new waitlist signups.
+// handleUserCreated sends verification or welcome email for new waitlist signups.
+// If verification is enabled: sends verification email
+// If verification is disabled but send_welcome_email is enabled: sends welcome email immediately
 func (p *EmailEventProcessor) handleUserCreated(ctx context.Context, event workers.EventMessage) error {
 	// Parse event data
 	var eventData struct {
@@ -92,11 +94,17 @@ func (p *EmailEventProcessor) handleUserCreated(ctx context.Context, event worke
 		return fmt.Errorf("failed to get campaign: %w", err)
 	}
 
-	// Check if email verification is enabled
-	emailConfig, ok := campaign.EmailConfig["verification_enabled"]
-	if !ok || !emailConfig.(bool) {
-		// Email verification not enabled, skip (not an error)
-		p.logger.Info(ctx, "Email verification not enabled for campaign, skipping")
+	// Check email settings
+	verificationEnabled := false
+	sendWelcomeEmail := false
+	if campaign.EmailSettings != nil {
+		verificationEnabled = campaign.EmailSettings.VerificationRequired
+		sendWelcomeEmail = campaign.EmailSettings.SendWelcomeEmail
+	}
+
+	// If neither setting is enabled, skip
+	if !verificationEnabled && !sendWelcomeEmail {
+		p.logger.Info(ctx, "No email settings enabled for campaign, skipping")
 		return nil
 	}
 
@@ -117,38 +125,58 @@ func (p *EmailEventProcessor) handleUserCreated(ctx context.Context, event worke
 		position = int(pos)
 	}
 
-	verificationToken := ""
-	if token, ok := eventData.User["verification_token"]; ok && token != nil {
-		if tokenPtr, ok := token.(*string); ok && tokenPtr != nil {
-			verificationToken = *tokenPtr
-		} else if tokenStr, ok := token.(string); ok {
-			verificationToken = tokenStr
-		}
-	}
-
 	referralLink := ""
 	if rl, ok := eventData.User["referral_link"].(string); ok {
 		referralLink = rl
 	}
 
 	campaignName := campaign.Name
-	campaignSlug := campaign.Slug
 
-	// Build verification link
-	verificationLink := fmt.Sprintf("https://app.example.com/verify?token=%s&campaign=%s",
-		verificationToken, campaignSlug)
+	// Decide which email to send based on settings
+	if verificationEnabled {
+		// Send verification email
+		verificationToken := ""
+		if token, ok := eventData.User["verification_token"]; ok && token != nil {
+			if tokenPtr, ok := token.(*string); ok && tokenPtr != nil {
+				verificationToken = *tokenPtr
+			} else if tokenStr, ok := token.(string); ok {
+				verificationToken = tokenStr
+			}
+		}
 
-	// Send verification email
-	p.logger.Info(ctx, fmt.Sprintf("Sending verification email to %s for campaign %s",
-		email, campaignName))
+		campaignSlug := campaign.Slug
+		verificationLink := fmt.Sprintf("https://app.example.com/verify?token=%s&campaign=%s",
+			verificationToken, campaignSlug)
 
-	err = p.emailService.SendWaitlistVerificationEmail(
-		ctx, email, firstName, campaignName, verificationLink, referralLink, position)
-	if err != nil {
-		return fmt.Errorf("failed to send verification email: %w", err)
+		p.logger.Info(ctx, fmt.Sprintf("Sending verification email to %s for campaign %s",
+			email, campaignName))
+
+		err = p.emailService.SendWaitlistVerificationEmail(
+			ctx, email, firstName, campaignName, verificationLink, referralLink, position)
+		if err != nil {
+			return fmt.Errorf("failed to send verification email: %w", err)
+		}
+
+		p.logger.Info(ctx, fmt.Sprintf("Successfully sent verification email to %s", email))
+	} else if sendWelcomeEmail {
+		// Send welcome email immediately (no verification required)
+		p.logger.Info(ctx, fmt.Sprintf("Sending welcome email to %s for campaign %s (no verification required)",
+			email, campaignName))
+
+		referralCount := 0
+		if rc, ok := eventData.User["referral_count"].(float64); ok {
+			referralCount = int(rc)
+		}
+
+		err = p.emailService.SendWaitlistWelcomeEmail(
+			ctx, email, firstName, campaignName, referralLink, position, referralCount)
+		if err != nil {
+			return fmt.Errorf("failed to send welcome email: %w", err)
+		}
+
+		p.logger.Info(ctx, fmt.Sprintf("Successfully sent welcome email to %s", email))
 	}
 
-	p.logger.Info(ctx, fmt.Sprintf("Successfully sent verification email to %s", email))
 	return nil
 }
 
