@@ -101,6 +101,13 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Start spam detection event consumer (detects and blocks spam signups)
+	go func() {
+		if err := s.deps.SpamConsumer.Start(ctx); err != nil {
+			s.logger.Error(ctx, "spam detection consumer stopped with error", err)
+		}
+	}()
+
 	// Create HTTP server
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.config.Server.Port),
@@ -137,6 +144,7 @@ func (s *Server) WaitForShutdown(ctx context.Context) error {
 	s.deps.WebhookConsumer.Stop()
 	s.deps.EmailConsumer.Stop()
 	s.deps.PositionConsumer.Stop()
+	s.deps.SpamConsumer.Stop()
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling

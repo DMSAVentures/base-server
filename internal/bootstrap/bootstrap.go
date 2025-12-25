@@ -32,6 +32,8 @@ import (
 	referralProcessor "base-server/internal/referral/processor"
 	rewardHandler "base-server/internal/rewards/handler"
 	rewardProcessor "base-server/internal/rewards/processor"
+	spamConsumer "base-server/internal/spam/consumer"
+	spamProcessor "base-server/internal/spam/processor"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	voiceCallProcessor "base-server/internal/voicecall/processor"
 	waitlistHandler "base-server/internal/waitlist/handler"
@@ -69,6 +71,7 @@ type Dependencies struct {
 	WebhookConsumer  workers.EventConsumer
 	EmailConsumer    workers.EventConsumer
 	PositionConsumer workers.EventConsumer
+	SpamConsumer     workers.EventConsumer
 	WebhookWorker    *webhookWorker.WebhookWorker
 
 	// Kafka clients (for cleanup)
@@ -212,6 +215,13 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	positionConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-position", cfg.Kafka.Topic)
 	positionConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.PositionWorkers
 	deps.PositionConsumer = workers.NewConsumer(positionConsumerConfig, positionEvtProcessor, logger)
+
+	// Initialize spam detection processor and consumer with worker pool
+	spamProc := spamProcessor.New(&deps.Store, logger)
+	spamEvtProcessor := spamConsumer.NewSpamEventProcessor(spamProc, deps.Store, logger)
+	spamConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-spam", cfg.Kafka.Topic)
+	spamConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.SpamWorkers
+	deps.SpamConsumer = workers.NewConsumer(spamConsumerConfig, spamEvtProcessor, logger)
 
 	return deps, nil
 }

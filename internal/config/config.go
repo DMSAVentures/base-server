@@ -61,6 +61,7 @@ type WorkerPoolConfig struct {
 	WebhookWorkers  int // Number of workers for webhook event processing
 	EmailWorkers    int // Number of workers for email event processing
 	PositionWorkers int // Number of workers for position calculation event processing
+	SpamWorkers     int // Number of workers for spam detection event processing
 }
 
 // ServerConfig holds HTTP server configuration
@@ -159,6 +160,12 @@ func Load() (*Config, error) {
 	cfg.WorkerPool.PositionWorkers, err = strconv.Atoi(positionWorkers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse POSITION_WORKERS: %w", err)
+	}
+
+	spamWorkers := getEnvWithDefault("SPAM_WORKERS", "3")
+	cfg.WorkerPool.SpamWorkers, err = strconv.Atoi(spamWorkers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse SPAM_WORKERS: %w", err)
 	}
 
 	// Server configuration

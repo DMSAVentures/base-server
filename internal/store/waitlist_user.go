@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -675,4 +676,49 @@ func (s *Store) BulkUpdateWaitlistUserPositions(ctx context.Context, userIDs []u
 		return fmt.Errorf("failed to bulk update waitlist user positions: %w", err)
 	}
 	return nil
+}
+
+const sqlBlockWaitlistUser = `
+UPDATE waitlist_users
+SET status = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+// BlockWaitlistUser updates a user's status to blocked
+func (s *Store) BlockWaitlistUser(ctx context.Context, userID uuid.UUID) error {
+	res, err := s.db.ExecContext(ctx, sqlBlockWaitlistUser, userID, WaitlistUserStatusBlocked)
+	if err != nil {
+		s.logger.Error(ctx, "failed to block waitlist user", err)
+		return fmt.Errorf("failed to block waitlist user: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		s.logger.Error(ctx, "failed to get rows affected", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+const sqlCountRecentSignupsByIP = `
+SELECT COUNT(*)
+FROM waitlist_users
+WHERE campaign_id = $1 AND ip_address = $2 AND created_at > $3 AND deleted_at IS NULL
+`
+
+// CountRecentSignupsByIP counts signups from an IP address within a time window
+func (s *Store) CountRecentSignupsByIP(ctx context.Context, campaignID uuid.UUID, ip string, since time.Time) (int, error) {
+	var count int
+	err := s.db.GetContext(ctx, &count, sqlCountRecentSignupsByIP, campaignID, ip, since)
+	if err != nil {
+		s.logger.Error(ctx, "failed to count recent signups by IP", err)
+		return 0, fmt.Errorf("failed to count recent signups by IP: %w", err)
+	}
+	return count, nil
 }
