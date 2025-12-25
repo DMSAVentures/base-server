@@ -289,6 +289,7 @@ type CampaignEmailSettings struct {
 	FromEmail            *string   `db:"from_email" json:"from_email,omitempty"`
 	ReplyTo              *string   `db:"reply_to" json:"reply_to,omitempty"`
 	VerificationRequired bool      `db:"verification_required" json:"verification_required"`
+	SendWelcomeEmail     bool      `db:"send_welcome_email" json:"send_welcome_email"`
 	CreatedAt            time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt            time.Time `db:"updated_at" json:"updated_at"`
 }

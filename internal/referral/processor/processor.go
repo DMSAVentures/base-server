@@ -42,7 +42,7 @@ type ListReferralsRequest struct {
 
 // ListReferralsResponse represents the paginated response for referrals
 type ListReferralsResponse struct {
-	Referrals []store.Referral `json:"referrals"`
+	Referrals  []store.Referral `json:"referrals"`
 	Pagination Pagination       `json:"pagination"`
 }
 
@@ -355,12 +355,17 @@ func isValidReferralStatus(status string) bool {
 }
 
 func getShareMessage(campaign store.Campaign, user store.WaitlistUser) string {
-	// Try to get custom share message from campaign config
-	if campaign.ReferralConfig != nil {
-		if customMessages, ok := campaign.ReferralConfig["custom_share_messages"].(map[string]interface{}); ok {
-			if message, ok := customMessages["default"].(string); ok {
-				return message
+	// Try to get custom share message from campaign's share messages
+	if campaign.ShareMessages != nil {
+		for _, msg := range campaign.ShareMessages {
+			// Use email channel as default, or first available message
+			if msg.Channel == store.SharingChannelEmail {
+				return msg.Message
 			}
+		}
+		// If no email channel, use first available
+		if len(campaign.ShareMessages) > 0 {
+			return campaign.ShareMessages[0].Message
 		}
 	}
 

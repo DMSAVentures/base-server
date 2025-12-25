@@ -24,34 +24,108 @@ func New(processor processor.CampaignProcessor, logger *observability.Logger) Ha
 	}
 }
 
+// EmailSettingsRequest represents email settings in HTTP request
+type EmailSettingsRequest struct {
+	FromName             *string `json:"from_name,omitempty"`
+	FromEmail            *string `json:"from_email,omitempty"`
+	ReplyTo              *string `json:"reply_to,omitempty"`
+	VerificationRequired bool    `json:"verification_required"`
+	SendWelcomeEmail     bool    `json:"send_welcome_email"`
+}
+
+// BrandingSettingsRequest represents branding settings in HTTP request
+type BrandingSettingsRequest struct {
+	LogoURL      *string `json:"logo_url,omitempty"`
+	PrimaryColor *string `json:"primary_color,omitempty"`
+	FontFamily   *string `json:"font_family,omitempty"`
+	CustomDomain *string `json:"custom_domain,omitempty"`
+}
+
+// FormSettingsRequest represents form settings in HTTP request
+type FormSettingsRequest struct {
+	CaptchaEnabled  bool        `json:"captcha_enabled"`
+	CaptchaProvider *string     `json:"captcha_provider,omitempty"`
+	CaptchaSiteKey  *string     `json:"captcha_site_key,omitempty"`
+	DoubleOptIn     bool        `json:"double_opt_in"`
+	Design          store.JSONB `json:"design"`
+	SuccessTitle    *string     `json:"success_title,omitempty"`
+	SuccessMessage  *string     `json:"success_message,omitempty"`
+}
+
+// ReferralSettingsRequest represents referral settings in HTTP request
+type ReferralSettingsRequest struct {
+	Enabled                 bool     `json:"enabled"`
+	PointsPerReferral       int      `json:"points_per_referral"`
+	VerifiedOnly            bool     `json:"verified_only"`
+	PositionsToJump         int      `json:"positions_to_jump"`
+	ReferrerPositionsToJump int      `json:"referrer_positions_to_jump"`
+	SharingChannels         []string `json:"sharing_channels"`
+}
+
+// FormFieldRequest represents a form field in HTTP request
+type FormFieldRequest struct {
+	Name              string   `json:"name" binding:"required"`
+	FieldType         string   `json:"field_type" binding:"required"`
+	Label             string   `json:"label" binding:"required"`
+	Placeholder       *string  `json:"placeholder,omitempty"`
+	Required          bool     `json:"required"`
+	ValidationPattern *string  `json:"validation_pattern,omitempty"`
+	Options           []string `json:"options,omitempty"`
+	DisplayOrder      int      `json:"display_order"`
+}
+
+// ShareMessageRequest represents a share message in HTTP request
+type ShareMessageRequest struct {
+	Channel string `json:"channel" binding:"required"`
+	Message string `json:"message" binding:"required"`
+}
+
+// TrackingIntegrationRequest represents a tracking integration in HTTP request
+type TrackingIntegrationRequest struct {
+	IntegrationType string  `json:"integration_type" binding:"required"`
+	Enabled         bool    `json:"enabled"`
+	TrackingID      string  `json:"tracking_id" binding:"required"`
+	TrackingLabel   *string `json:"tracking_label,omitempty"`
+}
+
 // CreateCampaignRequest represents the HTTP request for creating a campaign
 type CreateCampaignRequest struct {
-	Name             string       `json:"name" binding:"required,min=1,max=255"`
-	Slug             string       `json:"slug" binding:"required,min=1,max=255"`
-	Description      *string      `json:"description,omitempty"`
-	Type             string       `json:"type" binding:"required,oneof=waitlist referral contest"`
-	FormConfig       *store.JSONB `json:"form_config,omitempty"`
-	ReferralConfig   *store.JSONB `json:"referral_config,omitempty"`
-	EmailConfig      *store.JSONB `json:"email_config,omitempty"`
-	BrandingConfig   *store.JSONB `json:"branding_config,omitempty"`
-	PrivacyPolicyURL *string      `json:"privacy_policy_url,omitempty"`
-	TermsURL         *string      `json:"terms_url,omitempty"`
-	MaxSignups       *int         `json:"max_signups,omitempty"`
+	Name             string  `json:"name" binding:"required,min=1,max=255"`
+	Slug             string  `json:"slug" binding:"required,min=1,max=255"`
+	Description      *string `json:"description,omitempty"`
+	Type             string  `json:"type" binding:"required,oneof=waitlist referral contest"`
+	PrivacyPolicyURL *string `json:"privacy_policy_url,omitempty"`
+	TermsURL         *string `json:"terms_url,omitempty"`
+	MaxSignups       *int    `json:"max_signups,omitempty"`
+
+	// Settings
+	EmailSettings        *EmailSettingsRequest        `json:"email_settings,omitempty"`
+	BrandingSettings     *BrandingSettingsRequest     `json:"branding_settings,omitempty"`
+	FormSettings         *FormSettingsRequest         `json:"form_settings,omitempty"`
+	ReferralSettings     *ReferralSettingsRequest     `json:"referral_settings,omitempty"`
+	FormFields           []FormFieldRequest           `json:"form_fields,omitempty"`
+	ShareMessages        []ShareMessageRequest        `json:"share_messages,omitempty"`
+	TrackingIntegrations []TrackingIntegrationRequest `json:"tracking_integrations,omitempty"`
 }
 
 // UpdateCampaignRequest represents the HTTP request for updating a campaign
 type UpdateCampaignRequest struct {
-	Name             *string      `json:"name,omitempty"`
-	Description      *string      `json:"description,omitempty"`
-	LaunchDate       *string      `json:"launch_date,omitempty"`
-	EndDate          *string      `json:"end_date,omitempty"`
-	FormConfig       *store.JSONB `json:"form_config,omitempty"`
-	ReferralConfig   *store.JSONB `json:"referral_config,omitempty"`
-	EmailConfig      *store.JSONB `json:"email_config,omitempty"`
-	BrandingConfig   *store.JSONB `json:"branding_config,omitempty"`
-	PrivacyPolicyURL *string      `json:"privacy_policy_url,omitempty"`
-	TermsURL         *string      `json:"terms_url,omitempty"`
-	MaxSignups       *int         `json:"max_signups,omitempty"`
+	Name             *string `json:"name,omitempty"`
+	Description      *string `json:"description,omitempty"`
+	LaunchDate       *string `json:"launch_date,omitempty"`
+	EndDate          *string `json:"end_date,omitempty"`
+	PrivacyPolicyURL *string `json:"privacy_policy_url,omitempty"`
+	TermsURL         *string `json:"terms_url,omitempty"`
+	MaxSignups       *int    `json:"max_signups,omitempty"`
+
+	// Settings
+	EmailSettings        *EmailSettingsRequest        `json:"email_settings,omitempty"`
+	BrandingSettings     *BrandingSettingsRequest     `json:"branding_settings,omitempty"`
+	FormSettings         *FormSettingsRequest         `json:"form_settings,omitempty"`
+	ReferralSettings     *ReferralSettingsRequest     `json:"referral_settings,omitempty"`
+	FormFields           []FormFieldRequest           `json:"form_fields,omitempty"`
+	ShareMessages        []ShareMessageRequest        `json:"share_messages,omitempty"`
+	TrackingIntegrations []TrackingIntegrationRequest `json:"tracking_integrations,omitempty"`
 }
 
 // UpdateCampaignStatusRequest represents the HTTP request for updating campaign status
@@ -91,36 +165,98 @@ func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 		observability.Field{Key: "campaign_type", Value: req.Type},
 	)
 
-	// Set default empty JSONB if not provided
-	if req.FormConfig == nil {
-		emptyJSON := store.JSONB{}
-		req.FormConfig = &emptyJSON
-	}
-	if req.ReferralConfig == nil {
-		emptyJSON := store.JSONB{}
-		req.ReferralConfig = &emptyJSON
-	}
-	if req.EmailConfig == nil {
-		emptyJSON := store.JSONB{}
-		req.EmailConfig = &emptyJSON
-	}
-	if req.BrandingConfig == nil {
-		emptyJSON := store.JSONB{}
-		req.BrandingConfig = &emptyJSON
-	}
-
 	processorReq := processor.CreateCampaignRequest{
 		Name:             req.Name,
 		Slug:             req.Slug,
 		Description:      req.Description,
 		Type:             req.Type,
-		FormConfig:       *req.FormConfig,
-		ReferralConfig:   *req.ReferralConfig,
-		EmailConfig:      *req.EmailConfig,
-		BrandingConfig:   *req.BrandingConfig,
 		PrivacyPolicyURL: req.PrivacyPolicyURL,
 		TermsURL:         req.TermsURL,
 		MaxSignups:       req.MaxSignups,
+	}
+
+	// Convert settings
+	if req.EmailSettings != nil {
+		processorReq.EmailSettings = &processor.EmailSettingsInput{
+			FromName:             req.EmailSettings.FromName,
+			FromEmail:            req.EmailSettings.FromEmail,
+			ReplyTo:              req.EmailSettings.ReplyTo,
+			VerificationRequired: req.EmailSettings.VerificationRequired,
+			SendWelcomeEmail:     req.EmailSettings.SendWelcomeEmail,
+		}
+	}
+
+	if req.BrandingSettings != nil {
+		processorReq.BrandingSettings = &processor.BrandingSettingsInput{
+			LogoURL:      req.BrandingSettings.LogoURL,
+			PrimaryColor: req.BrandingSettings.PrimaryColor,
+			FontFamily:   req.BrandingSettings.FontFamily,
+			CustomDomain: req.BrandingSettings.CustomDomain,
+		}
+	}
+
+	if req.FormSettings != nil {
+		var captchaProvider *store.CaptchaProvider
+		if req.FormSettings.CaptchaProvider != nil {
+			cp := store.CaptchaProvider(*req.FormSettings.CaptchaProvider)
+			captchaProvider = &cp
+		}
+		processorReq.FormSettings = &processor.FormSettingsInput{
+			CaptchaEnabled:  req.FormSettings.CaptchaEnabled,
+			CaptchaProvider: captchaProvider,
+			CaptchaSiteKey:  req.FormSettings.CaptchaSiteKey,
+			DoubleOptIn:     req.FormSettings.DoubleOptIn,
+			Design:          req.FormSettings.Design,
+			SuccessTitle:    req.FormSettings.SuccessTitle,
+			SuccessMessage:  req.FormSettings.SuccessMessage,
+		}
+	}
+
+	if req.ReferralSettings != nil {
+		sharingChannels := make([]store.SharingChannel, len(req.ReferralSettings.SharingChannels))
+		for i, ch := range req.ReferralSettings.SharingChannels {
+			sharingChannels[i] = store.SharingChannel(ch)
+		}
+		processorReq.ReferralSettings = &processor.ReferralSettingsInput{
+			Enabled:                 req.ReferralSettings.Enabled,
+			PointsPerReferral:       req.ReferralSettings.PointsPerReferral,
+			VerifiedOnly:            req.ReferralSettings.VerifiedOnly,
+			PositionsToJump:         req.ReferralSettings.PositionsToJump,
+			ReferrerPositionsToJump: req.ReferralSettings.ReferrerPositionsToJump,
+			SharingChannels:         sharingChannels,
+		}
+	}
+
+	// Convert form fields
+	for _, f := range req.FormFields {
+		processorReq.FormFields = append(processorReq.FormFields, processor.FormFieldInput{
+			Name:              f.Name,
+			FieldType:         store.FormFieldType(f.FieldType),
+			Label:             f.Label,
+			Placeholder:       f.Placeholder,
+			Required:          f.Required,
+			ValidationPattern: f.ValidationPattern,
+			Options:           f.Options,
+			DisplayOrder:      f.DisplayOrder,
+		})
+	}
+
+	// Convert share messages
+	for _, m := range req.ShareMessages {
+		processorReq.ShareMessages = append(processorReq.ShareMessages, processor.ShareMessageInput{
+			Channel: store.SharingChannel(m.Channel),
+			Message: m.Message,
+		})
+	}
+
+	// Convert tracking integrations
+	for _, t := range req.TrackingIntegrations {
+		processorReq.TrackingIntegrations = append(processorReq.TrackingIntegrations, processor.TrackingIntegrationInput{
+			IntegrationType: store.TrackingIntegrationType(t.IntegrationType),
+			Enabled:         t.Enabled,
+			TrackingID:      t.TrackingID,
+			TrackingLabel:   t.TrackingLabel,
+		})
 	}
 
 	campaign, err := h.processor.CreateCampaign(ctx, accountID, processorReq)
@@ -306,17 +442,88 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 		MaxSignups:       req.MaxSignups,
 	}
 
-	if req.FormConfig != nil {
-		processorReq.FormConfig = *req.FormConfig
+	// Convert settings
+	if req.EmailSettings != nil {
+		processorReq.EmailSettings = &processor.EmailSettingsInput{
+			FromName:             req.EmailSettings.FromName,
+			FromEmail:            req.EmailSettings.FromEmail,
+			ReplyTo:              req.EmailSettings.ReplyTo,
+			VerificationRequired: req.EmailSettings.VerificationRequired,
+			SendWelcomeEmail:     req.EmailSettings.SendWelcomeEmail,
+		}
 	}
-	if req.ReferralConfig != nil {
-		processorReq.ReferralConfig = *req.ReferralConfig
+
+	if req.BrandingSettings != nil {
+		processorReq.BrandingSettings = &processor.BrandingSettingsInput{
+			LogoURL:      req.BrandingSettings.LogoURL,
+			PrimaryColor: req.BrandingSettings.PrimaryColor,
+			FontFamily:   req.BrandingSettings.FontFamily,
+			CustomDomain: req.BrandingSettings.CustomDomain,
+		}
 	}
-	if req.EmailConfig != nil {
-		processorReq.EmailConfig = *req.EmailConfig
+
+	if req.FormSettings != nil {
+		var captchaProvider *store.CaptchaProvider
+		if req.FormSettings.CaptchaProvider != nil {
+			cp := store.CaptchaProvider(*req.FormSettings.CaptchaProvider)
+			captchaProvider = &cp
+		}
+		processorReq.FormSettings = &processor.FormSettingsInput{
+			CaptchaEnabled:  req.FormSettings.CaptchaEnabled,
+			CaptchaProvider: captchaProvider,
+			CaptchaSiteKey:  req.FormSettings.CaptchaSiteKey,
+			DoubleOptIn:     req.FormSettings.DoubleOptIn,
+			Design:          req.FormSettings.Design,
+			SuccessTitle:    req.FormSettings.SuccessTitle,
+			SuccessMessage:  req.FormSettings.SuccessMessage,
+		}
 	}
-	if req.BrandingConfig != nil {
-		processorReq.BrandingConfig = *req.BrandingConfig
+
+	if req.ReferralSettings != nil {
+		sharingChannels := make([]store.SharingChannel, len(req.ReferralSettings.SharingChannels))
+		for i, ch := range req.ReferralSettings.SharingChannels {
+			sharingChannels[i] = store.SharingChannel(ch)
+		}
+		processorReq.ReferralSettings = &processor.ReferralSettingsInput{
+			Enabled:                 req.ReferralSettings.Enabled,
+			PointsPerReferral:       req.ReferralSettings.PointsPerReferral,
+			VerifiedOnly:            req.ReferralSettings.VerifiedOnly,
+			PositionsToJump:         req.ReferralSettings.PositionsToJump,
+			ReferrerPositionsToJump: req.ReferralSettings.ReferrerPositionsToJump,
+			SharingChannels:         sharingChannels,
+		}
+	}
+
+	// Convert form fields
+	for _, f := range req.FormFields {
+		processorReq.FormFields = append(processorReq.FormFields, processor.FormFieldInput{
+			Name:              f.Name,
+			FieldType:         store.FormFieldType(f.FieldType),
+			Label:             f.Label,
+			Placeholder:       f.Placeholder,
+			Required:          f.Required,
+			ValidationPattern: f.ValidationPattern,
+			Options:           f.Options,
+			DisplayOrder:      f.DisplayOrder,
+		})
+	}
+
+	// Convert share messages
+	for _, m := range req.ShareMessages {
+		processorReq.ShareMessages = append(processorReq.ShareMessages, processor.ShareMessageInput{
+			Channel: store.SharingChannel(m.Channel),
+			Message: m.Message,
+		})
+	}
+
+	// Convert tracking integrations
+	for _, t := range req.TrackingIntegrations {
+		processorReq.TrackingIntegrations = append(processorReq.TrackingIntegrations, processor.TrackingIntegrationInput{
+			IntegrationType: store.TrackingIntegrationType(t.IntegrationType),
+			Enabled:         t.Enabled,
+			TrackingID:      t.TrackingID,
+			TrackingLabel:   t.TrackingLabel,
+		})
 	}
 
 	campaign, err := h.processor.UpdateCampaign(ctx, accountID, campaignID, processorReq)

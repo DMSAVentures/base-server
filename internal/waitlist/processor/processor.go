@@ -105,22 +105,18 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 	}
 
 	// Check captcha if enabled for this campaign
-	if p.captchaVerifier != nil && p.captchaVerifier.IsEnabled() && campaign.FormConfig != nil {
-		if captchaConfig, ok := campaign.FormConfig["captcha"].(map[string]interface{}); ok {
-			if enabled, ok := captchaConfig["enabled"].(bool); ok && enabled {
-				// Captcha is required for this campaign
-				if req.CaptchaToken == nil || *req.CaptchaToken == "" {
-					return SignupUserResponse{}, ErrCaptchaRequired
-				}
-				ipAddress := ""
-				if req.IPAddress != nil {
-					ipAddress = *req.IPAddress
-				}
-				if err := p.captchaVerifier.Verify(ctx, *req.CaptchaToken, ipAddress); err != nil {
-					p.logger.Info(ctx, "captcha verification failed")
-					return SignupUserResponse{}, ErrCaptchaFailed
-				}
-			}
+	if p.captchaVerifier != nil && p.captchaVerifier.IsEnabled() && campaign.FormSettings != nil && campaign.FormSettings.CaptchaEnabled {
+		// Captcha is required for this campaign
+		if req.CaptchaToken == nil || *req.CaptchaToken == "" {
+			return SignupUserResponse{}, ErrCaptchaRequired
+		}
+		ipAddress := ""
+		if req.IPAddress != nil {
+			ipAddress = *req.IPAddress
+		}
+		if err := p.captchaVerifier.Verify(ctx, *req.CaptchaToken, ipAddress); err != nil {
+			p.logger.Info(ctx, "captcha verification failed")
+			return SignupUserResponse{}, ErrCaptchaFailed
 		}
 	}
 
@@ -237,34 +233,26 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 
 	// Generate channel-specific referral codes if campaign has sharing channels
 	var referralCodes map[string]string
-	if campaign.ReferralConfig != nil {
-		if sharingChannels, ok := campaign.ReferralConfig["sharing_channels"]; ok {
-			if channelsSlice, ok := sharingChannels.([]interface{}); ok && len(channelsSlice) > 0 {
-				// Convert []interface{} to []string
-				channels := make([]string, 0, len(channelsSlice))
-				for _, ch := range channelsSlice {
-					if chStr, ok := ch.(string); ok {
-						channels = append(channels, chStr)
-					}
-				}
+	if campaign.ReferralSettings != nil && len(campaign.ReferralSettings.SharingChannels) > 0 {
+		// Convert SharingChannel slice to string slice
+		channels := make([]string, 0, len(campaign.ReferralSettings.SharingChannels))
+		for _, ch := range campaign.ReferralSettings.SharingChannels {
+			channels = append(channels, string(ch))
+		}
 
-				if len(channels) > 0 {
-					// Generate channel codes
-					codes, err := utils.GenerateChannelCodes(channels)
-					if err != nil {
-						p.logger.Error(ctx, "failed to generate channel codes", err)
-						// Don't fail the signup, just log the error
-					} else if len(codes) > 0 {
-						// Store channel codes in database
-						_, err := p.store.CreateUserChannelCodes(ctx, user.ID, codes)
-						if err != nil {
-							p.logger.Error(ctx, "failed to store channel codes", err)
-							// Don't fail the signup, just log the error
-						} else {
-							referralCodes = codes
-						}
-					}
-				}
+		// Generate channel codes
+		codes, err := utils.GenerateChannelCodes(channels)
+		if err != nil {
+			p.logger.Error(ctx, "failed to generate channel codes", err)
+			// Don't fail the signup, just log the error
+		} else if len(codes) > 0 {
+			// Store channel codes in database
+			_, err := p.store.CreateUserChannelCodes(ctx, user.ID, codes)
+			if err != nil {
+				p.logger.Error(ctx, "failed to store channel codes", err)
+				// Don't fail the signup, just log the error
+			} else {
+				referralCodes = codes
 			}
 		}
 	}

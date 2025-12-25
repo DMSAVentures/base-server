@@ -17,10 +17,6 @@ type CreateCampaignParams struct {
 	Slug             string
 	Description      *string
 	Type             string
-	FormConfig       JSONB
-	ReferralConfig   JSONB
-	EmailConfig      JSONB
-	BrandingConfig   JSONB
 	PrivacyPolicyURL *string
 	TermsURL         *string
 	MaxSignups       *int
@@ -33,19 +29,15 @@ type UpdateCampaignParams struct {
 	Status           *string
 	LaunchDate       *time.Time
 	EndDate          *time.Time
-	FormConfig       JSONB
-	ReferralConfig   JSONB
-	EmailConfig      JSONB
-	BrandingConfig   JSONB
 	PrivacyPolicyURL *string
 	TermsURL         *string
 	MaxSignups       *int
 }
 
 const sqlCreateCampaign = `
-INSERT INTO campaigns (account_id, name, slug, description, type, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
+INSERT INTO campaigns (account_id, name, slug, description, type, privacy_policy_url, terms_url, max_signups)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
 `
 
 // CreateCampaign creates a new campaign
@@ -57,10 +49,6 @@ func (s *Store) CreateCampaign(ctx context.Context, params CreateCampaignParams)
 		params.Slug,
 		params.Description,
 		params.Type,
-		params.FormConfig,
-		params.ReferralConfig,
-		params.EmailConfig,
-		params.BrandingConfig,
 		params.PrivacyPolicyURL,
 		params.TermsURL,
 		params.MaxSignups)
@@ -74,8 +62,7 @@ func (s *Store) CreateCampaign(ctx context.Context, params CreateCampaignParams)
 const sqlGetCampaignByID = `
 SELECT
     c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
     COALESCE(COUNT(w.id), 0)::int as total_signups,
     COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
     COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -103,8 +90,7 @@ func (s *Store) GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (Camp
 const sqlGetCampaignBySlug = `
 SELECT
     c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
     COALESCE(COUNT(w.id), 0)::int as total_signups,
     COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
     COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -132,8 +118,7 @@ func (s *Store) GetCampaignBySlug(ctx context.Context, accountID uuid.UUID, slug
 const sqlGetCampaignsByAccountID = `
 SELECT
     c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
     COALESCE(COUNT(w.id), 0)::int as total_signups,
     COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
     COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -159,8 +144,7 @@ func (s *Store) GetCampaignsByAccountID(ctx context.Context, accountID uuid.UUID
 const sqlGetCampaignsByStatus = `
 SELECT
     c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-    c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-    c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+    c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
     COALESCE(COUNT(w.id), 0)::int as total_signups,
     COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
     COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -206,8 +190,7 @@ func (s *Store) ListCampaigns(ctx context.Context, params ListCampaignsParams) (
 	// Build dynamic query
 	query := `SELECT
 	          c.id, c.account_id, c.name, c.slug, c.description, c.status, c.type,
-	          c.launch_date, c.end_date, c.form_config, c.referral_config, c.email_config,
-	          c.branding_config, c.privacy_policy_url, c.terms_url, c.max_signups,
+	          c.launch_date, c.end_date, c.privacy_policy_url, c.terms_url, c.max_signups,
 	          COALESCE(COUNT(w.id), 0)::int as total_signups,
 	          COALESCE(COUNT(w.id) FILTER (WHERE w.email_verified = true), 0)::int as total_verified,
 	          COALESCE(COUNT(w.id) FILTER (WHERE w.referred_by_id IS NOT NULL), 0)::int as total_referrals,
@@ -274,16 +257,12 @@ SET name = COALESCE($3, name),
     status = COALESCE($5, status),
     launch_date = COALESCE($6, launch_date),
     end_date = COALESCE($7, end_date),
-    form_config = COALESCE($8, form_config),
-    referral_config = COALESCE($9, referral_config),
-    email_config = COALESCE($10, email_config),
-    branding_config = COALESCE($11, branding_config),
-    privacy_policy_url = COALESCE($12, privacy_policy_url),
-    terms_url = COALESCE($13, terms_url),
-    max_signups = COALESCE($14, max_signups),
+    privacy_policy_url = COALESCE($8, privacy_policy_url),
+    terms_url = COALESCE($9, terms_url),
+    max_signups = COALESCE($10, max_signups),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
-RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
+RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
 `
 
 // UpdateCampaign updates a campaign
@@ -297,10 +276,6 @@ func (s *Store) UpdateCampaign(ctx context.Context, accountID, campaignID uuid.U
 		params.Status,
 		params.LaunchDate,
 		params.EndDate,
-		params.FormConfig,
-		params.ReferralConfig,
-		params.EmailConfig,
-		params.BrandingConfig,
 		params.PrivacyPolicyURL,
 		params.TermsURL,
 		params.MaxSignups)
@@ -318,7 +293,7 @@ const sqlUpdateCampaignStatus = `
 UPDATE campaigns
 SET status = $3, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
-RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, form_config, referral_config, email_config, branding_config, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
+RETURNING id, account_id, name, slug, description, status, type, launch_date, end_date, privacy_policy_url, terms_url, max_signups, total_signups, total_verified, total_referrals, created_at, updated_at, deleted_at
 `
 
 // UpdateCampaignStatus updates a campaign's status
@@ -408,4 +383,99 @@ func (s *Store) IncrementCampaignReferrals(ctx context.Context, campaignID uuid.
 		return fmt.Errorf("failed to increment campaign referrals: %w", err)
 	}
 	return nil
+}
+
+// GetCampaignWithSettings retrieves a campaign with all its related settings
+func (s *Store) GetCampaignWithSettings(ctx context.Context, campaignID uuid.UUID) (Campaign, error) {
+	campaign, err := s.GetCampaignByID(ctx, campaignID)
+	if err != nil {
+		return Campaign{}, err
+	}
+
+	return s.loadCampaignSettings(ctx, campaign)
+}
+
+// GetCampaignBySlugWithSettings retrieves a campaign by slug with all its related settings
+func (s *Store) GetCampaignBySlugWithSettings(ctx context.Context, accountID uuid.UUID, slug string) (Campaign, error) {
+	campaign, err := s.GetCampaignBySlug(ctx, accountID, slug)
+	if err != nil {
+		return Campaign{}, err
+	}
+
+	return s.loadCampaignSettings(ctx, campaign)
+}
+
+// loadCampaignSettings loads all related settings for a campaign
+func (s *Store) loadCampaignSettings(ctx context.Context, campaign Campaign) (Campaign, error) {
+	// Load email settings
+	emailSettings, err := s.GetCampaignEmailSettings(ctx, campaign.ID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return Campaign{}, fmt.Errorf("failed to load email settings: %w", err)
+	}
+	if err == nil {
+		campaign.EmailSettings = &emailSettings
+	}
+
+	// Load branding settings
+	brandingSettings, err := s.GetCampaignBrandingSettings(ctx, campaign.ID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return Campaign{}, fmt.Errorf("failed to load branding settings: %w", err)
+	}
+	if err == nil {
+		campaign.BrandingSettings = &brandingSettings
+	}
+
+	// Load form settings
+	formSettings, err := s.GetCampaignFormSettings(ctx, campaign.ID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return Campaign{}, fmt.Errorf("failed to load form settings: %w", err)
+	}
+	if err == nil {
+		campaign.FormSettings = &formSettings
+	}
+
+	// Load referral settings
+	referralSettings, err := s.GetCampaignReferralSettings(ctx, campaign.ID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return Campaign{}, fmt.Errorf("failed to load referral settings: %w", err)
+	}
+	if err == nil {
+		campaign.ReferralSettings = &referralSettings
+	}
+
+	// Load form fields
+	formFields, err := s.GetCampaignFormFields(ctx, campaign.ID)
+	if err != nil {
+		return Campaign{}, fmt.Errorf("failed to load form fields: %w", err)
+	}
+	campaign.FormFields = formFields
+
+	// Load share messages
+	shareMessages, err := s.GetCampaignShareMessages(ctx, campaign.ID)
+	if err != nil {
+		return Campaign{}, fmt.Errorf("failed to load share messages: %w", err)
+	}
+	campaign.ShareMessages = shareMessages
+
+	// Load tracking integrations
+	trackingIntegrations, err := s.GetCampaignTrackingIntegrations(ctx, campaign.ID)
+	if err != nil {
+		return Campaign{}, fmt.Errorf("failed to load tracking integrations: %w", err)
+	}
+	campaign.TrackingIntegrations = trackingIntegrations
+
+	return campaign, nil
+}
+
+// LoadCampaignsSettings loads settings for multiple campaigns
+func (s *Store) LoadCampaignsSettings(ctx context.Context, campaigns []Campaign) ([]Campaign, error) {
+	result := make([]Campaign, len(campaigns))
+	for i, c := range campaigns {
+		loaded, err := s.loadCampaignSettings(ctx, c)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = loaded
+	}
+	return result, nil
 }

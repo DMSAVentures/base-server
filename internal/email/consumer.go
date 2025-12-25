@@ -169,8 +169,7 @@ func (c *EventConsumer) handleUserCreated(ctx context.Context, event kafka.Event
 	}
 
 	// Check if email verification is enabled
-	emailConfig, ok := campaign.EmailConfig["verification_enabled"]
-	if !ok || !emailConfig.(bool) {
+	if campaign.EmailSettings == nil || !campaign.EmailSettings.VerificationRequired {
 		// Email verification not enabled, skip
 		c.logger.Info(ctx, "Email verification not enabled for campaign, skipping")
 		return nil

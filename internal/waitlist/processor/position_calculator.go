@@ -54,29 +54,23 @@ func (pc *PositionCalculator) CalculatePositionsForCampaign(ctx context.Context,
 		return fmt.Errorf("failed to get campaign: %w", err)
 	}
 
-	// Check if email verification is required from campaign config
+	// Check if email verification is required from campaign email settings
 	emailVerificationRequired := false
-	if campaign.EmailConfig != nil {
-		if verificationRequired, ok := campaign.EmailConfig["verification_required"].(bool); ok {
-			emailVerificationRequired = verificationRequired
-		}
+	if campaign.EmailSettings != nil {
+		emailVerificationRequired = campaign.EmailSettings.VerificationRequired
 	}
 
-	// Get positions_to_jump from referral config (number of positions a referred user jumps ahead)
+	// Get positions_to_jump from referral settings (number of positions a referred user jumps ahead)
 	positionsToJump := 0
-	if campaign.ReferralConfig != nil {
-		if jump, ok := campaign.ReferralConfig["positions_to_jump"].(float64); ok {
-			positionsToJump = int(jump)
-		}
+	if campaign.ReferralSettings != nil {
+		positionsToJump = campaign.ReferralSettings.PositionsToJump
 	}
 
-	// Get referrer_positions_to_jump from referral config (positions the referrer jumps per referral)
+	// Get referrer_positions_to_jump from referral settings (positions the referrer jumps per referral)
 	// Default to 1 to maintain backward compatibility (each referral = 1 position)
 	referrerPositionsToJump := 1
-	if campaign.ReferralConfig != nil {
-		if jump, ok := campaign.ReferralConfig["referrer_positions_to_jump"].(float64); ok && int(jump) > 0 {
-			referrerPositionsToJump = int(jump)
-		}
+	if campaign.ReferralSettings != nil && campaign.ReferralSettings.ReferrerPositionsToJump > 0 {
+		referrerPositionsToJump = campaign.ReferralSettings.ReferrerPositionsToJump
 	}
 
 	ctx = observability.WithFields(ctx,

@@ -35,13 +35,82 @@ type CreateCampaignRequest struct {
 	Slug             string
 	Description      *string
 	Type             string
-	FormConfig       store.JSONB
-	ReferralConfig   store.JSONB
-	EmailConfig      store.JSONB
-	BrandingConfig   store.JSONB
 	PrivacyPolicyURL *string
 	TermsURL         *string
 	MaxSignups       *int
+
+	// Settings
+	EmailSettings        *EmailSettingsInput
+	BrandingSettings     *BrandingSettingsInput
+	FormSettings         *FormSettingsInput
+	ReferralSettings     *ReferralSettingsInput
+	FormFields           []FormFieldInput
+	ShareMessages        []ShareMessageInput
+	TrackingIntegrations []TrackingIntegrationInput
+}
+
+// EmailSettingsInput represents email settings input
+type EmailSettingsInput struct {
+	FromName             *string
+	FromEmail            *string
+	ReplyTo              *string
+	VerificationRequired bool
+	SendWelcomeEmail     bool
+}
+
+// BrandingSettingsInput represents branding settings input
+type BrandingSettingsInput struct {
+	LogoURL      *string
+	PrimaryColor *string
+	FontFamily   *string
+	CustomDomain *string
+}
+
+// FormSettingsInput represents form settings input
+type FormSettingsInput struct {
+	CaptchaEnabled  bool
+	CaptchaProvider *store.CaptchaProvider
+	CaptchaSiteKey  *string
+	DoubleOptIn     bool
+	Design          store.JSONB
+	SuccessTitle    *string
+	SuccessMessage  *string
+}
+
+// ReferralSettingsInput represents referral settings input
+type ReferralSettingsInput struct {
+	Enabled                 bool
+	PointsPerReferral       int
+	VerifiedOnly            bool
+	PositionsToJump         int
+	ReferrerPositionsToJump int
+	SharingChannels         []store.SharingChannel
+}
+
+// FormFieldInput represents a form field input
+type FormFieldInput struct {
+	Name              string
+	FieldType         store.FormFieldType
+	Label             string
+	Placeholder       *string
+	Required          bool
+	ValidationPattern *string
+	Options           []string
+	DisplayOrder      int
+}
+
+// ShareMessageInput represents a share message input
+type ShareMessageInput struct {
+	Channel store.SharingChannel
+	Message string
+}
+
+// TrackingIntegrationInput represents a tracking integration input
+type TrackingIntegrationInput struct {
+	IntegrationType store.TrackingIntegrationType
+	Enabled         bool
+	TrackingID      string
+	TrackingLabel   *string
 }
 
 // CreateCampaign creates a new campaign for an account
@@ -66,30 +135,12 @@ func (p *CampaignProcessor) CreateCampaign(ctx context.Context, accountID uuid.U
 		return store.Campaign{}, err
 	}
 
-	// Set defaults for JSONB fields if not provided
-	if req.FormConfig == nil {
-		req.FormConfig = store.JSONB{}
-	}
-	if req.ReferralConfig == nil {
-		req.ReferralConfig = store.JSONB{}
-	}
-	if req.EmailConfig == nil {
-		req.EmailConfig = store.JSONB{}
-	}
-	if req.BrandingConfig == nil {
-		req.BrandingConfig = store.JSONB{}
-	}
-
 	params := store.CreateCampaignParams{
 		AccountID:        accountID,
 		Name:             req.Name,
 		Slug:             req.Slug,
 		Description:      req.Description,
 		Type:             req.Type,
-		FormConfig:       req.FormConfig,
-		ReferralConfig:   req.ReferralConfig,
-		EmailConfig:      req.EmailConfig,
-		BrandingConfig:   req.BrandingConfig,
 		PrivacyPolicyURL: req.PrivacyPolicyURL,
 		TermsURL:         req.TermsURL,
 		MaxSignups:       req.MaxSignups,
@@ -101,18 +152,154 @@ func (p *CampaignProcessor) CreateCampaign(ctx context.Context, accountID uuid.U
 		return store.Campaign{}, err
 	}
 
+	// Create settings
+	if err := p.createCampaignSettings(ctx, campaign.ID, req); err != nil {
+		p.logger.Error(ctx, "failed to create campaign settings", err)
+		return store.Campaign{}, err
+	}
+
+	// Load campaign with settings
+	campaignWithSettings, err := p.store.GetCampaignWithSettings(ctx, campaign.ID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to load campaign with settings", err)
+		return store.Campaign{}, err
+	}
+
 	p.logger.Info(ctx, "campaign created successfully")
-	return campaign, nil
+	return campaignWithSettings, nil
 }
 
-// GetCampaign retrieves a campaign by ID
+// createCampaignSettings creates all settings for a campaign
+func (p *CampaignProcessor) createCampaignSettings(ctx context.Context, campaignID uuid.UUID, req CreateCampaignRequest) error {
+	// Create email settings
+	if req.EmailSettings != nil {
+		_, err := p.store.UpsertCampaignEmailSettings(ctx, store.CreateCampaignEmailSettingsParams{
+			CampaignID:           campaignID,
+			FromName:             req.EmailSettings.FromName,
+			FromEmail:            req.EmailSettings.FromEmail,
+			ReplyTo:              req.EmailSettings.ReplyTo,
+			VerificationRequired: req.EmailSettings.VerificationRequired,
+			SendWelcomeEmail:     req.EmailSettings.SendWelcomeEmail,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create branding settings
+	if req.BrandingSettings != nil {
+		_, err := p.store.UpsertCampaignBrandingSettings(ctx, store.CreateCampaignBrandingSettingsParams{
+			CampaignID:   campaignID,
+			LogoURL:      req.BrandingSettings.LogoURL,
+			PrimaryColor: req.BrandingSettings.PrimaryColor,
+			FontFamily:   req.BrandingSettings.FontFamily,
+			CustomDomain: req.BrandingSettings.CustomDomain,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create form settings
+	if req.FormSettings != nil {
+		_, err := p.store.UpsertCampaignFormSettings(ctx, store.CreateCampaignFormSettingsParams{
+			CampaignID:      campaignID,
+			CaptchaEnabled:  req.FormSettings.CaptchaEnabled,
+			CaptchaProvider: req.FormSettings.CaptchaProvider,
+			CaptchaSiteKey:  req.FormSettings.CaptchaSiteKey,
+			DoubleOptIn:     req.FormSettings.DoubleOptIn,
+			Design:          req.FormSettings.Design,
+			SuccessTitle:    req.FormSettings.SuccessTitle,
+			SuccessMessage:  req.FormSettings.SuccessMessage,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create referral settings
+	if req.ReferralSettings != nil {
+		_, err := p.store.UpsertCampaignReferralSettings(ctx, store.CreateCampaignReferralSettingsParams{
+			CampaignID:              campaignID,
+			Enabled:                 req.ReferralSettings.Enabled,
+			PointsPerReferral:       req.ReferralSettings.PointsPerReferral,
+			VerifiedOnly:            req.ReferralSettings.VerifiedOnly,
+			PositionsToJump:         req.ReferralSettings.PositionsToJump,
+			ReferrerPositionsToJump: req.ReferralSettings.ReferrerPositionsToJump,
+			SharingChannels:         req.ReferralSettings.SharingChannels,
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create form fields
+	if len(req.FormFields) > 0 {
+		fields := make([]store.CreateCampaignFormFieldParams, len(req.FormFields))
+		for i, f := range req.FormFields {
+			fields[i] = store.CreateCampaignFormFieldParams{
+				CampaignID:        campaignID,
+				Name:              f.Name,
+				FieldType:         f.FieldType,
+				Label:             f.Label,
+				Placeholder:       f.Placeholder,
+				Required:          f.Required,
+				ValidationPattern: f.ValidationPattern,
+				Options:           f.Options,
+				DisplayOrder:      f.DisplayOrder,
+			}
+		}
+		_, err := p.store.ReplaceCampaignFormFields(ctx, campaignID, fields)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create share messages
+	if len(req.ShareMessages) > 0 {
+		messages := make([]store.CreateCampaignShareMessageParams, len(req.ShareMessages))
+		for i, m := range req.ShareMessages {
+			messages[i] = store.CreateCampaignShareMessageParams{
+				CampaignID: campaignID,
+				Channel:    m.Channel,
+				Message:    m.Message,
+			}
+		}
+		_, err := p.store.ReplaceCampaignShareMessages(ctx, campaignID, messages)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create tracking integrations
+	if len(req.TrackingIntegrations) > 0 {
+		integrations := make([]store.CreateCampaignTrackingIntegrationParams, len(req.TrackingIntegrations))
+		for i, t := range req.TrackingIntegrations {
+			integrations[i] = store.CreateCampaignTrackingIntegrationParams{
+				CampaignID:      campaignID,
+				IntegrationType: t.IntegrationType,
+				Enabled:         t.Enabled,
+				TrackingID:      t.TrackingID,
+				TrackingLabel:   t.TrackingLabel,
+			}
+		}
+		_, err := p.store.ReplaceCampaignTrackingIntegrations(ctx, campaignID, integrations)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetCampaign retrieves a campaign by ID with all settings
 func (p *CampaignProcessor) GetCampaign(ctx context.Context, accountID, campaignID uuid.UUID) (store.Campaign, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 	)
 
-	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
+	campaign, err := p.store.GetCampaignWithSettings(ctx, campaignID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return store.Campaign{}, ErrCampaignNotFound
@@ -135,7 +322,7 @@ func (p *CampaignProcessor) GetPublicCampaign(ctx context.Context, campaignID uu
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 	)
 
-	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
+	campaign, err := p.store.GetCampaignWithSettings(ctx, campaignID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return store.Campaign{}, ErrCampaignNotFound
@@ -199,13 +386,18 @@ type UpdateCampaignRequest struct {
 	Description      *string
 	LaunchDate       *string
 	EndDate          *string
-	FormConfig       store.JSONB
-	ReferralConfig   store.JSONB
-	EmailConfig      store.JSONB
-	BrandingConfig   store.JSONB
 	PrivacyPolicyURL *string
 	TermsURL         *string
 	MaxSignups       *int
+
+	// Settings
+	EmailSettings        *EmailSettingsInput
+	BrandingSettings     *BrandingSettingsInput
+	FormSettings         *FormSettingsInput
+	ReferralSettings     *ReferralSettingsInput
+	FormFields           []FormFieldInput
+	ShareMessages        []ShareMessageInput
+	TrackingIntegrations []TrackingIntegrationInput
 }
 
 // UpdateCampaign updates a campaign
@@ -218,16 +410,12 @@ func (p *CampaignProcessor) UpdateCampaign(ctx context.Context, accountID, campa
 	params := store.UpdateCampaignParams{
 		Name:             req.Name,
 		Description:      req.Description,
-		FormConfig:       req.FormConfig,
-		ReferralConfig:   req.ReferralConfig,
-		EmailConfig:      req.EmailConfig,
-		BrandingConfig:   req.BrandingConfig,
 		PrivacyPolicyURL: req.PrivacyPolicyURL,
 		TermsURL:         req.TermsURL,
 		MaxSignups:       req.MaxSignups,
 	}
 
-	campaign, err := p.store.UpdateCampaign(ctx, accountID, campaignID, params)
+	_, err := p.store.UpdateCampaign(ctx, accountID, campaignID, params)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return store.Campaign{}, ErrCampaignNotFound
@@ -236,8 +424,31 @@ func (p *CampaignProcessor) UpdateCampaign(ctx context.Context, accountID, campa
 		return store.Campaign{}, err
 	}
 
+	// Update settings using CreateCampaignRequest format for reuse
+	settingsReq := CreateCampaignRequest{
+		EmailSettings:        req.EmailSettings,
+		BrandingSettings:     req.BrandingSettings,
+		FormSettings:         req.FormSettings,
+		ReferralSettings:     req.ReferralSettings,
+		FormFields:           req.FormFields,
+		ShareMessages:        req.ShareMessages,
+		TrackingIntegrations: req.TrackingIntegrations,
+	}
+
+	if err := p.createCampaignSettings(ctx, campaignID, settingsReq); err != nil {
+		p.logger.Error(ctx, "failed to update campaign settings", err)
+		return store.Campaign{}, err
+	}
+
+	// Load campaign with settings
+	campaignWithSettings, err := p.store.GetCampaignWithSettings(ctx, campaignID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to load campaign with settings", err)
+		return store.Campaign{}, err
+	}
+
 	p.logger.Info(ctx, "campaign updated successfully")
-	return campaign, nil
+	return campaignWithSettings, nil
 }
 
 // UpdateCampaignStatus updates a campaign's status
@@ -253,12 +464,19 @@ func (p *CampaignProcessor) UpdateCampaignStatus(ctx context.Context, accountID,
 		return store.Campaign{}, ErrInvalidCampaignStatus
 	}
 
-	campaign, err := p.store.UpdateCampaignStatus(ctx, accountID, campaignID, status)
+	_, err := p.store.UpdateCampaignStatus(ctx, accountID, campaignID, status)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return store.Campaign{}, ErrCampaignNotFound
 		}
 		p.logger.Error(ctx, "failed to update campaign status", err)
+		return store.Campaign{}, err
+	}
+
+	// Load campaign with settings
+	campaign, err := p.store.GetCampaignWithSettings(ctx, campaignID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to load campaign with settings", err)
 		return store.Campaign{}, err
 	}
 
