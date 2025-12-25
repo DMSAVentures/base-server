@@ -44,7 +44,7 @@ type BrandingSettingsRequest struct {
 // FormSettingsRequest represents form settings in HTTP request
 type FormSettingsRequest struct {
 	CaptchaEnabled  bool           `json:"captcha_enabled"`
-	CaptchaProvider *string        `json:"captcha_provider,omitempty"`
+	CaptchaProvider *string        `json:"captcha_provider,omitempty" binding:"omitempty,oneof=turnstile recaptcha hcaptcha"`
 	CaptchaSiteKey  *string        `json:"captcha_site_key,omitempty"`
 	DoubleOptIn     bool           `json:"double_opt_in"`
 	Design          map[string]any `json:"design"`
@@ -55,18 +55,18 @@ type FormSettingsRequest struct {
 // ReferralSettingsRequest represents referral settings in HTTP request
 type ReferralSettingsRequest struct {
 	Enabled                 bool     `json:"enabled"`
-	PointsPerReferral       int      `json:"points_per_referral"`
+	PointsPerReferral       int      `json:"points_per_referral" binding:"gte=0"`
 	VerifiedOnly            bool     `json:"verified_only"`
-	PositionsToJump         int      `json:"positions_to_jump"`
-	ReferrerPositionsToJump int      `json:"referrer_positions_to_jump"`
-	SharingChannels         []string `json:"sharing_channels"`
+	PositionsToJump         int      `json:"positions_to_jump" binding:"gte=0"`
+	ReferrerPositionsToJump int      `json:"referrer_positions_to_jump" binding:"gte=0"`
+	SharingChannels         []string `json:"sharing_channels" binding:"dive,oneof=email twitter facebook linkedin whatsapp"`
 }
 
 // FormFieldRequest represents a form field in HTTP request
 type FormFieldRequest struct {
-	Name              string   `json:"name" binding:"required"`
-	FieldType         string   `json:"field_type" binding:"required"`
-	Label             string   `json:"label" binding:"required"`
+	Name              string   `json:"name" binding:"required,min=1"`
+	FieldType         string   `json:"field_type" binding:"required,oneof=email text textarea select checkbox radio phone url date number"`
+	Label             string   `json:"label" binding:"required,min=1"`
 	Placeholder       *string  `json:"placeholder,omitempty"`
 	Required          bool     `json:"required"`
 	ValidationPattern *string  `json:"validation_pattern,omitempty"`
@@ -76,15 +76,15 @@ type FormFieldRequest struct {
 
 // ShareMessageRequest represents a share message in HTTP request
 type ShareMessageRequest struct {
-	Channel string `json:"channel" binding:"required"`
-	Message string `json:"message" binding:"required"`
+	Channel string `json:"channel" binding:"required,oneof=email twitter facebook linkedin whatsapp"`
+	Message string `json:"message" binding:"required,min=1"`
 }
 
 // TrackingIntegrationRequest represents a tracking integration in HTTP request
 type TrackingIntegrationRequest struct {
-	IntegrationType string  `json:"integration_type" binding:"required"`
+	IntegrationType string  `json:"integration_type" binding:"required,oneof=google_analytics meta_pixel google_ads tiktok_pixel linkedin_insight"`
 	Enabled         bool    `json:"enabled"`
-	TrackingID      string  `json:"tracking_id" binding:"required"`
+	TrackingID      string  `json:"tracking_id" binding:"required,min=1"`
 	TrackingLabel   *string `json:"tracking_label,omitempty"`
 }
 
