@@ -130,6 +130,11 @@ func (p *EmailEventProcessor) handleUserCreated(ctx context.Context, event worke
 		referralLink = rl
 	}
 
+	referralCount := 0
+	if rc, ok := eventData.User["referral_count"].(float64); ok {
+		referralCount = int(rc)
+	}
+
 	campaignName := campaign.Name
 
 	// Decide which email to send based on settings
@@ -151,8 +156,16 @@ func (p *EmailEventProcessor) handleUserCreated(ctx context.Context, event worke
 		p.logger.Info(ctx, fmt.Sprintf("Sending verification email to %s for campaign %s",
 			email, campaignName))
 
-		err = p.emailService.SendWaitlistVerificationEmail(
-			ctx, email, firstName, campaignName, verificationLink, referralLink, position)
+		// Try to use custom template from database
+		err = p.sendEmailWithCustomTemplate(ctx, campaignID, "verification", email, TemplateData{
+			FirstName:        firstName,
+			Email:            email,
+			CampaignName:     campaignName,
+			VerificationLink: verificationLink,
+			ReferralLink:     referralLink,
+			Position:         position,
+			ReferralCount:    referralCount,
+		})
 		if err != nil {
 			return fmt.Errorf("failed to send verification email: %w", err)
 		}
@@ -163,13 +176,15 @@ func (p *EmailEventProcessor) handleUserCreated(ctx context.Context, event worke
 		p.logger.Info(ctx, fmt.Sprintf("Sending welcome email to %s for campaign %s (no verification required)",
 			email, campaignName))
 
-		referralCount := 0
-		if rc, ok := eventData.User["referral_count"].(float64); ok {
-			referralCount = int(rc)
-		}
-
-		err = p.emailService.SendWaitlistWelcomeEmail(
-			ctx, email, firstName, campaignName, referralLink, position, referralCount)
+		// Try to use custom template from database
+		err = p.sendEmailWithCustomTemplate(ctx, campaignID, "welcome", email, TemplateData{
+			FirstName:     firstName,
+			Email:         email,
+			CampaignName:  campaignName,
+			ReferralLink:  referralLink,
+			Position:      position,
+			ReferralCount: referralCount,
+		})
 		if err != nil {
 			return fmt.Errorf("failed to send welcome email: %w", err)
 		}
@@ -241,12 +256,45 @@ func (p *EmailEventProcessor) handleUserVerified(ctx context.Context, event work
 	p.logger.Info(ctx, fmt.Sprintf("Sending welcome email to %s for campaign %s",
 		email, campaignName))
 
-	err = p.emailService.SendWaitlistWelcomeEmail(
-		ctx, email, firstName, campaignName, referralLink, position, referralCount)
+	// Try to use custom template from database
+	err = p.sendEmailWithCustomTemplate(ctx, campaignID, "welcome", email, TemplateData{
+		FirstName:     firstName,
+		Email:         email,
+		CampaignName:  campaignName,
+		ReferralLink:  referralLink,
+		Position:      position,
+		ReferralCount: referralCount,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to send welcome email: %w", err)
 	}
 
 	p.logger.Info(ctx, fmt.Sprintf("Successfully sent welcome email to %s", email))
 	return nil
+}
+
+// sendEmailWithCustomTemplate tries to send an email using a custom template from the database.
+// If no custom template exists or it's disabled, it falls back to the default hardcoded template.
+func (p *EmailEventProcessor) sendEmailWithCustomTemplate(ctx context.Context, campaignID uuid.UUID, templateType, recipientEmail string, data TemplateData) error {
+	// Try to get custom template from database
+	template, err := p.store.GetEmailTemplateByType(ctx, campaignID, templateType)
+	if err == nil && template.Enabled {
+		// Custom template found and enabled - use it
+		p.logger.Info(ctx, fmt.Sprintf("Using custom %s template for campaign", templateType))
+		return p.emailService.SendCustomTemplateEmail(ctx, recipientEmail, template.Subject, template.HTMLBody, data)
+	}
+
+	// Fall back to default templates
+	p.logger.Info(ctx, fmt.Sprintf("Using default %s template (no custom template found or disabled)", templateType))
+
+	switch templateType {
+	case "verification":
+		return p.emailService.SendWaitlistVerificationEmail(
+			ctx, recipientEmail, data.FirstName, data.CampaignName, data.VerificationLink, data.ReferralLink, data.Position)
+	case "welcome":
+		return p.emailService.SendWaitlistWelcomeEmail(
+			ctx, recipientEmail, data.FirstName, data.CampaignName, data.ReferralLink, data.Position, data.ReferralCount)
+	default:
+		return fmt.Errorf("unknown template type: %s", templateType)
+	}
 }

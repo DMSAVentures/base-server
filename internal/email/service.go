@@ -389,3 +389,45 @@ func (s *EmailService) SendWaitlistPositionUpdateEmail(ctx context.Context, to, 
 
 	return nil
 }
+
+// RenderCustomTemplate renders a custom template string with the provided data
+func (s *EmailService) RenderCustomTemplate(ctx context.Context, templateContent string, data TemplateData) (string, error) {
+	if templateContent == "" {
+		return "", ErrEmptyTemplate
+	}
+
+	tmpl, err := template.New("custom").Parse(templateContent)
+	if err != nil {
+		s.logger.Error(ctx, "failed to parse custom template", err)
+		return "", fmt.Errorf("failed to parse template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		s.logger.Error(ctx, "failed to execute custom template", err)
+		return "", fmt.Errorf("failed to execute template: %w", err)
+	}
+
+	return buf.String(), nil
+}
+
+// SendCustomTemplateEmail renders a custom template and sends it
+func (s *EmailService) SendCustomTemplateEmail(ctx context.Context, to, subject, templateContent string, data TemplateData) error {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "email_type", Value: "custom_template"},
+		observability.Field{Key: "recipient", Value: to},
+	)
+
+	htmlContent, err := s.RenderCustomTemplate(ctx, templateContent, data)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrEmptyTemplate, err.Error())
+	}
+
+	_, err = s.mailClient.SendEmail(ctx, s.defaultSender, to, subject, htmlContent)
+	if err != nil {
+		s.logger.Error(ctx, "failed to send custom template email", err)
+		return fmt.Errorf("%w: %s", ErrSendingEmail, err.Error())
+	}
+
+	return nil
+}

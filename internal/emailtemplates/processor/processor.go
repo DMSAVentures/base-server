@@ -58,7 +58,7 @@ type CreateEmailTemplateRequest struct {
 	Type              string
 	Subject           string
 	HTMLBody          string
-	TextBody          string
+	BlocksJSON        interface{}
 	Enabled           *bool
 	SendAutomatically *bool
 }
@@ -79,10 +79,6 @@ func (p *EmailTemplateProcessor) CreateEmailTemplate(ctx context.Context, accoun
 	// Validate template content (check if it's valid Go template syntax)
 	if err := validateTemplateContent(req.HTMLBody); err != nil {
 		p.logger.Error(ctx, "invalid HTML template content", err)
-		return store.EmailTemplate{}, ErrInvalidTemplateContent
-	}
-	if err := validateTemplateContent(req.TextBody); err != nil {
-		p.logger.Error(ctx, "invalid text template content", err)
 		return store.EmailTemplate{}, ErrInvalidTemplateContent
 	}
 
@@ -117,7 +113,7 @@ func (p *EmailTemplateProcessor) CreateEmailTemplate(ctx context.Context, accoun
 		Type:              req.Type,
 		Subject:           req.Subject,
 		HTMLBody:          req.HTMLBody,
-		TextBody:          req.TextBody,
+		BlocksJSON:        convertToJSONB(req.BlocksJSON),
 		Enabled:           enabled,
 		SendAutomatically: sendAutomatically,
 	}
@@ -227,7 +223,7 @@ type UpdateEmailTemplateRequest struct {
 	Name              *string
 	Subject           *string
 	HTMLBody          *string
-	TextBody          *string
+	BlocksJSON        interface{}
 	Enabled           *bool
 	SendAutomatically *bool
 }
@@ -275,18 +271,12 @@ func (p *EmailTemplateProcessor) UpdateEmailTemplate(ctx context.Context, accoun
 			return store.EmailTemplate{}, ErrInvalidTemplateContent
 		}
 	}
-	if req.TextBody != nil {
-		if err := validateTemplateContent(*req.TextBody); err != nil {
-			p.logger.Error(ctx, "invalid text template content", err)
-			return store.EmailTemplate{}, ErrInvalidTemplateContent
-		}
-	}
 
 	params := store.UpdateEmailTemplateParams{
 		Name:              req.Name,
 		Subject:           req.Subject,
 		HTMLBody:          req.HTMLBody,
-		TextBody:          req.TextBody,
+		BlocksJSON:        convertToJSONB(req.BlocksJSON),
 		Enabled:           req.Enabled,
 		SendAutomatically: req.SendAutomatically,
 	}
@@ -393,6 +383,21 @@ func (p *EmailTemplateProcessor) SendTestEmail(ctx context.Context, accountID, c
 }
 
 // Helper functions
+
+// convertToJSONB converts an interface{} to *store.JSONB
+func convertToJSONB(data interface{}) *store.JSONB {
+	if data == nil {
+		return nil
+	}
+
+	// If it's already a map[string]interface{}, convert directly
+	if m, ok := data.(map[string]interface{}); ok {
+		jsonb := store.JSONB(m)
+		return &jsonb
+	}
+
+	return nil
+}
 
 func isValidTemplateType(templateType string) bool {
 	validTypes := map[string]bool{

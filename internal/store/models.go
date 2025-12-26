@@ -508,8 +508,8 @@ type EmailTemplate struct {
 	Type       string    `db:"type" json:"type"`
 	Subject    string    `db:"subject" json:"subject"`
 
-	HTMLBody string `db:"html_body" json:"html_body"`
-	TextBody string `db:"text_body" json:"text_body"`
+	HTMLBody   string `db:"html_body" json:"html_body"`
+	BlocksJSON *JSONB `db:"blocks_json" json:"blocks_json,omitempty"`
 
 	Enabled           bool `db:"enabled" json:"enabled"`
 	SendAutomatically bool `db:"send_automatically" json:"send_automatically"`

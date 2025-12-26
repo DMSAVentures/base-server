@@ -16,7 +16,7 @@ type CreateEmailTemplateParams struct {
 	Type              string
 	Subject           string
 	HTMLBody          string
-	TextBody          string
+	BlocksJSON        *JSONB
 	Enabled           bool
 	SendAutomatically bool
 	VariantName       *string
@@ -24,9 +24,9 @@ type CreateEmailTemplateParams struct {
 }
 
 const sqlCreateEmailTemplate = `
-INSERT INTO email_templates (campaign_id, name, type, subject, html_body, text_body, enabled, send_automatically, variant_name, variant_weight)
+INSERT INTO email_templates (campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-RETURNING id, campaign_id, name, type, subject, html_body, text_body, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
+RETURNING id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
 `
 
 // CreateEmailTemplate creates a new email template
@@ -38,7 +38,7 @@ func (s *Store) CreateEmailTemplate(ctx context.Context, params CreateEmailTempl
 		params.Type,
 		params.Subject,
 		params.HTMLBody,
-		params.TextBody,
+		params.BlocksJSON,
 		params.Enabled,
 		params.SendAutomatically,
 		params.VariantName,
@@ -50,7 +50,7 @@ func (s *Store) CreateEmailTemplate(ctx context.Context, params CreateEmailTempl
 }
 
 const sqlGetEmailTemplateByID = `
-SELECT id, campaign_id, name, type, subject, html_body, text_body, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
+SELECT id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
 FROM email_templates
 WHERE id = $1 AND deleted_at IS NULL
 `
@@ -69,7 +69,7 @@ func (s *Store) GetEmailTemplateByID(ctx context.Context, templateID uuid.UUID) 
 }
 
 const sqlGetEmailTemplatesByCampaign = `
-SELECT id, campaign_id, name, type, subject, html_body, text_body, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
+SELECT id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
 FROM email_templates
 WHERE campaign_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
@@ -86,7 +86,7 @@ func (s *Store) GetEmailTemplatesByCampaign(ctx context.Context, campaignID uuid
 }
 
 const sqlGetEmailTemplateByType = `
-SELECT id, campaign_id, name, type, subject, html_body, text_body, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
+SELECT id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
 FROM email_templates
 WHERE campaign_id = $1 AND type = $2 AND enabled = TRUE AND deleted_at IS NULL
 ORDER BY created_at DESC
@@ -111,12 +111,12 @@ UPDATE email_templates
 SET name = COALESCE($2, name),
     subject = COALESCE($3, subject),
     html_body = COALESCE($4, html_body),
-    text_body = COALESCE($5, text_body),
+    blocks_json = COALESCE($5, blocks_json),
     enabled = COALESCE($6, enabled),
     send_automatically = COALESCE($7, send_automatically),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, campaign_id, name, type, subject, html_body, text_body, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
+RETURNING id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
 `
 
 // UpdateEmailTemplateParams represents parameters for updating an email template
@@ -124,7 +124,7 @@ type UpdateEmailTemplateParams struct {
 	Name              *string
 	Subject           *string
 	HTMLBody          *string
-	TextBody          *string
+	BlocksJSON        *JSONB
 	Enabled           *bool
 	SendAutomatically *bool
 }
@@ -137,7 +137,7 @@ func (s *Store) UpdateEmailTemplate(ctx context.Context, templateID uuid.UUID, p
 		params.Name,
 		params.Subject,
 		params.HTMLBody,
-		params.TextBody,
+		params.BlocksJSON,
 		params.Enabled,
 		params.SendAutomatically)
 	if err != nil {

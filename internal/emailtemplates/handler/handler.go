@@ -24,13 +24,13 @@ func New(processor processor.EmailTemplateProcessor, logger *observability.Logge
 
 // CreateEmailTemplateRequest represents the HTTP request for creating an email template
 type CreateEmailTemplateRequest struct {
-	Name              string `json:"name" binding:"required,max=255"`
-	Type              string `json:"type" binding:"required,oneof=verification welcome position_update reward_earned milestone custom"`
-	Subject           string `json:"subject" binding:"required,max=255"`
-	HTMLBody          string `json:"html_body" binding:"required"`
-	TextBody          string `json:"text_body" binding:"required"`
-	Enabled           *bool  `json:"enabled"`
-	SendAutomatically *bool  `json:"send_automatically"`
+	Name              string      `json:"name" binding:"required,max=255"`
+	Type              string      `json:"type" binding:"required,oneof=verification welcome position_update reward_earned milestone custom"`
+	Subject           string      `json:"subject" binding:"required,max=255"`
+	HTMLBody          string      `json:"html_body" binding:"required"`
+	BlocksJSON        interface{} `json:"blocks_json"`
+	Enabled           *bool       `json:"enabled"`
+	SendAutomatically *bool       `json:"send_automatically"`
 }
 
 // HandleCreateEmailTemplate handles POST /api/v1/campaigns/:campaign_id/email-templates
@@ -71,7 +71,7 @@ func (h *Handler) HandleCreateEmailTemplate(c *gin.Context) {
 		Type:              req.Type,
 		Subject:           req.Subject,
 		HTMLBody:          req.HTMLBody,
-		TextBody:          req.TextBody,
+		BlocksJSON:        req.BlocksJSON,
 		Enabled:           req.Enabled,
 		SendAutomatically: req.SendAutomatically,
 	}
@@ -174,12 +174,12 @@ func (h *Handler) HandleGetEmailTemplate(c *gin.Context) {
 
 // UpdateEmailTemplateRequest represents the HTTP request for updating an email template
 type UpdateEmailTemplateRequest struct {
-	Name              *string `json:"name,omitempty" binding:"omitempty,max=255"`
-	Subject           *string `json:"subject,omitempty" binding:"omitempty,max=255"`
-	HTMLBody          *string `json:"html_body,omitempty"`
-	TextBody          *string `json:"text_body,omitempty"`
-	Enabled           *bool   `json:"enabled,omitempty"`
-	SendAutomatically *bool   `json:"send_automatically,omitempty"`
+	Name              *string     `json:"name,omitempty" binding:"omitempty,max=255"`
+	Subject           *string     `json:"subject,omitempty" binding:"omitempty,max=255"`
+	HTMLBody          *string     `json:"html_body,omitempty"`
+	BlocksJSON        interface{} `json:"blocks_json,omitempty"`
+	Enabled           *bool       `json:"enabled,omitempty"`
+	SendAutomatically *bool       `json:"send_automatically,omitempty"`
 }
 
 // HandleUpdateEmailTemplate handles PUT /api/v1/campaigns/:campaign_id/email-templates/:template_id
@@ -228,7 +228,7 @@ func (h *Handler) HandleUpdateEmailTemplate(c *gin.Context) {
 		Name:              req.Name,
 		Subject:           req.Subject,
 		HTMLBody:          req.HTMLBody,
-		TextBody:          req.TextBody,
+		BlocksJSON:        req.BlocksJSON,
 		Enabled:           req.Enabled,
 		SendAutomatically: req.SendAutomatically,
 	}
