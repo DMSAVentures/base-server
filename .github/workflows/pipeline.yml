@@ -67,7 +67,17 @@ jobs:
         run: |
           echo "Waiting for PostgreSQL to be ready..."
           timeout 60 bash -c 'until docker compose -f docker-compose.services.yml exec -T db pg_isready -U base_user -d base_db; do sleep 2; done'
-          echo "Waiting for migrations to complete..."
+          echo "Waiting for Flyway migrations to complete..."
+          # Wait for Flyway container to exit (it's a one-shot container)
+          timeout 120 bash -c 'while [ "$(docker compose -f docker-compose.services.yml ps flyway --format json | jq -r ".[0].State")" = "running" ]; do sleep 2; done'
+          # Check if Flyway exited successfully
+          FLYWAY_EXIT_CODE=$(docker compose -f docker-compose.services.yml ps flyway --format json | jq -r '.[0].ExitCode')
+          if [ "$FLYWAY_EXIT_CODE" != "0" ]; then
+            echo "Flyway migrations failed with exit code: $FLYWAY_EXIT_CODE"
+            docker compose -f docker-compose.services.yml logs flyway
+            exit 1
+          fi
+          echo "Flyway migrations completed successfully"
           docker compose -f docker-compose.services.yml logs flyway
           echo "Waiting for Kafka to be ready..."
           sleep 10
