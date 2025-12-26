@@ -1,5 +1,7 @@
 package processor
 
+//go:generate go run go.uber.org/mock/mockgen@latest -source=new.go -destination=mocks_test.go -package=processor
+
 import (
 	"base-server/internal/clients/googleai"
 	openAIHTTP "base-server/internal/clients/openai"

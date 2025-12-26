@@ -1,5 +1,7 @@
 package processor
 
+//go:generate go run go.uber.org/mock/mockgen@latest -source=processor.go -destination=mocks_test.go -package=processor
+
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
