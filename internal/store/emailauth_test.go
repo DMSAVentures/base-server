@@ -2,59 +2,63 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/uuid"
 )
 
 func TestStore_CheckIfEmailExists(t *testing.T) {
+	t.Parallel()
+
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
 	tests := []struct {
 		name      string
-		setup     func(t *testing.T)
-		email     string
+		setup     func(t *testing.T) string
 		wantExist bool
 		wantErr   bool
 	}{
 		{
 			name: "email exists in email_auth",
-			setup: func(t *testing.T) {
+			setup: func(t *testing.T) string {
 				t.Helper()
+				uniqueEmail := fmt.Sprintf("john-%s@example.com", uuid.New().String())
 				// Create user and email auth
 				user, err := createTestUser(t, testDB, "John", "Doe")
 				if err != nil {
 					t.Fatalf("failed to create test user: %v", err)
 				}
 				authID := createTestUserAuth(t, testDB, user.ID, "email")
-				createTestEmailAuth(t, testDB, authID, "john@example.com", "hashedpassword")
+				createTestEmailAuth(t, testDB, authID, uniqueEmail, "hashedpassword")
+				return uniqueEmail
 			},
-			email:     "john@example.com",
 			wantExist: true,
 			wantErr:   false,
 		},
 		{
 			name: "email exists in oauth_auth",
-			setup: func(t *testing.T) {
+			setup: func(t *testing.T) string {
 				t.Helper()
+				uniqueEmail := fmt.Sprintf("jane-%s@example.com", uuid.New().String())
 				user, err := createTestUser(t, testDB, "Jane", "Smith")
 				if err != nil {
 					t.Fatalf("failed to create test user: %v", err)
 				}
 				authID := createTestUserAuth(t, testDB, user.ID, "oauth")
-				createTestOAuthAuth(t, testDB, authID, "google123", "jane@example.com", "Jane Smith", "google")
+				createTestOAuthAuth(t, testDB, authID, fmt.Sprintf("google-%s", uuid.New().String()), uniqueEmail, "Jane Smith", "google")
+				return uniqueEmail
 			},
-			email:     "jane@example.com",
 			wantExist: true,
 			wantErr:   false,
 		},
 		{
-			name:      "email does not exist",
-			setup:     func(t *testing.T) {},
-			email:     "nonexistent@example.com",
+			name: "email does not exist",
+			setup: func(t *testing.T) string {
+				return fmt.Sprintf("nonexistent-%s@example.com", uuid.New().String())
+			},
 			wantExist: false,
 			wantErr:   false,
 		},
@@ -62,10 +66,11 @@ func TestStore_CheckIfEmailExists(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
-			tt.setup(t)
+			t.Parallel()
 
-			exists, err := testDB.Store.CheckIfEmailExists(ctx, tt.email)
+			email := tt.setup(t)
+
+			exists, err := testDB.Store.CheckIfEmailExists(ctx, email)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CheckIfEmailExists() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -78,8 +83,9 @@ func TestStore_CheckIfEmailExists(t *testing.T) {
 }
 
 func TestStore_CreateUserOnEmailSignup(t *testing.T) {
+	t.Parallel()
+
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -87,19 +93,17 @@ func TestStore_CreateUserOnEmailSignup(t *testing.T) {
 		name           string
 		firstName      string
 		lastName       string
-		email          string
 		hashedPassword string
 		wantErr        bool
-		validate       func(t *testing.T, user User)
+		validate       func(t *testing.T, user User, email string)
 	}{
 		{
 			name:           "successful user creation",
 			firstName:      "Alice",
 			lastName:       "Johnson",
-			email:          "alice@example.com",
 			hashedPassword: "hashed_password_123",
 			wantErr:        false,
-			validate: func(t *testing.T, user User) {
+			validate: func(t *testing.T, user User, email string) {
 				t.Helper()
 				if user.ID == uuid.Nil {
 					t.Error("expected user ID to be set")
@@ -116,10 +120,9 @@ func TestStore_CreateUserOnEmailSignup(t *testing.T) {
 			name:           "user creation with minimal data",
 			firstName:      "Bob",
 			lastName:       "Smith",
-			email:          "bob@example.com",
 			hashedPassword: "password_hash",
 			wantErr:        false,
-			validate: func(t *testing.T, user User) {
+			validate: func(t *testing.T, user User, email string) {
 				t.Helper()
 				if user.ID == uuid.Nil {
 					t.Error("expected user ID to be set")
@@ -130,25 +133,27 @@ func TestStore_CreateUserOnEmailSignup(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 
-			user, err := testDB.Store.CreateUserOnEmailSignup(ctx, tt.firstName, tt.lastName, tt.email, tt.hashedPassword)
+			uniqueEmail := fmt.Sprintf("%s-%s@example.com", tt.firstName, uuid.New().String())
+
+			user, err := testDB.Store.CreateUserOnEmailSignup(ctx, tt.firstName, tt.lastName, uniqueEmail, tt.hashedPassword)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("CreateUserOnEmailSignup() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if !tt.wantErr && tt.validate != nil {
-				tt.validate(t, user)
+				tt.validate(t, user, uniqueEmail)
 
 				// Verify email auth was created
-				emailAuth, err := testDB.Store.GetCredentialsByEmail(ctx, tt.email)
+				emailAuth, err := testDB.Store.GetCredentialsByEmail(ctx, uniqueEmail)
 				if err != nil {
 					t.Errorf("failed to get credentials by email: %v", err)
 					return
 				}
-				if emailAuth.Email != tt.email {
-					t.Errorf("Email = %v, want %v", emailAuth.Email, tt.email)
+				if emailAuth.Email != uniqueEmail {
+					t.Errorf("Email = %v, want %v", emailAuth.Email, uniqueEmail)
 				}
 				if emailAuth.HashedPassword != tt.hashedPassword {
 					t.Errorf("HashedPassword = %v, want %v", emailAuth.HashedPassword, tt.hashedPassword)
@@ -159,33 +164,33 @@ func TestStore_CreateUserOnEmailSignup(t *testing.T) {
 }
 
 func TestStore_GetCredentialsByEmail(t *testing.T) {
+	t.Parallel()
+
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
 	tests := []struct {
 		name     string
-		setup    func(t *testing.T) uuid.UUID
-		email    string
+		setup    func(t *testing.T) (string, uuid.UUID)
 		wantErr  bool
-		validate func(t *testing.T, auth EmailAuth, expectedAuthID uuid.UUID)
+		validate func(t *testing.T, auth EmailAuth, expectedEmail string, expectedAuthID uuid.UUID)
 	}{
 		{
 			name: "get existing credentials",
-			setup: func(t *testing.T) uuid.UUID {
+			setup: func(t *testing.T) (string, uuid.UUID) {
 				t.Helper()
+				uniqueEmail := fmt.Sprintf("test-%s@example.com", uuid.New().String())
 				user, _ := createTestUser(t, testDB, "Test", "User")
 				authID := createTestUserAuth(t, testDB, user.ID, "email")
-				createTestEmailAuth(t, testDB, authID, "test@example.com", "hashed_pass")
-				return authID
+				createTestEmailAuth(t, testDB, authID, uniqueEmail, "hashed_pass")
+				return uniqueEmail, authID
 			},
-			email:   "test@example.com",
 			wantErr: false,
-			validate: func(t *testing.T, auth EmailAuth, expectedAuthID uuid.UUID) {
+			validate: func(t *testing.T, auth EmailAuth, expectedEmail string, expectedAuthID uuid.UUID) {
 				t.Helper()
-				if auth.Email != "test@example.com" {
-					t.Errorf("Email = %v, want test@example.com", auth.Email)
+				if auth.Email != expectedEmail {
+					t.Errorf("Email = %v, want %v", auth.Email, expectedEmail)
 				}
 				if auth.HashedPassword != "hashed_pass" {
 					t.Errorf("HashedPassword = %v, want hashed_pass", auth.HashedPassword)
@@ -196,34 +201,37 @@ func TestStore_GetCredentialsByEmail(t *testing.T) {
 			},
 		},
 		{
-			name:    "email does not exist",
-			setup:   func(t *testing.T) uuid.UUID { return uuid.Nil },
-			email:   "nonexistent@example.com",
+			name: "email does not exist",
+			setup: func(t *testing.T) (string, uuid.UUID) {
+				return fmt.Sprintf("nonexistent-%s@example.com", uuid.New().String()), uuid.Nil
+			},
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
-			expectedAuthID := tt.setup(t)
+			t.Parallel()
 
-			auth, err := testDB.Store.GetCredentialsByEmail(ctx, tt.email)
+			email, expectedAuthID := tt.setup(t)
+
+			auth, err := testDB.Store.GetCredentialsByEmail(ctx, email)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetCredentialsByEmail() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
 			if !tt.wantErr && tt.validate != nil {
-				tt.validate(t, auth, expectedAuthID)
+				tt.validate(t, auth, email, expectedAuthID)
 			}
 		})
 	}
 }
 
 func TestStore_GetUserByAuthID(t *testing.T) {
+	t.Parallel()
+
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -272,7 +280,8 @@ func TestStore_GetUserByAuthID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
+
 			authID, expectedUser := tt.setup(t)
 
 			got, err := testDB.Store.GetUserByAuthID(ctx, authID)

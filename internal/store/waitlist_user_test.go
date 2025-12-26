@@ -8,8 +8,8 @@ import (
 )
 
 func TestStore_CreateWaitlistUser(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -24,11 +24,11 @@ func TestStore_CreateWaitlistUser(t *testing.T) {
 			setup: func(t *testing.T) CreateWaitlistUserParams {
 				t.Helper()
 				account := createTestAccount(t, testDB)
-				campaign := createTestCampaign(t, testDB, account.ID, "Test", "test")
+				campaign := createTestCampaign(t, testDB, account.ID, "Test-"+uuid.New().String(), "test-"+uuid.New().String())
 				return CreateWaitlistUserParams{
 					CampaignID:       campaign.ID,
-					Email:            "test@example.com",
-					ReferralCode:     "TEST123",
+					Email:            uuid.New().String() + "@example.com",
+					ReferralCode:     "TEST-" + uuid.New().String(),
 					Position:         1,
 					OriginalPosition: 1,
 					TermsAccepted:    true,
@@ -59,11 +59,11 @@ func TestStore_CreateWaitlistUser(t *testing.T) {
 			setup: func(t *testing.T) CreateWaitlistUserParams {
 				t.Helper()
 				account := createTestAccount(t, testDB)
-				campaign := createTestCampaign(t, testDB, account.ID, "Custom Fields", "custom-fields")
+				campaign := createTestCampaign(t, testDB, account.ID, "Custom Fields-"+uuid.New().String(), "custom-fields-"+uuid.New().String())
 				return CreateWaitlistUserParams{
 					CampaignID:       campaign.ID,
-					Email:            "custom@example.com",
-					ReferralCode:     "CUSTOM1",
+					Email:            uuid.New().String() + "@example.com",
+					ReferralCode:     "CUSTOM-" + uuid.New().String(),
 					Position:         1,
 					OriginalPosition: 1,
 					Metadata: JSONB{
@@ -93,14 +93,14 @@ func TestStore_CreateWaitlistUser(t *testing.T) {
 			setup: func(t *testing.T) CreateWaitlistUserParams {
 				t.Helper()
 				account := createTestAccount(t, testDB)
-				campaign := createTestCampaign(t, testDB, account.ID, "UTM Test", "utm-test")
+				campaign := createTestCampaign(t, testDB, account.ID, "UTM Test-"+uuid.New().String(), "utm-test-"+uuid.New().String())
 				utmSource := "facebook"
 				utmMedium := "social"
 				utmCampaign := "spring-launch"
 				return CreateWaitlistUserParams{
 					CampaignID:       campaign.ID,
-					Email:            "utm@example.com",
-					ReferralCode:     "UTM123",
+					Email:            uuid.New().String() + "@example.com",
+					ReferralCode:     "UTM-" + uuid.New().String(),
 					Position:         1,
 					OriginalPosition: 1,
 					UTMSource:        &utmSource,
@@ -124,7 +124,7 @@ func TestStore_CreateWaitlistUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			params := tt.setup(t)
 
 			user, err := testDB.Store.CreateWaitlistUser(ctx, params)
@@ -141,19 +141,19 @@ func TestStore_CreateWaitlistUser(t *testing.T) {
 }
 
 func TestStore_GetWaitlistUserByEmail(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Email Test", "email-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Email Test-"+uuid.New().String(), "email-test-"+uuid.New().String())
 
-	// Create a user
-	created := createTestWaitlistUser(t, testDB, campaign.ID, "find@example.com")
+	// Create a user with unique email
+	uniqueEmail := uuid.New().String() + "@example.com"
+	created := createTestWaitlistUser(t, testDB, campaign.ID, uniqueEmail)
 
 	// Find by email
-	found, err := testDB.Store.GetWaitlistUserByEmail(ctx, campaign.ID, "find@example.com")
+	found, err := testDB.Store.GetWaitlistUserByEmail(ctx, campaign.ID, uniqueEmail)
 	if err != nil {
 		t.Fatalf("GetWaitlistUserByEmail() error = %v", err)
 	}
@@ -161,31 +161,31 @@ func TestStore_GetWaitlistUserByEmail(t *testing.T) {
 	if found.ID != created.ID {
 		t.Errorf("Found user ID = %v, want %v", found.ID, created.ID)
 	}
-	if found.Email != "find@example.com" {
-		t.Errorf("Email = %v, want find@example.com", found.Email)
+	if found.Email != uniqueEmail {
+		t.Errorf("Email = %v, want %v", found.Email, uniqueEmail)
 	}
 
 	// Try to find non-existent email
-	_, err = testDB.Store.GetWaitlistUserByEmail(ctx, campaign.ID, "notfound@example.com")
+	_, err = testDB.Store.GetWaitlistUserByEmail(ctx, campaign.ID, uuid.New().String()+"@notfound.com")
 	if err != ErrNotFound {
 		t.Errorf("Expected ErrNotFound, got %v", err)
 	}
 }
 
 func TestStore_GetWaitlistUserByReferralCode(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Referral Test", "referral-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Referral Test-"+uuid.New().String(), "referral-test-"+uuid.New().String())
 
-	// Create a user with a specific referral code
+	// Create a user with a unique referral code
+	uniqueReferralCode := "MYCODE-" + uuid.New().String()
 	created, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
 		CampaignID:       campaign.ID,
-		Email:            "referrer@example.com",
-		ReferralCode:     "MYCODE123",
+		Email:            uuid.New().String() + "@example.com",
+		ReferralCode:     uniqueReferralCode,
 		Position:         1,
 		OriginalPosition: 1,
 		TermsAccepted:    true,
@@ -195,7 +195,7 @@ func TestStore_GetWaitlistUserByReferralCode(t *testing.T) {
 	}
 
 	// Find by referral code
-	found, err := testDB.Store.GetWaitlistUserByReferralCode(ctx, "MYCODE123")
+	found, err := testDB.Store.GetWaitlistUserByReferralCode(ctx, uniqueReferralCode)
 	if err != nil {
 		t.Fatalf("GetWaitlistUserByReferralCode() error = %v", err)
 	}
@@ -205,22 +205,21 @@ func TestStore_GetWaitlistUserByReferralCode(t *testing.T) {
 	}
 
 	// Try to find non-existent code
-	_, err = testDB.Store.GetWaitlistUserByReferralCode(ctx, "NOTFOUND")
+	_, err = testDB.Store.GetWaitlistUserByReferralCode(ctx, "NOTFOUND-"+uuid.New().String())
 	if err != ErrNotFound {
 		t.Errorf("Expected ErrNotFound, got %v", err)
 	}
 }
 
 func TestStore_VerifyWaitlistUserEmail(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Verify Test", "verify-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Verify Test-"+uuid.New().String(), "verify-test-"+uuid.New().String())
 
-	user := createTestWaitlistUser(t, testDB, campaign.ID, "verify@example.com")
+	user := createTestWaitlistUser(t, testDB, campaign.ID, uuid.New().String()+"@example.com")
 
 	// Should be unverified initially
 	if user.EmailVerified {
@@ -245,15 +244,14 @@ func TestStore_VerifyWaitlistUserEmail(t *testing.T) {
 }
 
 func TestStore_IncrementReferralCount(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Referral Count", "referral-count")
+	campaign := createTestCampaign(t, testDB, account.ID, "Referral Count-"+uuid.New().String(), "referral-count-"+uuid.New().String())
 
-	user := createTestWaitlistUser(t, testDB, campaign.ID, "referrer@example.com")
+	user := createTestWaitlistUser(t, testDB, campaign.ID, uuid.New().String()+"@example.com")
 
 	// Initially should have 0 referrals
 	if user.ReferralCount != 0 {
@@ -286,15 +284,14 @@ func TestStore_IncrementReferralCount(t *testing.T) {
 }
 
 func TestStore_CountWaitlistUsersByCampaign(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Count Test", "count-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Count Test-"+uuid.New().String(), "count-test-"+uuid.New().String())
 
-	// Initially should be 0
+	// Initially should be 0 for this specific campaign
 	count, err := testDB.Store.CountWaitlistUsersByCampaign(ctx, campaign.ID)
 	if err != nil {
 		t.Fatalf("CountWaitlistUsersByCampaign() error = %v", err)
@@ -319,13 +316,12 @@ func TestStore_CountWaitlistUsersByCampaign(t *testing.T) {
 }
 
 func TestStore_GetWaitlistUsersByCampaign(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "List Test", "list-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "List Test-"+uuid.New().String(), "list-test-"+uuid.New().String())
 
 	// Create 15 users
 	for i := 1; i <= 15; i++ {
@@ -360,21 +356,20 @@ func TestStore_GetWaitlistUsersByCampaign(t *testing.T) {
 }
 
 func TestStore_GetWaitlistUsersByCampaignWithFilters(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Filter Test", "filter-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Filter Test-"+uuid.New().String(), "filter-test-"+uuid.New().String())
 
 	// Create verified user
-	verifiedUser := createTestWaitlistUser(t, testDB, campaign.ID, "verified@example.com")
+	verifiedUser := createTestWaitlistUser(t, testDB, campaign.ID, uuid.New().String()+"@example.com")
 	testDB.Store.VerifyWaitlistUserEmail(ctx, verifiedUser.ID)
 
 	// Create unverified users
-	createTestWaitlistUser(t, testDB, campaign.ID, "unverified1@example.com")
-	createTestWaitlistUser(t, testDB, campaign.ID, "unverified2@example.com")
+	createTestWaitlistUser(t, testDB, campaign.ID, uuid.New().String()+"@example.com")
+	createTestWaitlistUser(t, testDB, campaign.ID, uuid.New().String()+"@example.com")
 
 	// Filter by verified status
 	verified := true
@@ -413,15 +408,14 @@ func TestStore_GetWaitlistUsersByCampaignWithFilters(t *testing.T) {
 }
 
 func TestStore_UpdateWaitlistUserPosition(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Position Test", "position-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Position Test-"+uuid.New().String(), "position-test-"+uuid.New().String())
 
-	user := createTestWaitlistUser(t, testDB, campaign.ID, "position@example.com")
+	user := createTestWaitlistUser(t, testDB, campaign.ID, uuid.New().String()+"@example.com")
 
 	// Initially position 1
 	if user.Position != 1 {
@@ -446,15 +440,15 @@ func TestStore_UpdateWaitlistUserPosition(t *testing.T) {
 }
 
 func TestStore_DeleteWaitlistUser(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Delete Test", "delete-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Delete Test-"+uuid.New().String(), "delete-test-"+uuid.New().String())
 
-	user := createTestWaitlistUser(t, testDB, campaign.ID, "delete@example.com")
+	uniqueEmail := uuid.New().String() + "@example.com"
+	user := createTestWaitlistUser(t, testDB, campaign.ID, uniqueEmail)
 
 	// Delete the user
 	err := testDB.Store.DeleteWaitlistUser(ctx, user.ID)
@@ -472,29 +466,28 @@ func TestStore_DeleteWaitlistUser(t *testing.T) {
 	}
 
 	// Should also not be found by email
-	_, err = testDB.Store.GetWaitlistUserByEmail(ctx, campaign.ID, "delete@example.com")
+	_, err = testDB.Store.GetWaitlistUserByEmail(ctx, campaign.ID, uniqueEmail)
 	if err != ErrNotFound {
 		t.Errorf("Expected ErrNotFound for deleted user by email, got %v", err)
 	}
 }
 
 func TestStore_WaitlistUserWithReferral(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Referral Chain", "referral-chain")
+	campaign := createTestCampaign(t, testDB, account.ID, "Referral Chain-"+uuid.New().String(), "referral-chain-"+uuid.New().String())
 
 	// Create referrer
-	referrer := createTestWaitlistUser(t, testDB, campaign.ID, "referrer@example.com")
+	referrer := createTestWaitlistUser(t, testDB, campaign.ID, uuid.New().String()+"@example.com")
 
 	// Create referred user
 	referred, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
 		CampaignID:       campaign.ID,
-		Email:            "referred@example.com",
-		ReferralCode:     "REF456",
+		Email:            uuid.New().String() + "@example.com",
+		ReferralCode:     "REF-" + uuid.New().String(),
 		ReferredByID:     &referrer.ID,
 		Position:         2,
 		OriginalPosition: 2,
@@ -513,21 +506,22 @@ func TestStore_WaitlistUserWithReferral(t *testing.T) {
 }
 
 func TestStore_SearchWaitlistUsersByEmail(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Search Test", "search-test")
+	// Use a unique search prefix for this test
+	searchPrefix := uuid.New().String()[:8]
+	campaign := createTestCampaign(t, testDB, account.ID, "Search Test-"+uuid.New().String(), "search-test-"+uuid.New().String())
 
-	// Create users with different emails
-	createTestWaitlistUser(t, testDB, campaign.ID, "john.doe@example.com")
-	createTestWaitlistUser(t, testDB, campaign.ID, "jane.smith@example.com")
-	createTestWaitlistUser(t, testDB, campaign.ID, "john.smith@test.com")
+	// Create users with different emails containing the unique prefix
+	createTestWaitlistUser(t, testDB, campaign.ID, searchPrefix+".john.doe@example.com")
+	createTestWaitlistUser(t, testDB, campaign.ID, searchPrefix+".jane.smith@example.com")
+	createTestWaitlistUser(t, testDB, campaign.ID, searchPrefix+".john.smith@test.com")
 
-	// Search for "john"
-	query := "john"
+	// Search for the unique prefix + "john"
+	query := searchPrefix + ".john"
 	users, err := testDB.Store.SearchWaitlistUsers(ctx, SearchWaitlistUsersParams{
 		CampaignID: campaign.ID,
 		Query:      &query,
@@ -539,6 +533,6 @@ func TestStore_SearchWaitlistUsersByEmail(t *testing.T) {
 	}
 
 	if len(users) != 2 {
-		t.Errorf("Search 'john' got %d users, want 2", len(users))
+		t.Errorf("Search '%s' got %d users, want 2", query, len(users))
 	}
 }

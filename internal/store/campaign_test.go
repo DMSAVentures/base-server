@@ -10,8 +10,8 @@ import (
 )
 
 func TestStore_CreateCampaign(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
@@ -27,8 +27,8 @@ func TestStore_CreateCampaign(t *testing.T) {
 				account := f.CreateAccount()
 				return CreateCampaignParams{
 					AccountID: account.ID,
-					Name:      "Test Campaign",
-					Slug:      "test-campaign-" + uuid.New().String()[:8],
+					Name:      "Test Campaign " + uuid.New().String(),
+					Slug:      "test-campaign-" + uuid.New().String(),
 					Type:      "waitlist",
 				}
 			},
@@ -48,8 +48,8 @@ func TestStore_CreateCampaign(t *testing.T) {
 				account := f.CreateAccount()
 				return CreateCampaignParams{
 					AccountID:        account.ID,
-					Name:             "Full Campaign",
-					Slug:             "full-campaign-" + uuid.New().String()[:8],
+					Name:             "Full Campaign " + uuid.New().String(),
+					Slug:             "full-campaign-" + uuid.New().String(),
 					Description:      Ptr("Test Description"),
 					Type:             "referral",
 					MaxSignups:       Ptr(1000),
@@ -68,7 +68,7 @@ func TestStore_CreateCampaign(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			params := tt.setup()
 
 			campaign, err := testDB.Store.CreateCampaign(ctx, params)
@@ -86,13 +86,13 @@ func TestStore_CreateCampaign(t *testing.T) {
 }
 
 func TestStore_GetCampaignByID(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("returns campaign with signup counters", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
@@ -114,7 +114,7 @@ func TestStore_GetCampaignByID(t *testing.T) {
 	})
 
 	t.Run("returns ErrNotFound for non-existent campaign", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		nonExistentID := uuid.New()
 
 		_, err := testDB.Store.GetCampaignByID(ctx, nonExistentID)
@@ -124,15 +124,15 @@ func TestStore_GetCampaignByID(t *testing.T) {
 }
 
 func TestStore_GetCampaignBySlug(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("returns campaign with signup counters", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
-		slug := "slug-test-" + uuid.New().String()[:8]
+		slug := "slug-test-" + uuid.New().String()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) {
 			o.AccountID = &account.ID
 			o.Slug = slug
@@ -149,18 +149,18 @@ func TestStore_GetCampaignBySlug(t *testing.T) {
 	})
 
 	t.Run("returns ErrNotFound for non-existent slug", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 
-		_, err := testDB.Store.GetCampaignBySlug(ctx, account.ID, "non-existent-slug")
+		_, err := testDB.Store.GetCampaignBySlug(ctx, account.ID, "non-existent-slug-"+uuid.New().String())
 
 		assert.ErrorIs(t, err, ErrNotFound)
 	})
 }
 
 func TestStore_UpdateCampaign(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
@@ -172,39 +172,39 @@ func TestStore_UpdateCampaign(t *testing.T) {
 		{
 			name: "updates name",
 			params: UpdateCampaignParams{
-				Name: Ptr("Updated Name"),
+				Name: Ptr("Updated Name " + uuid.New().String()),
 			},
 			validate: func(t *testing.T, updated Campaign) {
-				assert.Equal(t, "Updated Name", updated.Name)
+				assert.Contains(t, updated.Name, "Updated Name")
 			},
 		},
 		{
 			name: "updates description",
 			params: UpdateCampaignParams{
-				Description: Ptr("Updated Description"),
+				Description: Ptr("Updated Description " + uuid.New().String()),
 			},
 			validate: func(t *testing.T, updated Campaign) {
-				assert.Equal(t, "Updated Description", *updated.Description)
+				assert.Contains(t, *updated.Description, "Updated Description")
 			},
 		},
 		{
 			name: "updates multiple fields",
 			params: UpdateCampaignParams{
-				Name:             Ptr("Multi Update"),
-				Description:      Ptr("Multi field update"),
-				PrivacyPolicyURL: Ptr("https://new-privacy.com"),
+				Name:             Ptr("Multi Update " + uuid.New().String()),
+				Description:      Ptr("Multi field update " + uuid.New().String()),
+				PrivacyPolicyURL: Ptr("https://new-privacy.com/" + uuid.New().String()),
 			},
 			validate: func(t *testing.T, updated Campaign) {
-				assert.Equal(t, "Multi Update", updated.Name)
-				assert.Equal(t, "Multi field update", *updated.Description)
-				assert.Equal(t, "https://new-privacy.com", *updated.PrivacyPolicyURL)
+				assert.Contains(t, updated.Name, "Multi Update")
+				assert.Contains(t, *updated.Description, "Multi field update")
+				assert.Contains(t, *updated.PrivacyPolicyURL, "https://new-privacy.com/")
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			account := f.CreateAccount()
 			campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
@@ -216,11 +216,11 @@ func TestStore_UpdateCampaign(t *testing.T) {
 	}
 
 	t.Run("returns ErrNotFound for non-existent campaign", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 
 		_, err := testDB.Store.UpdateCampaign(ctx, account.ID, uuid.New(), UpdateCampaignParams{
-			Name: Ptr("Updated"),
+			Name: Ptr("Updated " + uuid.New().String()),
 		})
 
 		assert.ErrorIs(t, err, ErrNotFound)
@@ -228,8 +228,8 @@ func TestStore_UpdateCampaign(t *testing.T) {
 }
 
 func TestStore_UpdateCampaignStatus(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
@@ -237,7 +237,7 @@ func TestStore_UpdateCampaignStatus(t *testing.T) {
 
 	for _, status := range statuses {
 		t.Run("updates status to "+status, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			account := f.CreateAccount()
 			campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
@@ -249,7 +249,7 @@ func TestStore_UpdateCampaignStatus(t *testing.T) {
 	}
 
 	t.Run("returns ErrNotFound for non-existent campaign", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 
 		_, err := testDB.Store.UpdateCampaignStatus(ctx, account.ID, uuid.New(), "active")
@@ -259,13 +259,13 @@ func TestStore_UpdateCampaignStatus(t *testing.T) {
 }
 
 func TestStore_DeleteCampaign(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("soft deletes campaign", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
@@ -278,7 +278,7 @@ func TestStore_DeleteCampaign(t *testing.T) {
 	})
 
 	t.Run("returns ErrNotFound for non-existent campaign", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 
 		err := testDB.Store.DeleteCampaign(ctx, account.ID, uuid.New())
@@ -288,13 +288,13 @@ func TestStore_DeleteCampaign(t *testing.T) {
 }
 
 func TestStore_ListCampaigns(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("returns paginated results", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 
 		// Create 5 campaigns
@@ -315,7 +315,7 @@ func TestStore_ListCampaigns(t *testing.T) {
 	})
 
 	t.Run("filters by status", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 
 		draftCampaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
@@ -336,7 +336,7 @@ func TestStore_ListCampaigns(t *testing.T) {
 	})
 
 	t.Run("includes signup counters", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
@@ -358,13 +358,13 @@ func TestStore_ListCampaigns(t *testing.T) {
 }
 
 func TestStore_GetCampaignsByAccountID(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("returns only campaigns for specified account", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account1 := f.CreateAccount()
 		account2 := f.CreateAccount()
 
@@ -385,13 +385,13 @@ func TestStore_GetCampaignsByAccountID(t *testing.T) {
 }
 
 func TestStore_GetCampaignsByStatus(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("returns only campaigns with specified status", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 
 		draftCampaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
@@ -411,9 +411,8 @@ func TestStore_GetCampaignsByStatus(t *testing.T) {
 }
 
 func TestStore_CountersWithSoftDeletedUsers(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
@@ -439,42 +438,42 @@ func TestStore_CountersWithSoftDeletedUsers(t *testing.T) {
 }
 
 func TestStore_CampaignEmailSettings(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("CRUD operations", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
 		// Create
 		created, err := testDB.Store.CreateCampaignEmailSettings(ctx, CreateCampaignEmailSettingsParams{
 			CampaignID:           campaign.ID,
-			FromName:             Ptr("Test Sender"),
-			FromEmail:            Ptr("sender@example.com"),
-			ReplyTo:              Ptr("reply@example.com"),
+			FromName:             Ptr("Test Sender " + uuid.New().String()),
+			FromEmail:            Ptr("sender-" + uuid.New().String() + "@example.com"),
+			ReplyTo:              Ptr("reply-" + uuid.New().String() + "@example.com"),
 			VerificationRequired: true,
 			SendWelcomeEmail:     true,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, campaign.ID, created.CampaignID)
-		assert.Equal(t, "Test Sender", *created.FromName)
+		assert.Contains(t, *created.FromName, "Test Sender")
 		assert.True(t, created.VerificationRequired)
 
 		// Read
 		retrieved, err := testDB.Store.GetCampaignEmailSettings(ctx, campaign.ID)
 		require.NoError(t, err)
-		assert.Equal(t, "sender@example.com", *retrieved.FromEmail)
+		assert.Contains(t, *retrieved.FromEmail, "sender-")
 
 		// Update
 		updated, err := testDB.Store.UpdateCampaignEmailSettings(ctx, campaign.ID, UpdateCampaignEmailSettingsParams{
-			FromName:         Ptr("Updated Sender"),
+			FromName:         Ptr("Updated Sender " + uuid.New().String()),
 			SendWelcomeEmail: Ptr(false),
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "Updated Sender", *updated.FromName)
+		assert.Contains(t, *updated.FromName, "Updated Sender")
 		assert.False(t, updated.SendWelcomeEmail)
 
 		// Delete
@@ -487,13 +486,13 @@ func TestStore_CampaignEmailSettings(t *testing.T) {
 }
 
 func TestStore_CampaignFormSettings(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("create and upsert", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
@@ -504,7 +503,7 @@ func TestStore_CampaignFormSettings(t *testing.T) {
 			CampaignID:      campaign.ID,
 			CaptchaEnabled:  true,
 			CaptchaProvider: &captchaProvider,
-			CaptchaSiteKey:  Ptr("test-site-key"),
+			CaptchaSiteKey:  Ptr("test-site-key-" + uuid.New().String()),
 			DoubleOptIn:     true,
 			Design:          JSONB{"theme": "dark"},
 		})
@@ -527,7 +526,7 @@ func TestStore_CampaignFormSettings(t *testing.T) {
 	})
 
 	t.Run("create with empty design", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
@@ -538,7 +537,7 @@ func TestStore_CampaignFormSettings(t *testing.T) {
 			CampaignID:      campaign.ID,
 			CaptchaEnabled:  true,
 			CaptchaProvider: &captchaProvider,
-			CaptchaSiteKey:  Ptr("test-site-key"),
+			CaptchaSiteKey:  Ptr("test-site-key-" + uuid.New().String()),
 			DoubleOptIn:     true,
 			Design:          JSONB{}, // Empty but not nil
 		})
@@ -549,13 +548,13 @@ func TestStore_CampaignFormSettings(t *testing.T) {
 }
 
 func TestStore_CampaignReferralSettings(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("create and update", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
@@ -586,67 +585,73 @@ func TestStore_CampaignReferralSettings(t *testing.T) {
 }
 
 func TestStore_CampaignBrandingSettings(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("create and upsert", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+		logoURL := "https://example.com/logo-" + uuid.New().String() + ".png"
+		customDomain := "campaign-" + uuid.New().String()[:8] + ".example.com"
 
 		// Create
 		created, err := testDB.Store.CreateCampaignBrandingSettings(ctx, CreateCampaignBrandingSettingsParams{
 			CampaignID:   campaign.ID,
-			LogoURL:      Ptr("https://example.com/logo.png"),
+			LogoURL:      Ptr(logoURL),
 			PrimaryColor: Ptr("#FF5733"),
 			FontFamily:   Ptr("Inter"),
-			CustomDomain: Ptr("campaign.example.com"),
+			CustomDomain: Ptr(customDomain),
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "https://example.com/logo.png", *created.LogoURL)
+		assert.Equal(t, logoURL, *created.LogoURL)
 		assert.Equal(t, "#FF5733", *created.PrimaryColor)
 
 		// Upsert
+		newLogoURL := "https://example.com/new-logo-" + uuid.New().String() + ".png"
 		upserted, err := testDB.Store.UpsertCampaignBrandingSettings(ctx, CreateCampaignBrandingSettingsParams{
 			CampaignID:   campaign.ID,
-			LogoURL:      Ptr("https://example.com/new-logo.png"),
+			LogoURL:      Ptr(newLogoURL),
 			PrimaryColor: Ptr("#00FF00"),
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "https://example.com/new-logo.png", *upserted.LogoURL)
+		assert.Equal(t, newLogoURL, *upserted.LogoURL)
 	})
 }
 
 func TestStore_CampaignFormFields(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("CRUD and bulk operations", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+		fieldName := "email-" + uuid.New().String()[:8]
 
 		// Create single field
 		field, err := testDB.Store.CreateCampaignFormField(ctx, CreateCampaignFormFieldParams{
 			CampaignID:   campaign.ID,
-			Name:         "email",
+			Name:         fieldName,
 			FieldType:    FormFieldType("email"),
 			Label:        "Email Address",
 			Required:     true,
 			DisplayOrder: 1,
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "email", field.Name)
+		assert.Equal(t, fieldName, field.Name)
 		assert.Equal(t, FormFieldType("email"), field.FieldType)
 
 		// Bulk create
 		fields, err := testDB.Store.BulkCreateCampaignFormFields(ctx, []CreateCampaignFormFieldParams{
-			{CampaignID: campaign.ID, Name: "name", FieldType: FormFieldType("text"), Label: "Full Name", DisplayOrder: 2},
-			{CampaignID: campaign.ID, Name: "company", FieldType: FormFieldType("text"), Label: "Company", DisplayOrder: 3},
+			{CampaignID: campaign.ID, Name: "name-" + uuid.New().String()[:8], FieldType: FormFieldType("text"), Label: "Full Name", DisplayOrder: 2},
+			{CampaignID: campaign.ID, Name: "company-" + uuid.New().String()[:8], FieldType: FormFieldType("text"), Label: "Company", DisplayOrder: 3},
 		})
 		require.NoError(t, err)
 		assert.Len(t, fields, 2)
@@ -657,31 +662,34 @@ func TestStore_CampaignFormFields(t *testing.T) {
 		assert.Len(t, allFields, 3)
 
 		// Replace all
+		newFieldName := "new_email-" + uuid.New().String()[:8]
 		replaced, err := testDB.Store.ReplaceCampaignFormFields(ctx, campaign.ID, []CreateCampaignFormFieldParams{
-			{CampaignID: campaign.ID, Name: "new_email", FieldType: FormFieldType("email"), Label: "New Email", DisplayOrder: 1},
+			{CampaignID: campaign.ID, Name: newFieldName, FieldType: FormFieldType("email"), Label: "New Email", DisplayOrder: 1},
 		})
 		require.NoError(t, err)
 		assert.Len(t, replaced, 1)
-		assert.Equal(t, "new_email", replaced[0].Name)
+		assert.Equal(t, newFieldName, replaced[0].Name)
 	})
 }
 
 func TestStore_CampaignShareMessages(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("CRUD and replace operations", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+		message := "Check out this campaign! " + uuid.New().String()
 
 		// Create
 		msg, err := testDB.Store.CreateCampaignShareMessage(ctx, CreateCampaignShareMessageParams{
 			CampaignID: campaign.ID,
 			Channel:    SharingChannel("email"),
-			Message:    "Check out this campaign!",
+			Message:    message,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, SharingChannel("email"), msg.Channel)
@@ -689,12 +697,12 @@ func TestStore_CampaignShareMessages(t *testing.T) {
 		// Get by channel
 		retrieved, err := testDB.Store.GetCampaignShareMessageByChannel(ctx, campaign.ID, SharingChannel("email"))
 		require.NoError(t, err)
-		assert.Equal(t, "Check out this campaign!", retrieved.Message)
+		assert.Equal(t, message, retrieved.Message)
 
 		// Replace all
 		replaced, err := testDB.Store.ReplaceCampaignShareMessages(ctx, campaign.ID, []CreateCampaignShareMessageParams{
-			{CampaignID: campaign.ID, Channel: SharingChannel("twitter"), Message: "Tweet this!"},
-			{CampaignID: campaign.ID, Channel: SharingChannel("facebook"), Message: "Share on FB!"},
+			{CampaignID: campaign.ID, Channel: SharingChannel("twitter"), Message: "Tweet this! " + uuid.New().String()},
+			{CampaignID: campaign.ID, Channel: SharingChannel("facebook"), Message: "Share on FB! " + uuid.New().String()},
 		})
 		require.NoError(t, err)
 		assert.Len(t, replaced, 2)
@@ -702,37 +710,40 @@ func TestStore_CampaignShareMessages(t *testing.T) {
 }
 
 func TestStore_CampaignTrackingIntegrations(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("CRUD and filter by enabled", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
+
+		trackingID := "GA-" + uuid.New().String()[:8]
 
 		// Create
 		integration, err := testDB.Store.CreateCampaignTrackingIntegration(ctx, CreateCampaignTrackingIntegrationParams{
 			CampaignID:      campaign.ID,
 			IntegrationType: TrackingIntegrationType("google_analytics"),
 			Enabled:         true,
-			TrackingID:      "GA-12345678",
+			TrackingID:      trackingID,
 			TrackingLabel:   Ptr("signup_conversion"),
 		})
 		require.NoError(t, err)
 		assert.True(t, integration.Enabled)
-		assert.Equal(t, "GA-12345678", integration.TrackingID)
+		assert.Equal(t, trackingID, integration.TrackingID)
 
 		// Get by type
 		byType, err := testDB.Store.GetCampaignTrackingIntegrationByType(ctx, campaign.ID, TrackingIntegrationType("google_analytics"))
 		require.NoError(t, err)
-		assert.Equal(t, "GA-12345678", byType.TrackingID)
+		assert.Equal(t, trackingID, byType.TrackingID)
 
 		// Replace with mixed enabled states
+		metaPixelID := uuid.New().String()[:9]
 		replaced, err := testDB.Store.ReplaceCampaignTrackingIntegrations(ctx, campaign.ID, []CreateCampaignTrackingIntegrationParams{
-			{CampaignID: campaign.ID, IntegrationType: TrackingIntegrationType("meta_pixel"), Enabled: true, TrackingID: "123456789"},
-			{CampaignID: campaign.ID, IntegrationType: TrackingIntegrationType("tiktok_pixel"), Enabled: false, TrackingID: "TT-999"},
+			{CampaignID: campaign.ID, IntegrationType: TrackingIntegrationType("meta_pixel"), Enabled: true, TrackingID: metaPixelID},
+			{CampaignID: campaign.ID, IntegrationType: TrackingIntegrationType("tiktok_pixel"), Enabled: false, TrackingID: "TT-" + uuid.New().String()[:8]},
 		})
 		require.NoError(t, err)
 		assert.Len(t, replaced, 2)
@@ -741,28 +752,28 @@ func TestStore_CampaignTrackingIntegrations(t *testing.T) {
 		enabled, err := testDB.Store.GetEnabledCampaignTrackingIntegrations(ctx, campaign.ID)
 		require.NoError(t, err)
 		assert.Len(t, enabled, 1)
-		assert.Equal(t, "123456789", enabled[0].TrackingID)
+		assert.Equal(t, metaPixelID, enabled[0].TrackingID)
 	})
 }
 
 func TestStore_CampaignWithSettings(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 	ctx := context.Background()
 	f := NewFixtures(t, testDB)
 
 	t.Run("loads all settings", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) { o.AccountID = &account.ID })
 
 		// Create all settings using fixtures
 		f.CreateEmailSettings(campaign.ID, func(o *EmailSettingsOpts) {
-			o.FromName = Ptr("Test")
+			o.FromName = Ptr("Test " + uuid.New().String())
 			o.SendWelcomeEmail = true
 		})
 		f.CreateBrandingSettings(campaign.ID, func(o *BrandingSettingsOpts) {
-			o.LogoURL = Ptr("https://example.com/logo.png")
+			o.LogoURL = Ptr("https://example.com/logo-" + uuid.New().String() + ".png")
 		})
 		f.CreateFormSettings(campaign.ID, func(o *FormSettingsOpts) {
 			o.CaptchaEnabled = true
@@ -774,15 +785,15 @@ func TestStore_CampaignWithSettings(t *testing.T) {
 		})
 
 		testDB.Store.CreateCampaignFormField(ctx, CreateCampaignFormFieldParams{
-			CampaignID: campaign.ID, Name: "email", FieldType: FormFieldType("email"),
+			CampaignID: campaign.ID, Name: "email-" + uuid.New().String()[:8], FieldType: FormFieldType("email"),
 			Label: "Email", Required: true, DisplayOrder: 1,
 		})
 		testDB.Store.CreateCampaignShareMessage(ctx, CreateCampaignShareMessageParams{
-			CampaignID: campaign.ID, Channel: SharingChannel("email"), Message: "Share!",
+			CampaignID: campaign.ID, Channel: SharingChannel("email"), Message: "Share! " + uuid.New().String(),
 		})
 		testDB.Store.CreateCampaignTrackingIntegration(ctx, CreateCampaignTrackingIntegrationParams{
 			CampaignID: campaign.ID, IntegrationType: TrackingIntegrationType("google_analytics"),
-			Enabled: true, TrackingID: "GA-123",
+			Enabled: true, TrackingID: "GA-" + uuid.New().String()[:8],
 		})
 
 		// Load campaign with all settings
@@ -799,9 +810,9 @@ func TestStore_CampaignWithSettings(t *testing.T) {
 	})
 
 	t.Run("by slug loads settings", func(t *testing.T) {
-		testDB.Truncate(t)
+		t.Parallel()
 		account := f.CreateAccount()
-		slug := "settings-test-" + uuid.New().String()[:8]
+		slug := "settings-test-" + uuid.New().String()
 		campaign := f.CreateCampaign(func(o *CampaignOpts) {
 			o.AccountID = &account.ID
 			o.Slug = slug

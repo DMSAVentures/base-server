@@ -9,8 +9,8 @@ import (
 )
 
 func TestStore_CreateAccount(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -25,10 +25,10 @@ func TestStore_CreateAccount(t *testing.T) {
 			setup: func(t *testing.T) CreateAccountParams {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "Owner", "User")
-				stripeID := "cus_account123"
+				stripeID := "cus_account_" + uuid.New().String()
 				return CreateAccountParams{
 					Name:             "Test Company",
-					Slug:             "test-company",
+					Slug:             "test-company-" + uuid.New().String(),
 					OwnerUserID:      user.ID,
 					Plan:             "pro",
 					StripeCustomerID: &stripeID,
@@ -64,7 +64,7 @@ func TestStore_CreateAccount(t *testing.T) {
 				user, _ := createTestUser(t, testDB, "Another", "Owner")
 				return CreateAccountParams{
 					Name:             "Startup Inc",
-					Slug:             "startup-inc",
+					Slug:             "startup-inc-" + uuid.New().String(),
 					OwnerUserID:      user.ID,
 					Plan:             "free",
 					StripeCustomerID: nil,
@@ -88,7 +88,7 @@ func TestStore_CreateAccount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			params := tt.setup(t)
 
 			account, err := testDB.Store.CreateAccount(ctx, params)
@@ -105,45 +105,47 @@ func TestStore_CreateAccount(t *testing.T) {
 }
 
 func TestStore_GetAccountByID(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
 	tests := []struct {
 		name     string
-		setup    func(t *testing.T) uuid.UUID
+		setup    func(t *testing.T) (uuid.UUID, string, string)
 		wantErr  bool
-		validate func(t *testing.T, account Account)
+		validate func(t *testing.T, account Account, expectedName, expectedSlug string)
 	}{
 		{
 			name: "get existing account",
-			setup: func(t *testing.T) uuid.UUID {
+			setup: func(t *testing.T) (uuid.UUID, string, string) {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "Owner", "User")
+				slug := "test-account-" + uuid.New().String()
+				name := "Test Account " + uuid.New().String()
 				account, _ := testDB.Store.CreateAccount(ctx, CreateAccountParams{
-					Name:        "Test Account",
-					Slug:        "test-account",
+					Name:        name,
+					Slug:        slug,
 					OwnerUserID: user.ID,
 					Plan:        "pro",
 				})
-				return account.ID
+				return account.ID, name, slug
 			},
 			wantErr: false,
-			validate: func(t *testing.T, account Account) {
+			validate: func(t *testing.T, account Account, expectedName, expectedSlug string) {
 				t.Helper()
-				if account.Name != "Test Account" {
-					t.Errorf("Name = %v, want Test Account", account.Name)
+				if account.Name != expectedName {
+					t.Errorf("Name = %v, want %v", account.Name, expectedName)
 				}
-				if account.Slug != "test-account" {
-					t.Errorf("Slug = %v, want test-account", account.Slug)
+				if account.Slug != expectedSlug {
+					t.Errorf("Slug = %v, want %v", account.Slug, expectedSlug)
 				}
 			},
 		},
 		{
 			name: "account does not exist",
-			setup: func(t *testing.T) uuid.UUID {
-				return uuid.New()
+			setup: func(t *testing.T) (uuid.UUID, string, string) {
+				return uuid.New(), "", ""
 			},
 			wantErr: true,
 		},
@@ -151,8 +153,8 @@ func TestStore_GetAccountByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
-			accountID := tt.setup(t)
+			t.Parallel()
+			accountID, expectedName, expectedSlug := tt.setup(t)
 
 			account, err := testDB.Store.GetAccountByID(ctx, accountID)
 			if (err != nil) != tt.wantErr {
@@ -165,7 +167,7 @@ func TestStore_GetAccountByID(t *testing.T) {
 					t.Errorf("ID = %v, want %v", account.ID, accountID)
 				}
 				if tt.validate != nil {
-					tt.validate(t, account)
+					tt.validate(t, account, expectedName, expectedSlug)
 				}
 			}
 		})
@@ -173,36 +175,37 @@ func TestStore_GetAccountByID(t *testing.T) {
 }
 
 func TestStore_GetAccountBySlug(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
 	tests := []struct {
 		name     string
-		setup    func(t *testing.T) string
-		slug     string
+		setup    func(t *testing.T) (string, string)
 		wantErr  bool
-		validate func(t *testing.T, account Account)
+		validate func(t *testing.T, account Account, expectedName string)
 	}{
 		{
 			name: "get account by valid slug",
-			setup: func(t *testing.T) string {
+			setup: func(t *testing.T) (string, string) {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "Owner", "User")
+				slug := "acme-corp-" + uuid.New().String()
+				name := "Acme Corp " + uuid.New().String()
 				testDB.Store.CreateAccount(ctx, CreateAccountParams{
-					Name:        "Acme Corp",
-					Slug:        "acme-corp",
+					Name:        name,
+					Slug:        slug,
 					OwnerUserID: user.ID,
 					Plan:        "enterprise",
 				})
-				return "acme-corp"
+				return slug, name
 			},
 			wantErr: false,
-			validate: func(t *testing.T, account Account) {
+			validate: func(t *testing.T, account Account, expectedName string) {
 				t.Helper()
-				if account.Name != "Acme Corp" {
-					t.Errorf("Name = %v, want Acme Corp", account.Name)
+				if account.Name != expectedName {
+					t.Errorf("Name = %v, want %v", account.Name, expectedName)
 				}
 				if account.Plan != "enterprise" {
 					t.Errorf("Plan = %v, want enterprise", account.Plan)
@@ -211,21 +214,17 @@ func TestStore_GetAccountBySlug(t *testing.T) {
 		},
 		{
 			name: "slug does not exist",
-			setup: func(t *testing.T) string {
-				return "nonexistent-slug"
+			setup: func(t *testing.T) (string, string) {
+				return "nonexistent-slug-" + uuid.New().String(), ""
 			},
-			slug:    "nonexistent-slug",
 			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
-			slug := tt.setup(t)
-			if tt.slug != "" {
-				slug = tt.slug
-			}
+			t.Parallel()
+			slug, expectedName := tt.setup(t)
 
 			account, err := testDB.Store.GetAccountBySlug(ctx, slug)
 			if (err != nil) != tt.wantErr {
@@ -238,7 +237,7 @@ func TestStore_GetAccountBySlug(t *testing.T) {
 					t.Errorf("Slug = %v, want %v", account.Slug, slug)
 				}
 				if tt.validate != nil {
-					tt.validate(t, account)
+					tt.validate(t, account, expectedName)
 				}
 			}
 		})
@@ -246,8 +245,8 @@ func TestStore_GetAccountBySlug(t *testing.T) {
 }
 
 func TestStore_GetAccountsByOwnerUserID(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -265,13 +264,13 @@ func TestStore_GetAccountsByOwnerUserID(t *testing.T) {
 				user, _ := createTestUser(t, testDB, "Multi", "Owner")
 				testDB.Store.CreateAccount(ctx, CreateAccountParams{
 					Name:        "Account 1",
-					Slug:        "account-1",
+					Slug:        "account-1-" + uuid.New().String(),
 					OwnerUserID: user.ID,
 					Plan:        "free",
 				})
 				testDB.Store.CreateAccount(ctx, CreateAccountParams{
 					Name:        "Account 2",
-					Slug:        "account-2",
+					Slug:        "account-2-" + uuid.New().String(),
 					OwnerUserID: user.ID,
 					Plan:        "pro",
 				})
@@ -300,7 +299,7 @@ func TestStore_GetAccountsByOwnerUserID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			userID := tt.setup(t)
 
 			accounts, err := testDB.Store.GetAccountsByOwnerUserID(ctx, userID)
@@ -322,8 +321,8 @@ func TestStore_GetAccountsByOwnerUserID(t *testing.T) {
 }
 
 func TestStore_UpdateAccount(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -340,7 +339,7 @@ func TestStore_UpdateAccount(t *testing.T) {
 				user, _ := createTestUser(t, testDB, "Owner", "User")
 				account, _ := testDB.Store.CreateAccount(ctx, CreateAccountParams{
 					Name:        "Old Name",
-					Slug:        "old-name",
+					Slug:        "old-name-" + uuid.New().String(),
 					OwnerUserID: user.ID,
 					Plan:        "free",
 				})
@@ -364,7 +363,7 @@ func TestStore_UpdateAccount(t *testing.T) {
 				user, _ := createTestUser(t, testDB, "Owner", "User")
 				account, _ := testDB.Store.CreateAccount(ctx, CreateAccountParams{
 					Name:        "Test Account",
-					Slug:        "test",
+					Slug:        "test-" + uuid.New().String(),
 					OwnerUserID: user.ID,
 					Plan:        "free",
 				})
@@ -400,7 +399,7 @@ func TestStore_UpdateAccount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			accountID, params := tt.setup(t)
 
 			updated, err := testDB.Store.UpdateAccount(ctx, accountID, params)
@@ -417,8 +416,8 @@ func TestStore_UpdateAccount(t *testing.T) {
 }
 
 func TestStore_DeleteAccount(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -434,7 +433,7 @@ func TestStore_DeleteAccount(t *testing.T) {
 				user, _ := createTestUser(t, testDB, "Owner", "User")
 				account, _ := testDB.Store.CreateAccount(ctx, CreateAccountParams{
 					Name:        "To Delete",
-					Slug:        "to-delete",
+					Slug:        "to-delete-" + uuid.New().String(),
 					OwnerUserID: user.ID,
 					Plan:        "free",
 				})
@@ -453,7 +452,7 @@ func TestStore_DeleteAccount(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			accountID := tt.setup(t)
 
 			err := testDB.Store.DeleteAccount(ctx, accountID)
@@ -474,8 +473,8 @@ func TestStore_DeleteAccount(t *testing.T) {
 }
 
 func TestStore_UpdateAccountStripeCustomerID(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -492,13 +491,13 @@ func TestStore_UpdateAccountStripeCustomerID(t *testing.T) {
 				user, _ := createTestUser(t, testDB, "Owner", "User")
 				account, _ := testDB.Store.CreateAccount(ctx, CreateAccountParams{
 					Name:        "Test Account",
-					Slug:        "test",
+					Slug:        "test-" + uuid.New().String(),
 					OwnerUserID: user.ID,
 					Plan:        "free",
 				})
 				return account.ID
 			},
-			stripeID: "cus_new_stripe_id",
+			stripeID: "cus_new_stripe_id_" + uuid.New().String(),
 			wantErr:  false,
 		},
 		{
@@ -506,14 +505,14 @@ func TestStore_UpdateAccountStripeCustomerID(t *testing.T) {
 			setup: func(t *testing.T) uuid.UUID {
 				return uuid.New()
 			},
-			stripeID: "cus_fail",
+			stripeID: "cus_fail_" + uuid.New().String(),
 			wantErr:  true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			accountID := tt.setup(t)
 
 			err := testDB.Store.UpdateAccountStripeCustomerID(ctx, accountID, tt.stripeID)
@@ -540,8 +539,8 @@ func TestStore_UpdateAccountStripeCustomerID(t *testing.T) {
 // Team Member Tests
 
 func TestStore_CreateTeamMember(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -559,7 +558,7 @@ func TestStore_CreateTeamMember(t *testing.T) {
 				member, _ := createTestUser(t, testDB, "Team", "Member")
 				account, _ := testDB.Store.CreateAccount(ctx, CreateAccountParams{
 					Name:        "Test Account",
-					Slug:        "test",
+					Slug:        "test-" + uuid.New().String(),
 					OwnerUserID: owner.ID,
 					Plan:        "pro",
 				})
@@ -592,7 +591,7 @@ func TestStore_CreateTeamMember(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			params := tt.setup(t)
 
 			member, err := testDB.Store.CreateTeamMember(ctx, params)
@@ -609,8 +608,8 @@ func TestStore_CreateTeamMember(t *testing.T) {
 }
 
 func TestStore_GetTeamMembersByAccountID(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -629,7 +628,7 @@ func TestStore_GetTeamMembersByAccountID(t *testing.T) {
 				member2, _ := createTestUser(t, testDB, "Member", "Two")
 				account, _ := testDB.Store.CreateAccount(ctx, CreateAccountParams{
 					Name:        "Test Account",
-					Slug:        "test",
+					Slug:        "test-" + uuid.New().String(),
 					OwnerUserID: owner.ID,
 					Plan:        "pro",
 				})
@@ -654,7 +653,7 @@ func TestStore_GetTeamMembersByAccountID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			accountID := tt.setup(t)
 
 			members, err := testDB.Store.GetTeamMembersByAccountID(ctx, accountID)
@@ -671,8 +670,8 @@ func TestStore_GetTeamMembersByAccountID(t *testing.T) {
 }
 
 func TestStore_DeleteTeamMember(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -689,7 +688,7 @@ func TestStore_DeleteTeamMember(t *testing.T) {
 				member, _ := createTestUser(t, testDB, "Team", "Member")
 				account, _ := testDB.Store.CreateAccount(ctx, CreateAccountParams{
 					Name:        "Test Account",
-					Slug:        "test",
+					Slug:        "test-" + uuid.New().String(),
 					OwnerUserID: owner.ID,
 					Plan:        "pro",
 				})
@@ -707,7 +706,7 @@ func TestStore_DeleteTeamMember(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			accountID, userID := tt.setup(t)
 
 			err := testDB.Store.DeleteTeamMember(ctx, accountID, userID)

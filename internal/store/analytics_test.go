@@ -10,22 +10,24 @@ import (
 )
 
 func TestStore_GetSignupsOverTime(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 
-	// Create test account and campaign
+	// Create test account and campaign with unique slugs
+	uniqueID := uuid.New().String()[:8]
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Analytics Test", "analytics-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Analytics Test "+uniqueID, "analytics-test-"+uniqueID)
 
 	// Create users at specific times for testing
+	// Use noon as the base time to avoid date boundary issues
 	now := time.Now().UTC()
-	yesterday := now.AddDate(0, 0, -1)
-	twoDaysAgo := now.AddDate(0, 0, -2)
-	lastWeek := now.AddDate(0, 0, -7)
-	lastMonth := now.AddDate(0, -1, 0)
+	todayNoon := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC)
+	yesterdayNoon := todayNoon.AddDate(0, 0, -1)
+	twoDaysAgoNoon := todayNoon.AddDate(0, 0, -2)
+	lastWeekNoon := todayNoon.AddDate(0, 0, -7)
+	lastMonthNoon := todayNoon.AddDate(0, -1, 0)
 
 	// Helper to create user with specific created_at
 	createUserAtTime := func(email string, createdAt time.Time) {
@@ -41,19 +43,19 @@ func TestStore_GetSignupsOverTime(t *testing.T) {
 		}
 	}
 
-	// Create users at different times
-	createUserAtTime("today1@example.com", now.Add(-1*time.Hour))
-	createUserAtTime("today2@example.com", now.Add(-2*time.Hour))
-	createUserAtTime("today3@example.com", now.Add(-3*time.Hour))
-	createUserAtTime("yesterday1@example.com", yesterday)
-	createUserAtTime("yesterday2@example.com", yesterday.Add(-1*time.Hour))
-	createUserAtTime("twodays1@example.com", twoDaysAgo)
-	createUserAtTime("lastweek1@example.com", lastWeek)
-	createUserAtTime("lastmonth1@example.com", lastMonth)
+	// Create users at different times (using minute offsets to stay within same day)
+	createUserAtTime(uniqueID+"today1@example.com", todayNoon.Add(-1*time.Minute))
+	createUserAtTime(uniqueID+"today2@example.com", todayNoon.Add(-2*time.Minute))
+	createUserAtTime(uniqueID+"today3@example.com", todayNoon.Add(-3*time.Minute))
+	createUserAtTime(uniqueID+"yesterday1@example.com", yesterdayNoon)
+	createUserAtTime(uniqueID+"yesterday2@example.com", yesterdayNoon.Add(-1*time.Minute))
+	createUserAtTime(uniqueID+"twodays1@example.com", twoDaysAgoNoon)
+	createUserAtTime(uniqueID+"lastweek1@example.com", lastWeekNoon)
+	createUserAtTime(uniqueID+"lastmonth1@example.com", lastMonthNoon)
 
 	t.Run("daily period", func(t *testing.T) {
-		from := now.AddDate(0, 0, -3)
-		to := now
+		from := todayNoon.AddDate(0, 0, -3)
+		to := todayNoon.AddDate(0, 0, 1) // Include today
 
 		results, err := testDB.Store.GetSignupsOverTime(ctx, campaign.ID, from, to, "day")
 		if err != nil {
@@ -67,10 +69,10 @@ func TestStore_GetSignupsOverTime(t *testing.T) {
 		// Verify we have data for today
 		todayCount := 0
 		yesterdayCount := 0
-		for _, r := range results {
-			truncatedToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-			truncatedYesterday := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC)
+		truncatedToday := time.Date(todayNoon.Year(), todayNoon.Month(), todayNoon.Day(), 0, 0, 0, 0, time.UTC)
+		truncatedYesterday := time.Date(yesterdayNoon.Year(), yesterdayNoon.Month(), yesterdayNoon.Day(), 0, 0, 0, 0, time.UTC)
 
+		for _, r := range results {
 			if r.Date.Equal(truncatedToday) {
 				todayCount = r.Count
 			}
@@ -88,8 +90,9 @@ func TestStore_GetSignupsOverTime(t *testing.T) {
 	})
 
 	t.Run("hourly period", func(t *testing.T) {
-		from := now.Add(-4 * time.Hour)
-		to := now
+		// Use a time range that includes todayNoon
+		from := todayNoon.Add(-1 * time.Hour)
+		to := todayNoon.Add(1 * time.Hour)
 
 		results, err := testDB.Store.GetSignupsOverTime(ctx, campaign.ID, from, to, "hour")
 		if err != nil {
@@ -199,7 +202,8 @@ func TestStore_GetSignupsOverTime(t *testing.T) {
 	})
 
 	t.Run("different campaign returns no data", func(t *testing.T) {
-		otherCampaign := createTestCampaign(t, testDB, account.ID, "Other Campaign", "other-campaign")
+		otherUniqueID := uuid.New().String()[:8]
+		otherCampaign := createTestCampaign(t, testDB, account.ID, "Other Campaign "+otherUniqueID, "other-campaign-"+otherUniqueID)
 
 		from := now.AddDate(0, 0, -7)
 		to := now
@@ -216,20 +220,22 @@ func TestStore_GetSignupsOverTime(t *testing.T) {
 }
 
 func TestStore_GetSignupsBySource(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 
-	// Create test account and campaign
+	// Create test account and campaign with unique slugs
+	uniqueID := uuid.New().String()[:8]
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Source Analytics Test", "source-analytics-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Source Analytics Test "+uniqueID, "source-analytics-test-"+uniqueID)
 
 	// Create users at specific times with different UTM sources
+	// Use noon as the base time to avoid date boundary issues
 	now := time.Now().UTC()
-	yesterday := now.AddDate(0, 0, -1)
-	twoDaysAgo := now.AddDate(0, 0, -2)
+	todayNoon := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC)
+	yesterdayNoon := todayNoon.AddDate(0, 0, -1)
+	twoDaysAgoNoon := todayNoon.AddDate(0, 0, -2)
 
 	// Helper to create user with specific created_at and utm_source
 	createUserWithSource := func(email string, createdAt time.Time, utmSource *string) {
@@ -253,23 +259,23 @@ func TestStore_GetSignupsBySource(t *testing.T) {
 	google := "google"
 	facebook := "facebook"
 
-	// Today: 2 google, 1 facebook, 1 null
-	createUserWithSource("today-google1@example.com", now.Add(-1*time.Hour), &google)
-	createUserWithSource("today-google2@example.com", now.Add(-2*time.Hour), &google)
-	createUserWithSource("today-facebook1@example.com", now.Add(-3*time.Hour), &facebook)
-	createUserWithSource("today-null1@example.com", now.Add(-4*time.Hour), nil)
+	// Today: 2 google, 1 facebook, 1 null (using minute offsets to stay within same day)
+	createUserWithSource(uniqueID+"today-google1@example.com", todayNoon.Add(-1*time.Minute), &google)
+	createUserWithSource(uniqueID+"today-google2@example.com", todayNoon.Add(-2*time.Minute), &google)
+	createUserWithSource(uniqueID+"today-facebook1@example.com", todayNoon.Add(-3*time.Minute), &facebook)
+	createUserWithSource(uniqueID+"today-null1@example.com", todayNoon.Add(-4*time.Minute), nil)
 
 	// Yesterday: 1 google, 2 facebook
-	createUserWithSource("yesterday-google1@example.com", yesterday, &google)
-	createUserWithSource("yesterday-facebook1@example.com", yesterday.Add(-1*time.Hour), &facebook)
-	createUserWithSource("yesterday-facebook2@example.com", yesterday.Add(-2*time.Hour), &facebook)
+	createUserWithSource(uniqueID+"yesterday-google1@example.com", yesterdayNoon, &google)
+	createUserWithSource(uniqueID+"yesterday-facebook1@example.com", yesterdayNoon.Add(-1*time.Minute), &facebook)
+	createUserWithSource(uniqueID+"yesterday-facebook2@example.com", yesterdayNoon.Add(-2*time.Minute), &facebook)
 
 	// Two days ago: 1 null
-	createUserWithSource("twodays-null1@example.com", twoDaysAgo, nil)
+	createUserWithSource(uniqueID+"twodays-null1@example.com", twoDaysAgoNoon, nil)
 
 	t.Run("daily period with multiple sources", func(t *testing.T) {
-		from := now.AddDate(0, 0, -3)
-		to := now
+		from := todayNoon.AddDate(0, 0, -3)
+		to := todayNoon.AddDate(0, 0, 1) // Include today
 
 		results, err := testDB.Store.GetSignupsBySource(ctx, campaign.ID, from, to, "day")
 		if err != nil {
@@ -303,8 +309,8 @@ func TestStore_GetSignupsBySource(t *testing.T) {
 	})
 
 	t.Run("daily period - verify date grouping", func(t *testing.T) {
-		from := now.AddDate(0, 0, -3)
-		to := now
+		from := todayNoon.AddDate(0, 0, -3)
+		to := todayNoon.AddDate(0, 0, 1) // Include today
 
 		results, err := testDB.Store.GetSignupsBySource(ctx, campaign.ID, from, to, "day")
 		if err != nil {
@@ -325,8 +331,8 @@ func TestStore_GetSignupsBySource(t *testing.T) {
 			dateSourceCounts[dateKey][source] = r.Count
 		}
 
-		todayKey := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
-		yesterdayKey := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+		todayKey := time.Date(todayNoon.Year(), todayNoon.Month(), todayNoon.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+		yesterdayKey := time.Date(yesterdayNoon.Year(), yesterdayNoon.Month(), yesterdayNoon.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 
 		// Verify today's counts
 		if dateSourceCounts[todayKey]["google"] != 2 {
@@ -419,7 +425,8 @@ func TestStore_GetSignupsBySource(t *testing.T) {
 	})
 
 	t.Run("different campaign returns no data", func(t *testing.T) {
-		otherCampaign := createTestCampaign(t, testDB, account.ID, "Other Campaign 2", "other-campaign-2")
+		otherUniqueID := uuid.New().String()[:8]
+		otherCampaign := createTestCampaign(t, testDB, account.ID, "Other Campaign 2 "+otherUniqueID, "other-campaign-2-"+otherUniqueID)
 
 		from := now.AddDate(0, 0, -7)
 		to := now
@@ -436,14 +443,14 @@ func TestStore_GetSignupsBySource(t *testing.T) {
 }
 
 func TestStore_GetSignupsOverTime_TimezoneHandling(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
 
 	ctx := context.Background()
 
+	uniqueID := uuid.New().String()[:8]
 	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID, "Timezone Test", "timezone-test")
+	campaign := createTestCampaign(t, testDB, account.ID, "Timezone Test "+uniqueID, "timezone-test-"+uniqueID)
 
 	// Create a user at a specific UTC time
 	specificTime := time.Date(2025, 12, 20, 14, 30, 0, 0, time.UTC)
@@ -452,7 +459,7 @@ func TestStore_GetSignupsOverTime_TimezoneHandling(t *testing.T) {
 			id, campaign_id, email, referral_code, position, original_position,
 			terms_accepted, created_at, updated_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-	`, uuid.New(), campaign.ID, "timezone@example.com", "TZREF1", 1, 1, true, specificTime, specificTime)
+	`, uuid.New(), campaign.ID, uniqueID+"timezone@example.com", "TZREF"+uniqueID, 1, 1, true, specificTime, specificTime)
 	if err != nil {
 		t.Fatalf("Failed to create test user: %v", err)
 	}

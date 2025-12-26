@@ -10,8 +10,8 @@ import (
 )
 
 func TestStore_CreateSubscription(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -25,19 +25,23 @@ func TestStore_CreateSubscription(t *testing.T) {
 			setup: func(t *testing.T) CreateSubscriptionsParams {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "Sub", "User")
-				product, _ := testDB.Store.CreateProduct(ctx, "prod_test123", "Test Product", "A test product")
+				prodStripeID := "prod_" + uuid.New().String()
+				priceStripeID := "price_" + uuid.New().String()
+				subStripeID := "sub_" + uuid.New().String()
+
+				product, _ := testDB.Store.CreateProduct(ctx, prodStripeID, "Test Product", "A test product")
 				price := Price{
 					ProductID:   product.ID,
-					StripeID:    "price_test123",
+					StripeID:    priceStripeID,
 					Description: "Test Price",
 				}
 				testDB.Store.CreatePrice(ctx, price)
-				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, "price_test123")
+				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, priceStripeID)
 
 				return CreateSubscriptionsParams{
 					UserID:          user.ID,
 					PriceID:         priceRecord.ID,
-					StripeID:        "sub_test123",
+					StripeID:        subStripeID,
 					Status:          "active",
 					StartDate:       time.Now(),
 					EndDate:         time.Now().AddDate(1, 0, 0),
@@ -51,19 +55,23 @@ func TestStore_CreateSubscription(t *testing.T) {
 			setup: func(t *testing.T) CreateSubscriptionsParams {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "Trial", "User")
-				product, _ := testDB.Store.CreateProduct(ctx, "prod_trial123", "Trial Product", "A trial product")
+				prodStripeID := "prod_" + uuid.New().String()
+				priceStripeID := "price_" + uuid.New().String()
+				subStripeID := "sub_" + uuid.New().String()
+
+				product, _ := testDB.Store.CreateProduct(ctx, prodStripeID, "Trial Product", "A trial product")
 				price := Price{
 					ProductID:   product.ID,
-					StripeID:    "price_trial123",
+					StripeID:    priceStripeID,
 					Description: "Trial Price",
 				}
 				testDB.Store.CreatePrice(ctx, price)
-				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, "price_trial123")
+				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, priceStripeID)
 
 				return CreateSubscriptionsParams{
 					UserID:          user.ID,
 					PriceID:         priceRecord.ID,
-					StripeID:        "sub_trial123",
+					StripeID:        subStripeID,
 					Status:          "trialing",
 					StartDate:       time.Now(),
 					EndDate:         time.Now().AddDate(1, 0, 0),
@@ -76,7 +84,7 @@ func TestStore_CreateSubscription(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			params := tt.setup(t)
 
 			err := testDB.Store.CreateSubscription(ctx, params)
@@ -104,8 +112,8 @@ func TestStore_CreateSubscription(t *testing.T) {
 }
 
 func TestStore_GetSubscription(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -113,39 +121,43 @@ func TestStore_GetSubscription(t *testing.T) {
 		name     string
 		setup    func(t *testing.T) string
 		wantErr  bool
-		validate func(t *testing.T, sub Subscription)
+		validate func(t *testing.T, sub Subscription, expectedStripeID string)
 	}{
 		{
 			name: "get existing subscription",
 			setup: func(t *testing.T) string {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "Sub", "User")
-				product, _ := testDB.Store.CreateProduct(ctx, "prod_get123", "Get Product", "Product for get test")
+				prodStripeID := "prod_" + uuid.New().String()
+				priceStripeID := "price_" + uuid.New().String()
+				subStripeID := "sub_" + uuid.New().String()
+
+				product, _ := testDB.Store.CreateProduct(ctx, prodStripeID, "Get Product", "Product for get test")
 				price := Price{
 					ProductID:   product.ID,
-					StripeID:    "price_get123",
+					StripeID:    priceStripeID,
 					Description: "Get Price",
 				}
 				testDB.Store.CreatePrice(ctx, price)
-				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, "price_get123")
+				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, priceStripeID)
 
 				params := CreateSubscriptionsParams{
 					UserID:          user.ID,
 					PriceID:         priceRecord.ID,
-					StripeID:        "sub_get123",
+					StripeID:        subStripeID,
 					Status:          "active",
 					StartDate:       time.Now(),
 					EndDate:         time.Now().AddDate(1, 0, 0),
 					NextBillingDate: time.Now().AddDate(0, 1, 0),
 				}
 				testDB.Store.CreateSubscription(ctx, params)
-				return "sub_get123"
+				return subStripeID
 			},
 			wantErr: false,
-			validate: func(t *testing.T, sub Subscription) {
+			validate: func(t *testing.T, sub Subscription, expectedStripeID string) {
 				t.Helper()
-				if sub.StripeID != "sub_get123" {
-					t.Errorf("StripeID = %v, want sub_get123", sub.StripeID)
+				if sub.StripeID != expectedStripeID {
+					t.Errorf("StripeID = %v, want %v", sub.StripeID, expectedStripeID)
 				}
 				if sub.Status != "active" {
 					t.Errorf("Status = %v, want active", sub.Status)
@@ -155,7 +167,7 @@ func TestStore_GetSubscription(t *testing.T) {
 		{
 			name: "subscription does not exist",
 			setup: func(t *testing.T) string {
-				return "sub_nonexistent"
+				return "sub_" + uuid.New().String()
 			},
 			wantErr: true,
 		},
@@ -163,7 +175,7 @@ func TestStore_GetSubscription(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			stripeID := tt.setup(t)
 
 			sub, err := testDB.Store.GetSubscription(ctx, stripeID)
@@ -173,15 +185,15 @@ func TestStore_GetSubscription(t *testing.T) {
 			}
 
 			if !tt.wantErr && tt.validate != nil {
-				tt.validate(t, sub)
+				tt.validate(t, sub, stripeID)
 			}
 		})
 	}
 }
 
 func TestStore_GetSubscriptionByUserID(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -196,19 +208,23 @@ func TestStore_GetSubscriptionByUserID(t *testing.T) {
 			setup: func(t *testing.T) uuid.UUID {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "User", "WithSub")
-				product, _ := testDB.Store.CreateProduct(ctx, "prod_user123", "User Product", "Product for user")
+				prodStripeID := "prod_" + uuid.New().String()
+				priceStripeID := "price_" + uuid.New().String()
+				subStripeID := "sub_" + uuid.New().String()
+
+				product, _ := testDB.Store.CreateProduct(ctx, prodStripeID, "User Product", "Product for user")
 				price := Price{
 					ProductID:   product.ID,
-					StripeID:    "price_user123",
+					StripeID:    priceStripeID,
 					Description: "User Price",
 				}
 				testDB.Store.CreatePrice(ctx, price)
-				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, "price_user123")
+				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, priceStripeID)
 
 				params := CreateSubscriptionsParams{
 					UserID:          user.ID,
 					PriceID:         priceRecord.ID,
-					StripeID:        "sub_user123",
+					StripeID:        subStripeID,
 					Status:          "active",
 					StartDate:       time.Now(),
 					EndDate:         time.Now().AddDate(1, 0, 0),
@@ -238,7 +254,7 @@ func TestStore_GetSubscriptionByUserID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			userID := tt.setup(t)
 
 			sub, err := testDB.Store.GetSubscriptionByUserID(ctx, userID)
@@ -255,8 +271,8 @@ func TestStore_GetSubscriptionByUserID(t *testing.T) {
 }
 
 func TestStore_UpdateSubscription(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -271,19 +287,23 @@ func TestStore_UpdateSubscription(t *testing.T) {
 			setup: func(t *testing.T) (string, UpdateSubscriptionParams) {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "Update", "User")
-				product, _ := testDB.Store.CreateProduct(ctx, "prod_update123", "Update Product", "Product for update")
+				prodStripeID := "prod_" + uuid.New().String()
+				priceStripeID := "price_" + uuid.New().String()
+				subStripeID := "sub_" + uuid.New().String()
+
+				product, _ := testDB.Store.CreateProduct(ctx, prodStripeID, "Update Product", "Product for update")
 				price := Price{
 					ProductID:   product.ID,
-					StripeID:    "price_update123",
+					StripeID:    priceStripeID,
 					Description: "Update Price",
 				}
 				testDB.Store.CreatePrice(ctx, price)
-				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, "price_update123")
+				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, priceStripeID)
 
 				params := CreateSubscriptionsParams{
 					UserID:          user.ID,
 					PriceID:         priceRecord.ID,
-					StripeID:        "sub_update123",
+					StripeID:        subStripeID,
 					Status:          "active",
 					StartDate:       time.Now(),
 					EndDate:         time.Now().AddDate(1, 0, 0),
@@ -295,10 +315,10 @@ func TestStore_UpdateSubscription(t *testing.T) {
 					Status:          "past_due",
 					EndDate:         time.Now().AddDate(1, 0, 0),
 					NextBillingDate: time.Now().AddDate(0, 1, 0),
-					StripeID:        "sub_update123",
-					StripePriceID:   "price_update123",
+					StripeID:        subStripeID,
+					StripePriceID:   priceStripeID,
 				}
-				return "sub_update123", updateParams
+				return subStripeID, updateParams
 			},
 			wantErr: false,
 			validate: func(t *testing.T, stripeID string, params UpdateSubscriptionParams) {
@@ -318,21 +338,26 @@ func TestStore_UpdateSubscription(t *testing.T) {
 			setup: func(t *testing.T) (string, UpdateSubscriptionParams) {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "Price", "User")
-				product, _ := testDB.Store.CreateProduct(ctx, "prod_price123", "Price Product", "Product for price test")
+				prodStripeID := "prod_" + uuid.New().String()
+				oldPriceStripeID := "price_" + uuid.New().String()
+				newPriceStripeID := "price_" + uuid.New().String()
+				subStripeID := "sub_" + uuid.New().String()
+
+				product, _ := testDB.Store.CreateProduct(ctx, prodStripeID, "Price Product", "Product for price test")
 
 				// Old price
 				oldPrice := Price{
 					ProductID:   product.ID,
-					StripeID:    "price_old123",
+					StripeID:    oldPriceStripeID,
 					Description: "Old Price",
 				}
 				testDB.Store.CreatePrice(ctx, oldPrice)
-				oldPriceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, "price_old123")
+				oldPriceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, oldPriceStripeID)
 
 				// New price
 				newPrice := Price{
 					ProductID:   product.ID,
-					StripeID:    "price_new123",
+					StripeID:    newPriceStripeID,
 					Description: "New Price",
 				}
 				testDB.Store.CreatePrice(ctx, newPrice)
@@ -340,7 +365,7 @@ func TestStore_UpdateSubscription(t *testing.T) {
 				params := CreateSubscriptionsParams{
 					UserID:          user.ID,
 					PriceID:         oldPriceRecord.ID,
-					StripeID:        "sub_price123",
+					StripeID:        subStripeID,
 					Status:          "active",
 					StartDate:       time.Now(),
 					EndDate:         time.Now().AddDate(1, 0, 0),
@@ -352,10 +377,10 @@ func TestStore_UpdateSubscription(t *testing.T) {
 					Status:          "active",
 					EndDate:         time.Now().AddDate(1, 0, 0),
 					NextBillingDate: time.Now().AddDate(0, 1, 0),
-					StripeID:        "sub_price123",
-					StripePriceID:   "price_new123",
+					StripeID:        subStripeID,
+					StripePriceID:   newPriceStripeID,
 				}
-				return "sub_price123", updateParams
+				return subStripeID, updateParams
 			},
 			wantErr: false,
 			validate: func(t *testing.T, stripeID string, params UpdateSubscriptionParams) {
@@ -376,11 +401,15 @@ func TestStore_UpdateSubscription(t *testing.T) {
 			name: "update non-existent subscription",
 			setup: func(t *testing.T) (string, UpdateSubscriptionParams) {
 				t.Helper()
+				prodStripeID := "prod_" + uuid.New().String()
+				priceStripeID := "price_" + uuid.New().String()
+				subStripeID := "sub_" + uuid.New().String()
+
 				// Create a price for the update params
-				product, _ := testDB.Store.CreateProduct(ctx, "prod_fake123", "Fake Product", "Fake product")
+				product, _ := testDB.Store.CreateProduct(ctx, prodStripeID, "Fake Product", "Fake product")
 				price := Price{
 					ProductID:   product.ID,
-					StripeID:    "price_fake123",
+					StripeID:    priceStripeID,
 					Description: "Fake Price",
 				}
 				testDB.Store.CreatePrice(ctx, price)
@@ -389,10 +418,10 @@ func TestStore_UpdateSubscription(t *testing.T) {
 					Status:          "active",
 					EndDate:         time.Now().AddDate(1, 0, 0),
 					NextBillingDate: time.Now().AddDate(0, 1, 0),
-					StripeID:        "sub_nonexistent",
-					StripePriceID:   "price_fake123",
+					StripeID:        subStripeID,
+					StripePriceID:   priceStripeID,
 				}
-				return "sub_nonexistent", updateParams
+				return subStripeID, updateParams
 			},
 			wantErr: true,
 		},
@@ -400,7 +429,7 @@ func TestStore_UpdateSubscription(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			stripeID, params := tt.setup(t)
 
 			err := testDB.Store.UpdateSubscription(ctx, params)
@@ -417,8 +446,8 @@ func TestStore_UpdateSubscription(t *testing.T) {
 }
 
 func TestStore_CancelSubscription(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
@@ -433,19 +462,23 @@ func TestStore_CancelSubscription(t *testing.T) {
 			setup: func(t *testing.T) (string, time.Time) {
 				t.Helper()
 				user, _ := createTestUser(t, testDB, "Cancel", "User")
-				product, _ := testDB.Store.CreateProduct(ctx, "prod_cancel123", "Cancel Product", "Product for cancel")
+				prodStripeID := "prod_" + uuid.New().String()
+				priceStripeID := "price_" + uuid.New().String()
+				subStripeID := "sub_" + uuid.New().String()
+
+				product, _ := testDB.Store.CreateProduct(ctx, prodStripeID, "Cancel Product", "Product for cancel")
 				price := Price{
 					ProductID:   product.ID,
-					StripeID:    "price_cancel123",
+					StripeID:    priceStripeID,
 					Description: "Cancel Price",
 				}
 				testDB.Store.CreatePrice(ctx, price)
-				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, "price_cancel123")
+				priceRecord, _ := testDB.Store.GetPriceByStripeID(ctx, priceStripeID)
 
 				params := CreateSubscriptionsParams{
 					UserID:          user.ID,
 					PriceID:         priceRecord.ID,
-					StripeID:        "sub_cancel123",
+					StripeID:        subStripeID,
 					Status:          "active",
 					StartDate:       time.Now(),
 					EndDate:         time.Now().AddDate(1, 0, 0),
@@ -454,7 +487,7 @@ func TestStore_CancelSubscription(t *testing.T) {
 				testDB.Store.CreateSubscription(ctx, params)
 
 				cancelAt := time.Now().AddDate(0, 0, 7) // Cancel in 7 days
-				return "sub_cancel123", cancelAt
+				return subStripeID, cancelAt
 			},
 			wantErr: false,
 			validate: func(t *testing.T, stripeID string, cancelAt time.Time) {
@@ -477,7 +510,7 @@ func TestStore_CancelSubscription(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDB.Truncate(t)
+			t.Parallel()
 			stripeID, cancelAt := tt.setup(t)
 
 			err := testDB.Store.CancelSubscription(ctx, stripeID, cancelAt)
@@ -494,8 +527,8 @@ func TestStore_CancelSubscription(t *testing.T) {
 }
 
 func TestStore_GetSubscriptionByUserID_NotFound(t *testing.T) {
+	t.Parallel()
 	testDB := SetupTestDB(t, TestDBTypePostgres)
-	defer testDB.Close()
 
 	ctx := context.Background()
 
