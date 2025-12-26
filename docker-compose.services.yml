@@ -57,14 +57,5 @@ services:
       timeout: 10s
       retries: 5
 
-  ready:
-    image: busybox
-    depends_on:
-      flyway:
-        condition: service_completed_successfully
-      kafka:
-        condition: service_healthy
-    command: "true"
-
 volumes:
   postgres_data:

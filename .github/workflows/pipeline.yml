@@ -61,7 +61,9 @@ jobs:
           EOF
 
       - name: Start services with docker-compose
-        run: docker compose -f docker-compose.services.yml up ready
+        run: |
+          docker compose -f docker-compose.services.yml up -d --wait db kafka
+          docker compose -f docker-compose.services.yml up flyway
 
       - name: Build the application
         run: go build -v -o base-server .
