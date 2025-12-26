@@ -234,8 +234,8 @@ func TestListUsers_Success(t *testing.T) {
 		ID:        campaignID,
 		AccountID: accountID,
 	}, nil)
-	mockStore.EXPECT().GetWaitlistUsersByCampaignWithFilters(gomock.Any(), gomock.Any()).Return(users, nil)
-	mockStore.EXPECT().CountWaitlistUsersWithFilters(gomock.Any(), campaignID, gomock.Any(), gomock.Any()).Return(2, nil)
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(users, nil)
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(2, nil)
 
 	result, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{Page: 1, Limit: 20})
 

@@ -546,14 +546,14 @@ func TestStore_ListWaitlistUsersWithExtendedFilters(t *testing.T) {
 	campaign := createTestCampaign(t, testDB, account.ID, "Extended Filter Test-"+uuid.New().String(), "extended-filter-test-"+uuid.New().String())
 
 	// Create users with different attributes for filtering
-	// User 1: verified, organic source, with referrals, position 1, company=Acme
+	// User 1: verified, direct source, with referrals, position 1, company=Acme
 	user1, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
 		CampaignID:       campaign.ID,
 		Email:            uuid.New().String() + "@example.com",
 		ReferralCode:     "REF1-" + uuid.New().String(),
 		Position:         1,
 		OriginalPosition: 1,
-		Source:           stringPtr("organic"),
+		Source:           stringPtr("direct"),
 		Metadata: JSONB{
 			"company": "Acme",
 			"role":    "Developer",
@@ -592,7 +592,7 @@ func TestStore_ListWaitlistUsersWithExtendedFilters(t *testing.T) {
 		ReferralCode:     "REF3-" + uuid.New().String(),
 		Position:         5,
 		OriginalPosition: 5,
-		Source:           stringPtr("twitter"),
+		Source:           stringPtr("social"),
 		Metadata: JSONB{
 			"company": "Acme",
 			"role":    "Designer",
@@ -605,14 +605,14 @@ func TestStore_ListWaitlistUsersWithExtendedFilters(t *testing.T) {
 	testDB.Store.VerifyWaitlistUserEmail(ctx, user3.ID)
 	testDB.Store.IncrementReferralCount(ctx, user3.ID)
 
-	// User 4: unverified, organic source, no referrals, position 10, company=Gamma
+	// User 4: unverified, direct source, no referrals, position 10, company=Gamma
 	_, err = testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
 		CampaignID:       campaign.ID,
 		Email:            uuid.New().String() + "@example.com",
 		ReferralCode:     "REF4-" + uuid.New().String(),
 		Position:         10,
 		OriginalPosition: 10,
-		Source:           stringPtr("organic"),
+		Source:           stringPtr("direct"),
 		Metadata: JSONB{
 			"company": "Gamma",
 			"role":    "Developer",
@@ -644,23 +644,23 @@ func TestStore_ListWaitlistUsersWithExtendedFilters(t *testing.T) {
 			name: "filter by single source",
 			params: ExtendedListWaitlistUsersParams{
 				CampaignID: campaign.ID,
-				Sources:    []string{"organic"},
+				Sources:    []string{"direct"},
 				Limit:      10,
 				Offset:     0,
 			},
 			expectedCount: 2, // Users 1 and 4
-			description:   "Should return only organic source users",
+			description:   "Should return only direct source users",
 		},
 		{
 			name: "filter by multiple sources",
 			params: ExtendedListWaitlistUsersParams{
 				CampaignID: campaign.ID,
-				Sources:    []string{"organic", "referral"},
+				Sources:    []string{"direct", "referral"},
 				Limit:      10,
 				Offset:     0,
 			},
 			expectedCount: 3, // Users 1, 2, and 4
-			description:   "Should return organic and referral source users",
+			description:   "Should return direct and referral source users",
 		},
 		{
 			name: "filter by hasReferrals",
@@ -711,25 +711,25 @@ func TestStore_ListWaitlistUsersWithExtendedFilters(t *testing.T) {
 			name: "combine source and hasReferrals filters",
 			params: ExtendedListWaitlistUsersParams{
 				CampaignID:   campaign.ID,
-				Sources:      []string{"organic"},
+				Sources:      []string{"direct"},
 				HasReferrals: boolPtr(true),
 				Limit:        10,
 				Offset:       0,
 			},
 			expectedCount: 1, // Only User 1
-			description:   "Should return organic users with referrals",
+			description:   "Should return direct users with referrals",
 		},
 		{
 			name: "combine custom fields and source filter",
 			params: ExtendedListWaitlistUsersParams{
 				CampaignID:   campaign.ID,
 				CustomFields: map[string]string{"company": "Acme"},
-				Sources:      []string{"organic"},
+				Sources:      []string{"direct"},
 				Limit:        10,
 				Offset:       0,
 			},
-			expectedCount: 1, // Only User 1 (Acme + organic)
-			description:   "Should return organic users from Acme",
+			expectedCount: 1, // Only User 1 (Acme + direct)
+			description:   "Should return direct users from Acme",
 		},
 		{
 			name: "sort by position ascending",
@@ -845,7 +845,7 @@ func TestStore_CountWaitlistUsersWithExtendedFilters(t *testing.T) {
 
 	// Create 5 users with different attributes
 	for i := 0; i < 5; i++ {
-		source := "organic"
+		source := "direct"
 		if i%2 == 0 {
 			source = "referral"
 		}
@@ -889,10 +889,10 @@ func TestStore_CountWaitlistUsersWithExtendedFilters(t *testing.T) {
 			expectedCount: 5,
 		},
 		{
-			name: "count by source organic",
+			name: "count by source direct",
 			params: ExtendedListWaitlistUsersParams{
 				CampaignID: campaign.ID,
-				Sources:    []string{"organic"},
+				Sources:    []string{"direct"},
 			},
 			expectedCount: 2,
 		},
