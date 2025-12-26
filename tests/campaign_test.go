@@ -574,34 +574,34 @@ func TestAPI_Campaign_Delete(t *testing.T) {
 func TestAPI_Campaign_GetPublicCampaign(t *testing.T) {
 	token := createAuthenticatedUser(t)
 
-	// Create a draft campaign
+	// Create a draft campaign with settings
 	draftResp := POST(t, "/api/v1/campaigns").
 		WithToken(token).
 		WithBody(map[string]interface{}{
-			"name":            "Public Draft Campaign",
-			"slug":            generateTestCampaignSlug(),
-			"description":     "A draft campaign for public access",
-			"type":            "waitlist",
-			"form_config":     map[string]interface{}{"fields": []string{"email", "name"}},
-			"referral_config": map[string]interface{}{"enabled": true},
-			"email_config":    map[string]interface{}{},
-			"branding_config": map[string]interface{}{"theme": "dark"},
+			"name":              "Public Draft Campaign",
+			"slug":              generateTestCampaignSlug(),
+			"description":       "A draft campaign for public access",
+			"type":              "waitlist",
+			"form_settings":     map[string]interface{}{"captcha_enabled": false},
+			"referral_settings": map[string]interface{}{"enabled": true},
+			"email_settings":    map[string]interface{}{},
+			"branding_settings": map[string]interface{}{"primary_color": "#000000"},
 		}).
 		Do()
 	draftResp.RequireStatus(http.StatusCreated)
 	draftCampaignID := draftResp.JSON()["id"].(string)
 
-	// Create an active campaign
+	// Create an active campaign with settings
 	activeResp := POST(t, "/api/v1/campaigns").
 		WithToken(token).
 		WithBody(map[string]interface{}{
-			"name":            "Public Active Campaign",
-			"slug":            generateTestCampaignSlug(),
-			"type":            "referral",
-			"form_config":     map[string]interface{}{},
-			"referral_config": map[string]interface{}{},
-			"email_config":    map[string]interface{}{},
-			"branding_config": map[string]interface{}{},
+			"name":              "Public Active Campaign",
+			"slug":              generateTestCampaignSlug(),
+			"type":              "referral",
+			"form_settings":     map[string]interface{}{},
+			"referral_settings": map[string]interface{}{},
+			"email_settings":    map[string]interface{}{},
+			"branding_settings": map[string]interface{}{},
 		}).
 		Do()
 	activeResp.RequireStatus(http.StatusCreated)
@@ -630,9 +630,9 @@ func TestAPI_Campaign_GetPublicCampaign(t *testing.T) {
 				resp.AssertJSONField("name", "Public Draft Campaign")
 				resp.AssertJSONField("type", "waitlist")
 				resp.AssertJSONField("status", "draft")
-				resp.AssertJSONFieldNotNil("form_config")
-				resp.AssertJSONFieldNotNil("referral_config")
-				resp.AssertJSONFieldNotNil("branding_config")
+				resp.AssertJSONFieldNotNil("form_settings")
+				resp.AssertJSONFieldNotNil("referral_settings")
+				resp.AssertJSONFieldNotNil("branding_settings")
 				resp.AssertJSONFieldNotNil("account_id")
 			},
 		},

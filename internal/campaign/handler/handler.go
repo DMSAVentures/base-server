@@ -103,9 +103,9 @@ type CreateCampaignRequest struct {
 	BrandingSettings     *BrandingSettingsRequest     `json:"branding_settings,omitempty"`
 	FormSettings         *FormSettingsRequest         `json:"form_settings,omitempty"`
 	ReferralSettings     *ReferralSettingsRequest     `json:"referral_settings,omitempty"`
-	FormFields           []FormFieldRequest           `json:"form_fields,omitempty"`
-	ShareMessages        []ShareMessageRequest        `json:"share_messages,omitempty"`
-	TrackingIntegrations []TrackingIntegrationRequest `json:"tracking_integrations,omitempty"`
+	FormFields           []FormFieldRequest           `json:"form_fields,omitempty" binding:"dive"`
+	ShareMessages        []ShareMessageRequest        `json:"share_messages,omitempty" binding:"dive"`
+	TrackingIntegrations []TrackingIntegrationRequest `json:"tracking_integrations,omitempty" binding:"dive"`
 }
 
 // UpdateCampaignRequest represents the HTTP request for updating a campaign
@@ -123,9 +123,9 @@ type UpdateCampaignRequest struct {
 	BrandingSettings     *BrandingSettingsRequest     `json:"branding_settings,omitempty"`
 	FormSettings         *FormSettingsRequest         `json:"form_settings,omitempty"`
 	ReferralSettings     *ReferralSettingsRequest     `json:"referral_settings,omitempty"`
-	FormFields           []FormFieldRequest           `json:"form_fields,omitempty"`
-	ShareMessages        []ShareMessageRequest        `json:"share_messages,omitempty"`
-	TrackingIntegrations []TrackingIntegrationRequest `json:"tracking_integrations,omitempty"`
+	FormFields           []FormFieldRequest           `json:"form_fields,omitempty" binding:"dive"`
+	ShareMessages        []ShareMessageRequest        `json:"share_messages,omitempty" binding:"dive"`
+	TrackingIntegrations []TrackingIntegrationRequest `json:"tracking_integrations,omitempty" binding:"dive"`
 }
 
 // UpdateCampaignStatusRequest represents the HTTP request for updating campaign status
