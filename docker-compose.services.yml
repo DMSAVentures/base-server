@@ -29,7 +29,7 @@ services:
       FLYWAY_USER: base_user
       FLYWAY_PASSWORD: base_password
       FLYWAY_SCHEMAS: public
-      FLYWAY_CONNECT_RETRIES: 60 # Optional: attempts to connect to DB, useful for waiting until the DB is up
+      FLYWAY_CONNECT_RETRIES: 60
     command: migrate
 
   kafka:
@@ -56,6 +56,15 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
+
+  ready:
+    image: busybox
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    command: "true"
 
 volumes:
   postgres_data:

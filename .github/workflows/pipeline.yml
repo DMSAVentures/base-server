@@ -61,19 +61,7 @@ jobs:
           EOF
 
       - name: Start services with docker-compose
-        run: docker compose -f docker-compose.services.yml up -d
-
-      - name: Wait for services to be healthy
-        run: |
-          echo "Waiting for PostgreSQL to be ready..."
-          timeout 60 bash -c 'until docker compose -f docker-compose.services.yml exec -T db pg_isready -U base_user -d base_db; do sleep 2; done'
-          echo "Waiting for Flyway migrations to complete..."
-          docker compose -f docker-compose.services.yml wait flyway
-          docker compose -f docker-compose.services.yml logs flyway
-          echo "Waiting for Kafka to be ready..."
-          sleep 10
-          docker compose -f docker-compose.services.yml exec -T kafka kafka-topics --bootstrap-server localhost:9092 --list || echo "Kafka not fully ready yet"
-          timeout 60 bash -c 'until docker compose -f docker-compose.services.yml exec -T kafka kafka-broker-api-versions --bootstrap-server localhost:9092 2>/dev/null; do sleep 2; done'
+        run: docker compose -f docker-compose.services.yml up ready
 
       - name: Build the application
         run: go build -v -o base-server .
