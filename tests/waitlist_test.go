@@ -32,6 +32,13 @@ func TestAPI_WaitlistUser_PublicSignup(t *testing.T) {
 	parseJSONResponse(t, createBody, &createdCampaign)
 	campaignID := createdCampaign["id"].(string)
 
+	// Set campaign to active status so it can accept signups
+	statusPath := fmt.Sprintf("/api/v1/campaigns/%s/status", campaignID)
+	statusResp, _ := makeAuthenticatedRequest(t, http.MethodPatch, statusPath, map[string]interface{}{"status": "active"}, token)
+	if statusResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to set campaign status to active")
+	}
+
 	tests := []struct {
 		name           string
 		campaignID     string
@@ -254,6 +261,79 @@ func TestAPI_WaitlistUser_PublicSignup(t *testing.T) {
 	}
 }
 
+func TestAPI_WaitlistUser_SignupFailsForNonActiveCampaign(t *testing.T) {
+	token := createAuthenticatedUser(t)
+
+	// Create test campaigns for each non-active status
+	statusTests := []struct {
+		name           string
+		status         string
+		expectedStatus int
+		expectedCode   string
+	}{
+		{
+			name:           "signup fails for draft campaign",
+			status:         "draft", // Default status, no update needed
+			expectedStatus: http.StatusBadRequest,
+			expectedCode:   "CAMPAIGN_NOT_ACTIVE",
+		},
+		{
+			name:           "signup fails for paused campaign",
+			status:         "paused",
+			expectedStatus: http.StatusBadRequest,
+			expectedCode:   "CAMPAIGN_NOT_ACTIVE",
+		},
+		{
+			name:           "signup fails for completed campaign",
+			status:         "completed",
+			expectedStatus: http.StatusBadRequest,
+			expectedCode:   "CAMPAIGN_NOT_ACTIVE",
+		},
+	}
+
+	for _, tt := range statusTests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a campaign
+			createCampaignReq := map[string]interface{}{
+				"name": fmt.Sprintf("Test Campaign - %s", tt.status),
+				"slug": generateTestCampaignSlug(),
+				"type": "waitlist",
+			}
+			createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", createCampaignReq, token)
+			if createResp.StatusCode != http.StatusCreated {
+				t.Fatalf("Failed to create test campaign: %s", string(createBody))
+			}
+
+			var createdCampaign map[string]interface{}
+			parseJSONResponse(t, createBody, &createdCampaign)
+			campaignID := createdCampaign["id"].(string)
+
+			// Set status if not draft (draft is the default)
+			if tt.status != "draft" {
+				// First activate, then set to target status (some statuses may require being active first)
+				statusPath := fmt.Sprintf("/api/v1/campaigns/%s/status", campaignID)
+				makeAuthenticatedRequest(t, http.MethodPatch, statusPath, map[string]interface{}{"status": "active"}, token)
+				makeAuthenticatedRequest(t, http.MethodPatch, statusPath, map[string]interface{}{"status": tt.status}, token)
+			}
+
+			// Try to sign up - should fail
+			signupPath := fmt.Sprintf("/api/v1/campaigns/%s/users", campaignID)
+			signupResp, signupBody := makeRequest(t, http.MethodPost, signupPath, map[string]interface{}{
+				"email":          fmt.Sprintf("test-%s@example.com", tt.status),
+				"terms_accepted": true,
+			}, nil)
+
+			assertStatusCode(t, signupResp, tt.expectedStatus)
+
+			var errResp map[string]interface{}
+			parseJSONResponse(t, signupBody, &errResp)
+			if errResp["code"] != tt.expectedCode {
+				t.Errorf("Expected error code %s, got %v", tt.expectedCode, errResp["code"])
+			}
+		})
+	}
+}
+
 func TestAPI_CampaignCounters_RealTime(t *testing.T) {
 	// Create an authenticated user and a campaign
 	token := createAuthenticatedUser(t)
@@ -276,6 +356,13 @@ func TestAPI_CampaignCounters_RealTime(t *testing.T) {
 	var createdCampaign map[string]interface{}
 	parseJSONResponse(t, createBody, &createdCampaign)
 	campaignID := createdCampaign["id"].(string)
+
+	// Set campaign to active status so it can accept signups
+	statusPath := fmt.Sprintf("/api/v1/campaigns/%s/status", campaignID)
+	statusResp, _ := makeAuthenticatedRequest(t, http.MethodPatch, statusPath, map[string]interface{}{"status": "active"}, token)
+	if statusResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to set campaign status to active")
+	}
 
 	// Verify initial counts are zero
 	getCampaignPath := fmt.Sprintf("/api/v1/campaigns/%s", campaignID)

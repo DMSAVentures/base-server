@@ -66,6 +66,7 @@ const (
 	CodeAIServiceError        = "AI_SERVICE_ERROR"
 	CodeCaptchaRequired       = "CAPTCHA_REQUIRED"
 	CodeCaptchaFailed         = "CAPTCHA_FAILED"
+	CodeCampaignNotActive     = "CAMPAIGN_NOT_ACTIVE"
 )
 
 // NotFound creates a 404 Not Found error

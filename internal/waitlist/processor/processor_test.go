@@ -33,6 +33,7 @@ func TestSignupUser_Success(t *testing.T) {
 		AccountID: accountID,
 		Name:      "Test Campaign",
 		Slug:      "test-campaign",
+		Status:    store.CampaignStatusActive,
 	}
 
 	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(campaign, nil)
@@ -103,6 +104,7 @@ func TestSignupUser_EmailAlreadyExists(t *testing.T) {
 	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
 		ID:        campaignID,
 		AccountID: accountID,
+		Status:    store.CampaignStatusActive,
 	}, nil)
 	mockStore.EXPECT().GetWaitlistUserByEmail(gomock.Any(), campaignID, email).Return(store.WaitlistUser{
 		ID:    uuid.New(),
@@ -117,6 +119,96 @@ func TestSignupUser_EmailAlreadyExists(t *testing.T) {
 
 	if !errors.Is(err, ErrEmailAlreadyExists) {
 		t.Errorf("expected ErrEmailAlreadyExists, got %v", err)
+	}
+}
+
+func TestSignupUser_CampaignNotActive_Draft(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	campaignID := uuid.New()
+	accountID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+		Status:    store.CampaignStatusDraft,
+	}, nil)
+
+	req := SignupUserRequest{
+		Email: "test@example.com",
+	}
+
+	_, err := processor.SignupUser(ctx, campaignID, req, "https://example.com")
+
+	if !errors.Is(err, ErrCampaignNotActive) {
+		t.Errorf("expected ErrCampaignNotActive, got %v", err)
+	}
+}
+
+func TestSignupUser_CampaignNotActive_Paused(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	campaignID := uuid.New()
+	accountID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+		Status:    store.CampaignStatusPaused,
+	}, nil)
+
+	req := SignupUserRequest{
+		Email: "test@example.com",
+	}
+
+	_, err := processor.SignupUser(ctx, campaignID, req, "https://example.com")
+
+	if !errors.Is(err, ErrCampaignNotActive) {
+		t.Errorf("expected ErrCampaignNotActive, got %v", err)
+	}
+}
+
+func TestSignupUser_CampaignNotActive_Completed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	campaignID := uuid.New()
+	accountID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+		Status:    store.CampaignStatusCompleted,
+	}, nil)
+
+	req := SignupUserRequest{
+		Email: "test@example.com",
+	}
+
+	_, err := processor.SignupUser(ctx, campaignID, req, "https://example.com")
+
+	if !errors.Is(err, ErrCampaignNotActive) {
+		t.Errorf("expected ErrCampaignNotActive, got %v", err)
 	}
 }
 

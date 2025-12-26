@@ -104,6 +104,9 @@ func MapError(err error) *APIError {
 	case errors.Is(err, waitlistProcessor.ErrCaptchaFailed):
 		return BadRequest(CodeCaptchaFailed, "Captcha verification failed")
 
+	case errors.Is(err, waitlistProcessor.ErrCampaignNotActive):
+		return BadRequest(CodeCampaignNotActive, "This campaign is not currently accepting signups")
+
 	// Map rewards processor errors
 	case errors.Is(err, rewardsProcessor.ErrRewardNotFound):
 		return NotFound(CodeRewardNotFound, "Reward not found")

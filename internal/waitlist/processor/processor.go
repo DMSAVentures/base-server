@@ -64,6 +64,7 @@ var (
 	ErrMaxSignupsReached        = errors.New("campaign has reached maximum signups")
 	ErrCaptchaRequired          = errors.New("captcha verification required")
 	ErrCaptchaFailed            = errors.New("captcha verification failed")
+	ErrCampaignNotActive        = errors.New("campaign is not accepting signups")
 )
 
 type WaitlistProcessor struct {
@@ -128,6 +129,11 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 	}
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: campaign.AccountID.String()})
+
+	// Check campaign status - only active campaigns accept signups
+	if campaign.Status != store.CampaignStatusActive {
+		return SignupUserResponse{}, ErrCampaignNotActive
+	}
 
 	// Check if email already exists for this campaign
 	existingUser, err := p.store.GetWaitlistUserByEmail(ctx, campaignID, req.Email)
