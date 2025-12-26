@@ -1,3 +1,5 @@
 .idea/
 env.local
 server
+base-server
+coverage.out
