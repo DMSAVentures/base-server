@@ -11,6 +11,7 @@ import (
 )
 
 func TestAPI_Webhook_Create(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a campaign for testing webhook with campaign_id
@@ -189,6 +190,7 @@ func TestAPI_Webhook_Create(t *testing.T) {
 }
 
 func TestAPI_Webhook_List(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a few test webhooks
@@ -266,6 +268,7 @@ func TestAPI_Webhook_List(t *testing.T) {
 }
 
 func TestAPI_Webhook_GetByID(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test webhook
@@ -350,6 +353,7 @@ func TestAPI_Webhook_GetByID(t *testing.T) {
 }
 
 func TestAPI_Webhook_Update(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test webhook
@@ -471,6 +475,7 @@ func TestAPI_Webhook_Update(t *testing.T) {
 }
 
 func TestAPI_Webhook_Delete(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	tests := []struct {
@@ -539,6 +544,7 @@ func TestAPI_Webhook_Delete(t *testing.T) {
 }
 
 func TestAPI_Webhook_GetDeliveries(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test webhook
@@ -624,6 +630,7 @@ func TestAPI_Webhook_GetDeliveries(t *testing.T) {
 }
 
 func TestAPI_Webhook_TestWebhook(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Start a mock webhook server to receive webhook deliveries

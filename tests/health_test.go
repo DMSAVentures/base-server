@@ -9,6 +9,7 @@ import (
 )
 
 func TestAPI_Health(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name           string
 		expectedStatus int

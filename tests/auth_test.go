@@ -9,6 +9,7 @@ import (
 )
 
 func TestAPI_Auth_EmailSignup(t *testing.T) {
+	t.Parallel()
 	t.Skip("Skipping email signup test - requires Stripe API key for customer creation")
 	tests := []struct {
 		name           string
@@ -160,6 +161,7 @@ func TestAPI_Auth_EmailSignup(t *testing.T) {
 }
 
 func TestAPI_Auth_EmailLogin(t *testing.T) {
+	t.Parallel()
 	// First, create a test user for login tests (directly in database to bypass Stripe)
 	testEmail := generateTestEmail()
 	testPassword := "testpassword123"
@@ -287,6 +289,7 @@ func TestAPI_Auth_EmailLogin(t *testing.T) {
 }
 
 func TestAPI_Auth_GetUserInfo(t *testing.T) {
+	t.Parallel()
 	// Create test user directly in database and login to get token
 	token := createAuthenticatedTestUser(t)
 

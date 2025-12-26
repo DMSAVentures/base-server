@@ -13,6 +13,7 @@ import (
 )
 
 func TestAPI_Analytics_SignupsOverTime(t *testing.T) {
+	t.Parallel()
 	// Create authenticated user and get token
 	token := createAuthenticatedTestUser(t)
 
@@ -202,6 +203,7 @@ func TestAPI_Analytics_SignupsOverTime(t *testing.T) {
 }
 
 func TestAPI_Analytics_SignupsOverTime_Unauthorized(t *testing.T) {
+	t.Parallel()
 	// Try to access without authentication
 	path := fmt.Sprintf("/api/v1/campaigns/%s/analytics/signups-over-time", uuid.New().String())
 	resp, _ := makeRequest(t, http.MethodGet, path, nil, nil)
@@ -212,6 +214,7 @@ func TestAPI_Analytics_SignupsOverTime_Unauthorized(t *testing.T) {
 }
 
 func TestAPI_Analytics_SignupsOverTime_InvalidCampaign(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedTestUser(t)
 
 	// Try to access with non-existent campaign ID
@@ -225,6 +228,7 @@ func TestAPI_Analytics_SignupsOverTime_InvalidCampaign(t *testing.T) {
 }
 
 func TestAPI_Analytics_SignupsOverTime_InvalidDateFormat(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedTestUser(t)
 
 	// Create a campaign first
@@ -258,6 +262,7 @@ func TestAPI_Analytics_SignupsOverTime_InvalidDateFormat(t *testing.T) {
 }
 
 func TestAPI_Analytics_SignupsBySource(t *testing.T) {
+	t.Parallel()
 	// Create authenticated user and get token
 	token := createAuthenticatedTestUser(t)
 
@@ -489,6 +494,7 @@ func TestAPI_Analytics_SignupsBySource(t *testing.T) {
 }
 
 func TestAPI_Analytics_SignupsBySource_Unauthorized(t *testing.T) {
+	t.Parallel()
 	// Try to access without authentication
 	path := fmt.Sprintf("/api/v1/campaigns/%s/analytics/signups-by-source", uuid.New().String())
 	resp, _ := makeRequest(t, http.MethodGet, path, nil, nil)
@@ -499,6 +505,7 @@ func TestAPI_Analytics_SignupsBySource_Unauthorized(t *testing.T) {
 }
 
 func TestAPI_Analytics_SignupsBySource_InvalidCampaign(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedTestUser(t)
 
 	// Try to access with non-existent campaign ID
@@ -512,6 +519,7 @@ func TestAPI_Analytics_SignupsBySource_InvalidCampaign(t *testing.T) {
 }
 
 func TestAPI_Analytics_SignupsBySource_InvalidDateFormat(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedTestUser(t)
 
 	// Create a campaign first
@@ -545,6 +553,7 @@ func TestAPI_Analytics_SignupsBySource_InvalidDateFormat(t *testing.T) {
 }
 
 func TestAPI_Analytics_SignupsBySource_GapFilling(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedTestUser(t)
 
 	// Create a campaign
@@ -652,6 +661,7 @@ func TestAPI_Analytics_SignupsBySource_GapFilling(t *testing.T) {
 }
 
 func TestAPI_Analytics_SignupsOverTime_GapFilling(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedTestUser(t)
 
 	// Create a campaign

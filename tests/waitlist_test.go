@@ -10,6 +10,7 @@ import (
 )
 
 func TestAPI_WaitlistUser_PublicSignup(t *testing.T) {
+	t.Parallel()
 	// First create an authenticated user and a campaign
 	token := createAuthenticatedUser(t)
 
@@ -262,6 +263,7 @@ func TestAPI_WaitlistUser_PublicSignup(t *testing.T) {
 }
 
 func TestAPI_WaitlistUser_SignupFailsForNonActiveCampaign(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create test campaigns for each non-active status
@@ -335,6 +337,7 @@ func TestAPI_WaitlistUser_SignupFailsForNonActiveCampaign(t *testing.T) {
 }
 
 func TestAPI_CampaignCounters_RealTime(t *testing.T) {
+	t.Parallel()
 	// Create an authenticated user and a campaign
 	token := createAuthenticatedUser(t)
 
@@ -435,6 +438,7 @@ func TestAPI_CampaignCounters_RealTime(t *testing.T) {
 }
 
 func TestAPI_ListUsers_WithFilters(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test campaign
@@ -581,6 +585,7 @@ func TestAPI_ListUsers_WithFilters(t *testing.T) {
 }
 
 func TestAPI_ListUsers_FilterBySource(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test campaign
@@ -626,6 +631,7 @@ func TestAPI_ListUsers_FilterBySource(t *testing.T) {
 }
 
 func TestAPI_ListUsers_FilterByPositionRange(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test campaign
@@ -684,6 +690,7 @@ func TestAPI_ListUsers_FilterByPositionRange(t *testing.T) {
 }
 
 func TestAPI_ListUsers_FilterByDateRange(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test campaign
@@ -738,6 +745,7 @@ func TestAPI_ListUsers_FilterByDateRange(t *testing.T) {
 }
 
 func TestAPI_ListUsers_CombinedFilters(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test campaign
@@ -806,6 +814,7 @@ func TestAPI_ListUsers_CombinedFilters(t *testing.T) {
 }
 
 func TestAPI_ListUsers_ResponseStructure(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test campaign

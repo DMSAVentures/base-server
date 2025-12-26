@@ -19,6 +19,7 @@ func createAuthenticatedUser(t *testing.T) string {
 }
 
 func TestAPI_Campaign_Create(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	tests := []struct {
@@ -160,6 +161,7 @@ func TestAPI_Campaign_Create(t *testing.T) {
 }
 
 func TestAPI_Campaign_List(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a few test campaigns
@@ -259,6 +261,7 @@ func TestAPI_Campaign_List(t *testing.T) {
 }
 
 func TestAPI_Campaign_GetByID(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test campaign
@@ -327,6 +330,7 @@ func TestAPI_Campaign_GetByID(t *testing.T) {
 }
 
 func TestAPI_Campaign_Update(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test campaign
@@ -420,6 +424,7 @@ func TestAPI_Campaign_Update(t *testing.T) {
 }
 
 func TestAPI_Campaign_UpdateStatus(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a test campaign
@@ -503,6 +508,7 @@ func TestAPI_Campaign_UpdateStatus(t *testing.T) {
 }
 
 func TestAPI_Campaign_Delete(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Helper to create a campaign for deletion
@@ -572,6 +578,7 @@ func TestAPI_Campaign_Delete(t *testing.T) {
 }
 
 func TestAPI_Campaign_GetPublicCampaign(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a draft campaign with settings
@@ -745,6 +752,7 @@ func containsInMiddle(s, substr string) bool {
 
 // TestAPI_Campaign_CreateWithFormFields tests form field validation
 func TestAPI_Campaign_CreateWithFormFields(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	tests := []struct {
@@ -861,6 +869,7 @@ func TestAPI_Campaign_CreateWithFormFields(t *testing.T) {
 
 // TestAPI_Campaign_CreateWithShareMessages tests share message validation
 func TestAPI_Campaign_CreateWithShareMessages(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	tests := []struct {
@@ -943,6 +952,7 @@ func TestAPI_Campaign_CreateWithShareMessages(t *testing.T) {
 
 // TestAPI_Campaign_CreateWithTrackingIntegrations tests tracking integration validation
 func TestAPI_Campaign_CreateWithTrackingIntegrations(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	tests := []struct {
@@ -1027,6 +1037,7 @@ func TestAPI_Campaign_CreateWithTrackingIntegrations(t *testing.T) {
 
 // TestAPI_Campaign_CreateWithReferralSettings tests referral settings validation
 func TestAPI_Campaign_CreateWithReferralSettings(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	tests := []struct {
@@ -1161,6 +1172,7 @@ func TestAPI_Campaign_CreateWithReferralSettings(t *testing.T) {
 
 // TestAPI_Campaign_CreateWithFormSettings tests form settings validation
 func TestAPI_Campaign_CreateWithFormSettings(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	tests := []struct {
@@ -1284,6 +1296,7 @@ func TestAPI_Campaign_CreateWithFormSettings(t *testing.T) {
 
 // TestAPI_Campaign_CreateWithFullSettings tests creating a campaign with all settings
 func TestAPI_Campaign_CreateWithFullSettings(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	request := map[string]interface{}{
@@ -1371,6 +1384,7 @@ func TestAPI_Campaign_CreateWithFullSettings(t *testing.T) {
 
 // TestAPI_Campaign_UpdateWithSettings tests updating campaign settings with validation
 func TestAPI_Campaign_UpdateWithSettings(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 
 	// Create a base campaign first
@@ -1462,6 +1476,7 @@ func TestAPI_Campaign_UpdateWithSettings(t *testing.T) {
 
 // TestAPI_Campaign_DuplicateSlug tests that duplicate slugs are rejected
 func TestAPI_Campaign_DuplicateSlug(t *testing.T) {
+	t.Parallel()
 	token := createAuthenticatedUser(t)
 	slug := generateTestCampaignSlug()
 
