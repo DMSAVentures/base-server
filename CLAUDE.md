@@ -530,6 +530,109 @@ websocketServer := &http.Server{
 }
 ```
 
+## Testing Requirements
+
+**CRITICAL:** All code changes MUST include corresponding tests. Always verify tests pass before considering work complete.
+
+### Test Levels
+
+| Level | Location | Purpose | Command |
+|-------|----------|---------|---------|
+| **Store Tests** | `internal/store/*_test.go` | Database operations | `make test-store` |
+| **Unit Tests** | `internal/*/processor/*_test.go` | Business logic with mocks | `make test-unit` |
+| **Integration Tests** | `tests/*_test.go` | Full API endpoint testing | `make test-integration` |
+
+### When to Add Tests
+
+1. **New Store Methods**: Add tests in `internal/store/*_test.go`
+   - Test success cases, error cases, edge cases
+   - Use valid enum values (check migrations for valid values)
+
+2. **New Processor Methods**: Add tests in `internal/*/processor/*_test.go`
+   - Use gomock for mocking store dependencies
+   - Regenerate mocks if interface changes: `go generate ./...`
+
+3. **New API Endpoints**: Add tests in `tests/*_test.go`
+   - Integration tests use real HTTP requests
+   - Each test must use `t.Parallel()` for parallel execution
+   - Create unique test data (UUIDs) to avoid conflicts
+
+### Running Tests
+
+```bash
+# Start required services (database, kafka)
+make services-up
+
+# Run all test levels
+make test-unit         # No DB needed - uses mocks
+make test-store        # Requires DB (services-up)
+make test-integration  # Requires running server
+
+# Run specific test
+go test -run TestFunctionName ./path/to/package/...
+
+# Run with verbose output
+go test -v ./internal/store/...
+```
+
+### Test Patterns
+
+**Store Test Example:**
+```go
+func TestStore_CreateUser(t *testing.T) {
+    t.Parallel()
+    testDB := SetupTestDB(t, TestDBTypePostgres)
+
+    user, err := testDB.Store.CreateUser(ctx, params)
+    require.NoError(t, err)
+    assert.Equal(t, expected, user.Email)
+}
+```
+
+**Processor Test with Mocks:**
+```go
+func TestProcessor_GetUser(t *testing.T) {
+    ctrl := gomock.NewController(t)
+    defer ctrl.Finish()
+
+    mockStore := NewMockStore(ctrl)
+    mockStore.EXPECT().GetUser(gomock.Any(), userID).Return(user, nil)
+
+    processor := New(mockStore, logger)
+    result, err := processor.GetUser(ctx, userID)
+
+    require.NoError(t, err)
+    assert.Equal(t, expected, result)
+}
+```
+
+**Integration Test Example:**
+```go
+func TestAPI_CreateCampaign(t *testing.T) {
+    t.Parallel()
+    token := createAuthenticatedTestUser(t)
+
+    resp, body := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", req, token)
+    assert.Equal(t, http.StatusCreated, resp.StatusCode)
+}
+```
+
+### Before Completing Any Task
+
+1. **Run relevant tests** to verify changes work:
+   ```bash
+   make test-unit        # Always run
+   make test-store       # If store code changed
+   make test-integration # If API behavior changed
+   ```
+
+2. **Fix any failing tests** before considering work complete
+
+3. **Update mocks** if interfaces changed:
+   ```bash
+   go generate ./...
+   ```
+
 ## Common Patterns to Follow
 
 1. **Always use context**: Pass context through all function calls
@@ -542,3 +645,5 @@ websocketServer := &http.Server{
 8. **Middleware composition**: Apply cross-cutting concerns via middleware
 9. **Resource cleanup**: Use defer for cleanup operations
 10. **Configuration validation**: Check all required env vars at startup
+11. **Always add tests**: Every code change must include corresponding tests
+12. **Verify tests pass**: Run `make test-unit`, `make test-store`, `make test-integration` before completing work
