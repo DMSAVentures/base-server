@@ -41,7 +41,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Type:              "welcome",
 			Subject:           "Welcome!",
 			HTMLBody:          "<h1>Welcome</h1>",
-			TextBody:          "Welcome",
 			Enabled:           true,
 			SendAutomatically: true,
 			CreatedAt:         time.Now(),
@@ -59,7 +58,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 				Type:              "welcome",
 				Subject:           "Welcome!",
 				HTMLBody:          "<h1>Welcome</h1>",
-				TextBody:          "Welcome",
 				Enabled:           true,
 				SendAutomatically: true,
 			}).
@@ -70,7 +68,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Type:     "welcome",
 			Subject:  "Welcome!",
 			HTMLBody: "<h1>Welcome</h1>",
-			TextBody: "Welcome",
 		}
 
 		result, err := processor.CreateEmailTemplate(ctx, accountID, campaignID, req)
@@ -101,7 +98,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Type:              "custom",
 			Subject:           "Custom",
 			HTMLBody:          "<h1>Custom</h1>",
-			TextBody:          "Custom",
 			Enabled:           false,
 			SendAutomatically: false,
 			CreatedAt:         time.Now(),
@@ -119,7 +115,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 				Type:              "custom",
 				Subject:           "Custom",
 				HTMLBody:          "<h1>Custom</h1>",
-				TextBody:          "Custom",
 				Enabled:           false,
 				SendAutomatically: false,
 			}).
@@ -130,7 +125,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Type:              "custom",
 			Subject:           "Custom",
 			HTMLBody:          "<h1>Custom</h1>",
-			TextBody:          "Custom",
 			Enabled:           &enabled,
 			SendAutomatically: &sendAutomatically,
 		}
@@ -154,7 +148,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Type:     "invalid_type",
 			Subject:  "Invalid",
 			HTMLBody: "<h1>Invalid</h1>",
-			TextBody: "Invalid",
 		}
 
 		_, err := processor.CreateEmailTemplate(ctx, accountID, campaignID, req)
@@ -170,7 +163,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Type:     "welcome",
 			Subject:  "Welcome",
 			HTMLBody: "{{.Invalid",
-			TextBody: "Valid",
 		}
 
 		_, err := processor.CreateEmailTemplate(ctx, accountID, campaignID, req)
@@ -180,21 +172,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 		}
 	})
 
-	t.Run("returns error for invalid text template content", func(t *testing.T) {
-		req := CreateEmailTemplateRequest{
-			Name:     "Invalid Text",
-			Type:     "welcome",
-			Subject:  "Welcome",
-			HTMLBody: "<h1>Valid</h1>",
-			TextBody: "{{.Invalid",
-		}
-
-		_, err := processor.CreateEmailTemplate(ctx, accountID, campaignID, req)
-
-		if !errors.Is(err, ErrInvalidTemplateContent) {
-			t.Errorf("expected ErrInvalidTemplateContent, got %v", err)
-		}
-	})
 
 	t.Run("returns error when campaign not found", func(t *testing.T) {
 		mockStore.EXPECT().
@@ -206,7 +183,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Type:     "welcome",
 			Subject:  "Welcome",
 			HTMLBody: "<h1>Welcome</h1>",
-			TextBody: "Welcome",
 		}
 
 		_, err := processor.CreateEmailTemplate(ctx, accountID, campaignID, req)
@@ -234,7 +210,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Type:     "welcome",
 			Subject:  "Welcome",
 			HTMLBody: "<h1>Welcome</h1>",
-			TextBody: "Welcome",
 		}
 
 		_, err := processor.CreateEmailTemplate(ctx, accountID, campaignID, req)
@@ -267,7 +242,6 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Type:     "welcome",
 			Subject:  "Welcome",
 			HTMLBody: "<h1>Welcome</h1>",
-			TextBody: "Welcome",
 		}
 
 		_, err := processor.CreateEmailTemplate(ctx, accountID, campaignID, req)
@@ -307,7 +281,6 @@ func TestGetEmailTemplate(t *testing.T) {
 			Type:       "welcome",
 			Subject:    "Welcome!",
 			HTMLBody:   "<h1>Welcome</h1>",
-			TextBody:   "Welcome",
 		}
 
 		mockStore.EXPECT().
@@ -704,41 +677,6 @@ func TestUpdateEmailTemplate(t *testing.T) {
 		}
 	})
 
-	t.Run("returns error for invalid text template content", func(t *testing.T) {
-		campaign := store.Campaign{
-			ID:        campaignID,
-			AccountID: accountID,
-			Name:      "Test Campaign",
-			Status:    "active",
-		}
-
-		existingTemplate := store.EmailTemplate{
-			ID:         templateID,
-			CampaignID: campaignID,
-			Name:       "Template",
-			Type:       "welcome",
-		}
-
-		mockStore.EXPECT().
-			GetCampaignByID(gomock.Any(), campaignID).
-			Return(campaign, nil)
-
-		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
-			Return(existingTemplate, nil)
-
-		invalidText := "{{.Invalid"
-		req := UpdateEmailTemplateRequest{
-			TextBody: &invalidText,
-		}
-
-		_, err := processor.UpdateEmailTemplate(ctx, accountID, campaignID, templateID, req)
-
-		if !errors.Is(err, ErrInvalidTemplateContent) {
-			t.Errorf("expected ErrInvalidTemplateContent, got %v", err)
-		}
-	})
-
 	t.Run("returns error when campaign not found", func(t *testing.T) {
 		mockStore.EXPECT().
 			GetCampaignByID(gomock.Any(), campaignID).
@@ -1069,7 +1007,6 @@ func TestSendTestEmail(t *testing.T) {
 			Type:       "welcome",
 			Subject:    "Welcome!",
 			HTMLBody:   "<h1>Hello {{.first_name}}</h1>",
-			TextBody:   "Hello",
 		}
 
 		mockStore.EXPECT().
@@ -1144,7 +1081,6 @@ func TestSendTestEmail(t *testing.T) {
 			Type:       "welcome",
 			Subject:    "Welcome!",
 			HTMLBody:   "{{.invalid", // This is invalid template syntax
-			TextBody:   "Hello",
 		}
 
 		mockStore.EXPECT().
@@ -1189,7 +1125,6 @@ func TestSendTestEmail(t *testing.T) {
 			Type:       "welcome",
 			Subject:    "Welcome!",
 			HTMLBody:   "<h1>Hello</h1>",
-			TextBody:   "Hello",
 		}
 
 		mockStore.EXPECT().
