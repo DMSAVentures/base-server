@@ -12,89 +12,56 @@ import (
 	"github.com/google/uuid"
 )
 
-// MockStore implements a minimal store.Store interface for testing
-type MockStore struct {
-	WebhookURL string // Configurable URL for testing
-}
+// createTestAccount creates an account for testing
+func createTestAccount(t *testing.T, testDB *store.TestDB) store.Account {
+	t.Helper()
+	ctx := context.Background()
 
-func (m *MockStore) GetWebhooksByAccount(ctx context.Context, accountID uuid.UUID) ([]store.Webhook, error) {
-	url := m.WebhookURL
-	if url == "" {
-		url = "https://example.com/webhook"
+	// Create a user first
+	var user store.User
+	err := testDB.GetDB().GetContext(ctx, &user,
+		`INSERT INTO users (first_name, last_name) VALUES ($1, $2) RETURNING id, first_name, last_name`,
+		"Test", "User")
+	if err != nil {
+		t.Fatalf("failed to create test user: %v", err)
 	}
-	return []store.Webhook{
-		{
-			ID:           uuid.New(),
-			AccountID:    accountID,
-			CampaignID:   nil,
-			URL:          url,
-			Secret:       "test-secret",
-			Events:       []string{"user.created", "user.verified"},
-			Status:       "active",
-			RetryEnabled: true,
-			MaxRetries:   5,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
-		},
-	}, nil
-}
 
-func (m *MockStore) CreateWebhookDelivery(ctx context.Context, params store.CreateWebhookDeliveryParams) (store.WebhookDelivery, error) {
-	return store.WebhookDelivery{
-		ID:            uuid.New(),
-		WebhookID:     params.WebhookID,
-		EventType:     params.EventType,
-		Payload:       params.Payload,
-		Status:        "pending",
-		AttemptNumber: 1,
-		CreatedAt:     time.Now(),
-	}, nil
-}
-
-func (m *MockStore) UpdateWebhookDeliveryStatus(ctx context.Context, deliveryID uuid.UUID, params store.UpdateWebhookDeliveryStatusParams) error {
-	return nil
-}
-
-func (m *MockStore) IncrementWebhookSent(ctx context.Context, webhookID uuid.UUID) error {
-	return nil
-}
-
-func (m *MockStore) IncrementWebhookFailed(ctx context.Context, webhookID uuid.UUID) error {
-	return nil
-}
-
-func (m *MockStore) IncrementDeliveryAttempt(ctx context.Context, deliveryID uuid.UUID, nextRetryAt *time.Time) error {
-	return nil
-}
-
-func (m *MockStore) GetWebhookByID(ctx context.Context, webhookID uuid.UUID) (store.Webhook, error) {
-	url := m.WebhookURL
-	if url == "" {
-		url = "https://example.com/webhook"
+	// Create account
+	account, err := testDB.Store.CreateAccount(ctx, store.CreateAccountParams{
+		Name:        "Test Account",
+		Slug:        "test-account-" + uuid.New().String()[:8],
+		OwnerUserID: user.ID,
+		Plan:        "pro",
+	})
+	if err != nil {
+		t.Fatalf("failed to create test account: %v", err)
 	}
-	return store.Webhook{
-		ID:           webhookID,
-		AccountID:    uuid.New(),
-		CampaignID:   nil,
-		URL:          url,
-		Secret:       "test-secret",
-		Events:       []string{"webhook.test"},
-		Status:       "active",
-		RetryEnabled: true,
-		MaxRetries:   5,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
-	}, nil
+	return account
 }
 
-func (m *MockStore) GetPendingWebhookDeliveries(ctx context.Context, limit int, maxAttempt int) ([]store.WebhookDelivery, error) {
-	return []store.WebhookDelivery{}, nil
+// createTestCampaign creates a campaign for testing
+func createTestCampaign(t *testing.T, testDB *store.TestDB, accountID uuid.UUID) store.Campaign {
+	t.Helper()
+	ctx := context.Background()
+
+	campaign, err := testDB.Store.CreateCampaign(ctx, store.CreateCampaignParams{
+		AccountID: accountID,
+		Name:      "Test Campaign",
+		Slug:      "test-campaign-" + uuid.New().String()[:8],
+		Type:      "waitlist",
+	})
+	if err != nil {
+		t.Fatalf("failed to create test campaign: %v", err)
+	}
+	return campaign
 }
 
 func TestGenerateSignature(t *testing.T) {
+	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
+	defer testDB.Close()
+
 	logger := observability.NewLogger()
-	mockStore := &MockStore{}
-	service := New(mockStore, logger)
+	service := New(&testDB.Store, logger)
 
 	secret := "test-secret"
 	payload := []byte(`{"test":"data"}`)
@@ -118,9 +85,11 @@ func TestGenerateSignature(t *testing.T) {
 }
 
 func TestCalculateNextRetry(t *testing.T) {
+	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
+	defer testDB.Close()
+
 	logger := observability.NewLogger()
-	mockStore := &MockStore{}
-	service := New(mockStore, logger)
+	service := New(&testDB.Store, logger)
 
 	tests := []struct {
 		attemptNumber int
@@ -148,9 +117,11 @@ func TestCalculateNextRetry(t *testing.T) {
 }
 
 func TestSubscribesToEvent(t *testing.T) {
+	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
+	defer testDB.Close()
+
 	logger := observability.NewLogger()
-	mockStore := &MockStore{}
-	service := New(mockStore, logger)
+	service := New(&testDB.Store, logger)
 
 	subscribedEvents := []string{"user.created", "user.verified", "referral.created"}
 
@@ -176,6 +147,10 @@ func TestSubscribesToEvent(t *testing.T) {
 }
 
 func TestDispatchEvent(t *testing.T) {
+	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
+	defer testDB.Close()
+	testDB.Truncate(t)
+
 	// Create a test HTTP server to receive webhooks
 	receivedWebhooks := 0
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -191,22 +166,35 @@ func TestDispatchEvent(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	// Create service with mock store pointing to test server
+	// Create test account
+	account := createTestAccount(t, testDB)
+
+	// Create a webhook pointing to our test server
+	ctx := context.Background()
+	webhook, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
+		AccountID:    account.ID,
+		CampaignID:   nil,
+		URL:          testServer.URL,
+		Secret:       "test-secret",
+		Events:       []string{"user.created", "user.verified"},
+		RetryEnabled: true,
+		MaxRetries:   5,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create webhook: %v", err)
+	}
+
 	logger := observability.NewLogger()
-	mockStore := &MockStore{WebhookURL: testServer.URL}
-	service := New(mockStore, logger)
+	service := New(&testDB.Store, logger)
 
 	// Test dispatch
-	ctx := context.Background()
-	accountID := uuid.New()
-	campaignID := uuid.New()
 	eventType := "user.created"
 	data := map[string]interface{}{
 		"user_id": "123",
 		"email":   "test@example.com",
 	}
 
-	err := service.DispatchEvent(ctx, accountID, &campaignID, eventType, data)
+	err = service.DispatchEvent(ctx, account.ID, nil, eventType, data)
 	if err != nil {
 		t.Errorf("DispatchEvent failed: %v", err)
 	}
@@ -214,24 +202,211 @@ func TestDispatchEvent(t *testing.T) {
 	if receivedWebhooks != 1 {
 		t.Errorf("Expected 1 webhook to be received, got %d", receivedWebhooks)
 	}
+
+	// Verify delivery was recorded in database
+	deliveries, err := testDB.Store.GetWebhookDeliveriesByWebhook(ctx, webhook.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("Failed to get deliveries: %v", err)
+	}
+	if len(deliveries) != 1 {
+		t.Errorf("Expected 1 delivery record, got %d", len(deliveries))
+	}
+	if len(deliveries) > 0 && deliveries[0].Status != "success" {
+		t.Errorf("Expected delivery status 'success', got '%s'", deliveries[0].Status)
+	}
 }
 
 func TestTestWebhook(t *testing.T) {
+	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
+	defer testDB.Close()
+	testDB.Truncate(t)
+
 	// Create a test HTTP server
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer testServer.Close()
 
-	logger := observability.NewLogger()
-	mockStore := &MockStore{WebhookURL: testServer.URL}
-	service := New(mockStore, logger)
+	// Create test account
+	account := createTestAccount(t, testDB)
 
 	ctx := context.Background()
-	webhookID := uuid.New()
+	webhook, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
+		AccountID:    account.ID,
+		CampaignID:   nil,
+		URL:          testServer.URL,
+		Secret:       "test-secret",
+		Events:       []string{"webhook.test"},
+		RetryEnabled: true,
+		MaxRetries:   5,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create webhook: %v", err)
+	}
 
-	err := service.TestWebhook(ctx, webhookID)
+	logger := observability.NewLogger()
+	service := New(&testDB.Store, logger)
+
+	err = service.TestWebhook(ctx, webhook.ID)
 	if err != nil {
 		t.Errorf("TestWebhook failed: %v", err)
+	}
+}
+
+func TestDispatchEvent_WebhookNotSubscribed(t *testing.T) {
+	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
+	defer testDB.Close()
+	testDB.Truncate(t)
+
+	// Create a test HTTP server - should NOT receive any webhooks
+	receivedWebhooks := 0
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedWebhooks++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testServer.Close()
+
+	// Create test account
+	account := createTestAccount(t, testDB)
+
+	ctx := context.Background()
+	_, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
+		AccountID:    account.ID,
+		CampaignID:   nil,
+		URL:          testServer.URL,
+		Secret:       "test-secret",
+		Events:       []string{"user.deleted"}, // subscribed to different event
+		RetryEnabled: true,
+		MaxRetries:   5,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create webhook: %v", err)
+	}
+
+	logger := observability.NewLogger()
+	service := New(&testDB.Store, logger)
+
+	// Dispatch an event the webhook is NOT subscribed to
+	err = service.DispatchEvent(ctx, account.ID, nil, "user.created", map[string]interface{}{"test": true})
+	if err != nil {
+		t.Errorf("DispatchEvent failed: %v", err)
+	}
+
+	// Webhook should NOT have been called
+	if receivedWebhooks != 0 {
+		t.Errorf("Expected 0 webhooks to be received (not subscribed), got %d", receivedWebhooks)
+	}
+}
+
+func TestDispatchEvent_PausedWebhook(t *testing.T) {
+	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
+	defer testDB.Close()
+	testDB.Truncate(t)
+
+	// Create a test HTTP server - should NOT receive any webhooks
+	receivedWebhooks := 0
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedWebhooks++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testServer.Close()
+
+	// Create test account
+	account := createTestAccount(t, testDB)
+
+	ctx := context.Background()
+	// Create webhook and then update it to paused
+	webhook, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
+		AccountID:    account.ID,
+		CampaignID:   nil,
+		URL:          testServer.URL,
+		Secret:       "test-secret",
+		Events:       []string{"user.created"},
+		RetryEnabled: true,
+		MaxRetries:   5,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create webhook: %v", err)
+	}
+
+	// Update webhook to paused status
+	pausedStatus := "paused"
+	_, err = testDB.Store.UpdateWebhook(ctx, webhook.ID, store.UpdateWebhookParams{
+		Status: &pausedStatus,
+	})
+	if err != nil {
+		t.Fatalf("Failed to pause webhook: %v", err)
+	}
+
+	logger := observability.NewLogger()
+	service := New(&testDB.Store, logger)
+
+	err = service.DispatchEvent(ctx, account.ID, nil, "user.created", map[string]interface{}{"test": true})
+	if err != nil {
+		t.Errorf("DispatchEvent failed: %v", err)
+	}
+
+	// Webhook should NOT have been called (paused)
+	if receivedWebhooks != 0 {
+		t.Errorf("Expected 0 webhooks to be received (paused), got %d", receivedWebhooks)
+	}
+}
+
+func TestDispatchEvent_CampaignSpecific(t *testing.T) {
+	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
+	defer testDB.Close()
+	testDB.Truncate(t)
+
+	// Create a test HTTP server
+	receivedWebhooks := 0
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedWebhooks++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testServer.Close()
+
+	// Create test account and campaign
+	account := createTestAccount(t, testDB)
+	campaign := createTestCampaign(t, testDB, account.ID)
+
+	ctx := context.Background()
+
+	// Create a webhook for a specific campaign
+	_, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
+		AccountID:    account.ID,
+		CampaignID:   &campaign.ID,
+		URL:          testServer.URL,
+		Secret:       "test-secret",
+		Events:       []string{"user.created"},
+		RetryEnabled: true,
+		MaxRetries:   5,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create webhook: %v", err)
+	}
+
+	logger := observability.NewLogger()
+	service := New(&testDB.Store, logger)
+
+	// Dispatch event for the correct campaign
+	err = service.DispatchEvent(ctx, account.ID, &campaign.ID, "user.created", map[string]interface{}{"test": true})
+	if err != nil {
+		t.Errorf("DispatchEvent failed: %v", err)
+	}
+
+	if receivedWebhooks != 1 {
+		t.Errorf("Expected 1 webhook to be received, got %d", receivedWebhooks)
+	}
+
+	// Dispatch event for a different campaign - should NOT trigger webhook
+	receivedWebhooks = 0
+	otherCampaignID := uuid.New()
+	err = service.DispatchEvent(ctx, account.ID, &otherCampaignID, "user.created", map[string]interface{}{"test": true})
+	if err != nil {
+		t.Errorf("DispatchEvent failed: %v", err)
+	}
+
+	if receivedWebhooks != 0 {
+		t.Errorf("Expected 0 webhooks for different campaign, got %d", receivedWebhooks)
 	}
 }
