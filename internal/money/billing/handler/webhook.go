@@ -16,7 +16,7 @@ func (h *Handler) HandleUpdateSubscription(c *gin.Context) {
 
 	userID := c.MustGet("User-ID")
 	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
 
 	var req CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -38,7 +38,7 @@ func (h *Handler) HandleGetPaymentMethod(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID := c.MustGet("User-ID")
 	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
 
 	paymentMethod, err := h.processor.GetPaymentMethodForUser(ctx, parsedUserID)
 	if err != nil {

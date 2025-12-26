@@ -37,7 +37,7 @@ func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
 
 	userID := c.MustGet("User-ID")
 	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
 
 	clientSecret, err := h.processor.CreateStripePaymentIntent(ctx, req.Items)
 	if err != nil {
@@ -59,7 +59,7 @@ func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
 
 	userID := c.MustGet("User-ID")
 	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
 
 	clientSecret, err := h.processor.CreateSubscriptionIntent(ctx, parsedUserID, req.PriceID)
 	if err != nil {
@@ -76,7 +76,7 @@ func (h *Handler) HandleCancelSubscription(c *gin.Context) {
 
 	userID := c.MustGet("User-ID")
 	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
 
 	err := h.processor.CancelSubscription(ctx, parsedUserID)
 	if err != nil {
@@ -92,7 +92,7 @@ func (h *Handler) HandleCreateCheckoutSession(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID := c.MustGet("User-ID")
 	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
 
 	var req CreateCheckoutSessionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -133,7 +133,7 @@ func (h *Handler) HandleGetSubscription(c *gin.Context) {
 
 	userID := c.MustGet("User-ID")
 	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
 
 	sub, err := h.processor.GetActiveSubscription(ctx, parsedUserID)
 	if err != nil {
@@ -150,7 +150,7 @@ func (h *Handler) HandleCreateCustomerPortal(c *gin.Context) {
 
 	userID := c.MustGet("User-ID")
 	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
 
 	sessionURL, err := h.processor.CreateCustomerPortal(ctx, parsedUserID)
 	if err != nil {

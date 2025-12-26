@@ -23,8 +23,8 @@ var (
 
 func (p *BillingProcessor) CreateSubscriptionIntent(ctx context.Context, userID uuid.UUID, priceID string) (string, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{"user_id", userID},
-		observability.Field{"price_id", priceID})
+		observability.Field{Key: "user_id", Value: userID},
+		observability.Field{Key: "price_id", Value: priceID})
 
 	p.logger.Info(ctx, "Creating subscription intent for user")
 
@@ -60,7 +60,7 @@ func (p *BillingProcessor) CreateSubscriptionIntent(ctx context.Context, userID 
 		p.logger.Error(ctx, "failed to initialize incomplete subscription", err)
 		return "", ErrFailedToCreateSubscriptionIntent
 	}
-	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionInitialized.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "subscription_id", Value: subscriptionInitialized.ID})
 
 	// Check if a PaymentIntent exists on the latest invoice
 	var clientSecret string
@@ -77,7 +77,7 @@ func (p *BillingProcessor) CreateSubscriptionIntent(ctx context.Context, userID 
 }
 
 func (p *BillingProcessor) CancelSubscription(ctx context.Context, userID uuid.UUID) error {
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", userID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: userID})
 
 	activeSub, err := p.GetActiveSubscription(ctx, userID)
 	if err != nil {
@@ -95,7 +95,7 @@ func (p *BillingProcessor) CancelSubscription(ctx context.Context, userID uuid.U
 }
 
 func (p *BillingProcessor) CancelSubscriptionBySubscriptionExternalID(ctx context.Context, stripSubID string) error {
-	ctx = observability.WithFields(ctx, observability.Field{"stripe_subscription_id", stripSubID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "stripe_subscription_id", Value: stripSubID})
 
 	_, err := subscription.Cancel(stripSubID, nil)
 	if err != nil {
@@ -108,8 +108,8 @@ func (p *BillingProcessor) CancelSubscriptionBySubscriptionExternalID(ctx contex
 
 func (p *BillingProcessor) UpdateSubscription(ctx context.Context, userID uuid.UUID, priceID string) error {
 	ctx = observability.WithFields(ctx,
-		observability.Field{"user_id", userID},
-		observability.Field{"price_id", priceID})
+		observability.Field{Key: "user_id", Value: userID},
+		observability.Field{Key: "price_id", Value: priceID})
 
 	activeSub, err := p.GetActiveSubscription(ctx, userID)
 	if err != nil {
@@ -138,7 +138,7 @@ func (p *BillingProcessor) UpdateSubscription(ctx context.Context, userID uuid.U
 
 func (p *BillingProcessor) GetActiveSubscription(ctx context.Context, userID uuid.UUID) (subscriptions.Subscription,
 	error) {
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", userID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: userID})
 
 	sub, err := p.subscriptionService.GetSubscriptionByUserID(ctx, userID)
 	if err != nil {
@@ -155,8 +155,8 @@ func (p *BillingProcessor) GetActiveSubscription(ctx context.Context, userID uui
 
 func (p *BillingProcessor) CreateCheckoutSession(ctx context.Context, userID uuid.UUID, priceID string) (*stripe.CheckoutSession, error) {
 	ctx = observability.WithFields(ctx,
-		observability.Field{"user_id", userID},
-		observability.Field{"price_id", priceID})
+		observability.Field{Key: "user_id", Value: userID},
+		observability.Field{Key: "price_id", Value: priceID})
 
 	stripeCustomerID, err := p.store.GetStripeCustomerIDByUserExternalID(ctx, userID)
 	if err != nil {
@@ -208,7 +208,7 @@ type CheckoutSessionInfo struct {
 }
 
 func (p *BillingProcessor) GetCheckoutSession(ctx context.Context, sessionID string) (CheckoutSessionInfo, error) {
-	ctx = observability.WithFields(ctx, observability.Field{"session_id", sessionID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "session_id", Value: sessionID})
 
 	session, err := session.Get(sessionID, nil)
 	if err != nil {

@@ -18,7 +18,7 @@ type Price struct {
 }
 
 func (p *ProductService) CreateProduct(ctx context.Context, productCreated stripe.Product) error {
-	ctx = observability.WithFields(ctx, observability.Field{"product_id", productCreated.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "product_id", Value: productCreated.ID})
 
 	_, err := p.store.CreateProduct(ctx, productCreated.ID, productCreated.Name, productCreated.Description)
 	if err != nil {
@@ -32,8 +32,8 @@ func (p *ProductService) CreateProduct(ctx context.Context, productCreated strip
 // HandlePriceCreationWebhookEvent handles the price creation webhook event
 func (p *ProductService) CreatePrice(ctx context.Context, priceCreated stripe.Price) error {
 	ctx = observability.WithFields(ctx,
-		observability.Field{"price_id", priceCreated.ID},
-		observability.Field{"product_id", priceCreated.Product.ID})
+		observability.Field{Key: "price_id", Value: priceCreated.ID},
+		observability.Field{Key: "product_id", Value: priceCreated.Product.ID})
 
 	// Try to get the product from the local database
 	productInDB, err := p.store.GetProductByStripeID(ctx, priceCreated.Product.ID)
@@ -80,8 +80,8 @@ func (p *ProductService) CreatePrice(ctx context.Context, priceCreated stripe.Pr
 // HandlePriceU handles the price update webhook event
 func (p *ProductService) UpdatePrice(ctx context.Context, priceUpdated stripe.Price) error {
 	ctx = observability.WithFields(ctx,
-		observability.Field{"price_id", priceUpdated.ID},
-		observability.Field{"product_id", priceUpdated.Product.ID})
+		observability.Field{Key: "price_id", Value: priceUpdated.ID},
+		observability.Field{Key: "product_id", Value: priceUpdated.Product.ID})
 
 	product, err := p.store.GetProductByStripeID(ctx, priceUpdated.Product.ID)
 	if err != nil {
@@ -100,7 +100,7 @@ func (p *ProductService) UpdatePrice(ctx context.Context, priceUpdated stripe.Pr
 
 // HandlePlanDeletionWebhookEvent handles the plan deletion webhook event
 func (p *ProductService) DeletePrice(ctx context.Context, priceDeleted stripe.Price) error {
-	ctx = observability.WithFields(ctx, observability.Field{"price_id", priceDeleted.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "price_id", Value: priceDeleted.ID})
 
 	err := p.store.DeletePriceByStripeID(ctx, priceDeleted.ID)
 	if err != nil {

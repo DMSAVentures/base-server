@@ -28,7 +28,7 @@ func (p *BillingProcessor) PaymentIntentSucceeded(ctx context.Context, paymentIn
 		return
 	}
 
-	ctx = observability.WithFields(ctx, observability.Field{"tax_transaction_id", txn.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "tax_transaction_id", Value: txn.ID})
 	p.logger.Info(ctx, "Tax transaction created")
 
 	//// 2. Update order status to 'Paid' in the system (pseudo-code)
@@ -63,7 +63,7 @@ func (p *BillingProcessor) PaymentIntentSucceeded(ctx context.Context, paymentIn
 
 // Invoke this method in your webhook handler when `customer.subscription.updated` webhook is received
 func (p *BillingProcessor) SubscriptionUpdated(ctx context.Context, subscription stripe.Subscription) error {
-	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscription.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "subscription_id", Value: subscription.ID})
 
 	if subscription.CancelAt > 0 {
 		cancelAt := time.Unix(subscription.CancelAt, 0)
@@ -90,7 +90,7 @@ func (p *BillingProcessor) SubscriptionUpdated(ctx context.Context, subscription
 
 // Invoke this method in your webhook handler when `customer.subscription.updated` webhook is received
 func (p *BillingProcessor) SubscriptionCreated(ctx context.Context, subscription stripe.Subscription) error {
-	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscription.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "subscription_id", Value: subscription.ID})
 
 	err := p.subscriptionService.CreateSubscription(ctx, subscription)
 	if err != nil {
@@ -105,8 +105,8 @@ func (p *BillingProcessor) SubscriptionCreated(ctx context.Context, subscription
 // Invoke this method in your webhook handler when `invoice.payment_failed` webhook is received
 func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice stripe.Invoice) error {
 	ctx = observability.WithFields(ctx,
-		observability.Field{"invoice_id", invoice.ID},
-		observability.Field{"subscription_id", invoice.Subscription.ID})
+		observability.Field{Key: "invoice_id", Value: invoice.ID},
+		observability.Field{Key: "subscription_id", Value: invoice.Subscription.ID})
 	//1. Get the user by the customer ID
 	//2. Get the user's email
 	//3. Send an email to the user
@@ -122,8 +122,8 @@ func (p *BillingProcessor) InvoicePaymentFailed(ctx context.Context, invoice str
 
 func (p *BillingProcessor) InvoicePaymentPaid(ctx context.Context, invoice stripe.Invoice) error {
 	ctx = observability.WithFields(ctx,
-		observability.Field{"invoice_id", invoice.ID},
-		observability.Field{"subscription_id", invoice.Subscription.ID})
+		observability.Field{Key: "invoice_id", Value: invoice.ID},
+		observability.Field{Key: "subscription_id", Value: invoice.Subscription.ID})
 	// 1. Get the user by the customer ID
 	// 2. Get the user's email
 	// 3. Send an email to the user
@@ -155,7 +155,7 @@ func (p *BillingProcessor) InvoicePaymentPaid(ctx context.Context, invoice strip
 //}
 
 func (p *BillingProcessor) ProductCreated(ctx context.Context, productCreated stripe.Product) error {
-	ctx = observability.WithFields(ctx, observability.Field{"product_id", productCreated.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "product_id", Value: productCreated.ID})
 
 	err := p.productService.CreateProduct(ctx, productCreated)
 	if err != nil {
@@ -168,7 +168,7 @@ func (p *BillingProcessor) ProductCreated(ctx context.Context, productCreated st
 }
 
 func (p *BillingProcessor) PriceCreated(ctx context.Context, priceCreated stripe.Price) error {
-	ctx = observability.WithFields(ctx, observability.Field{"price_id", priceCreated.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "price_id", Value: priceCreated.ID})
 
 	err := p.productService.CreatePrice(ctx, priceCreated)
 	if err != nil {
@@ -181,7 +181,7 @@ func (p *BillingProcessor) PriceCreated(ctx context.Context, priceCreated stripe
 }
 
 func (p *BillingProcessor) PriceUpdated(ctx context.Context, priceUpdated stripe.Price) error {
-	ctx = observability.WithFields(ctx, observability.Field{"price_id", priceUpdated.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "price_id", Value: priceUpdated.ID})
 
 	err := p.productService.UpdatePrice(ctx, priceUpdated)
 	if err != nil {
@@ -194,7 +194,7 @@ func (p *BillingProcessor) PriceUpdated(ctx context.Context, priceUpdated stripe
 }
 
 func (p *BillingProcessor) SubscriptionDeleted(ctx context.Context, subscriptionDeleted stripe.Subscription) error {
-	ctx = observability.WithFields(ctx, observability.Field{"subscription_id", subscriptionDeleted.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "subscription_id", Value: subscriptionDeleted.ID})
 
 	err := p.subscriptionService.CancelSubscription(ctx, subscriptionDeleted.ID, time.Now())
 	if err != nil {
@@ -207,7 +207,7 @@ func (p *BillingProcessor) SubscriptionDeleted(ctx context.Context, subscription
 }
 
 func (p *BillingProcessor) PriceDeleted(ctx context.Context, priceDeleted stripe.Price) error {
-	ctx = observability.WithFields(ctx, observability.Field{"price_id", priceDeleted.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "price_id", Value: priceDeleted.ID})
 
 	err := p.productService.DeletePrice(ctx, priceDeleted)
 	if err != nil {
@@ -220,7 +220,7 @@ func (p *BillingProcessor) PriceDeleted(ctx context.Context, priceDeleted stripe
 }
 
 func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event) error {
-	ctx = observability.WithFields(ctx, observability.Field{"event_id", event.ID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "event_id", Value: event.ID})
 	// Handle the event
 	switch event.Type {
 	case "product.created":

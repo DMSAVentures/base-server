@@ -119,7 +119,7 @@ func New(stripKey string, webhookSecret string, webhostURL string, store Billing
 }
 
 func (p *BillingProcessor) CreateStripeCustomer(ctx context.Context, email string) (string, error) {
-	ctx = observability.WithFields(ctx, observability.Field{"email", email})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "email", Value: email})
 
 	params := &stripe.CustomerParams{
 		Email: stripe.String(email),

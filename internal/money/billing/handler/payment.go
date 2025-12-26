@@ -13,7 +13,7 @@ func (h *Handler) HandleUpdatePaymentMethod(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID := c.MustGet("User-ID")
 	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{"user_id", parsedUserID})
+	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
 
 	clientSecret, err := h.processor.SetupPaymentMethodUpdateIntent(ctx, parsedUserID)
 	if err != nil {
