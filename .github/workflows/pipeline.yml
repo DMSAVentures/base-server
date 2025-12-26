@@ -77,8 +77,15 @@ jobs:
       - name: Build the application
         run: go build -v -o base-server .
 
-      - name: Run unit tests
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic -short ./...
+      - name: Run unit tests (mocked - no DB needed)
+        run: go test -coverprofile=coverage.out -covermode=atomic -short ./internal/.../processor/... ./internal/.../service/...
+
+      - name: Run store tests (requires DB)
+        run: go test -coverprofile=coverage-store.out -covermode=atomic -short ./internal/store/...
+
+      - name: Run race detection
+        if: github.event_name == 'push'
+        run: go test -race -short ./...
 
       - name: Start API server in background
         run: |
@@ -106,7 +113,12 @@ jobs:
           fi
 
       - name: Display test coverage
-        run: go tool cover -func=coverage.out
+        run: |
+          echo "=== Unit test coverage ==="
+          go tool cover -func=coverage.out
+          echo ""
+          echo "=== Store test coverage ==="
+          go tool cover -func=coverage-store.out
 
       - name: Stop services
         if: always()
