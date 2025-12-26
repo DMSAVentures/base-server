@@ -36,6 +36,13 @@ func TestAPI_Analytics_SignupsOverTime(t *testing.T) {
 	parseJSONResponse(t, createBody, &createdCampaign)
 	campaignID := createdCampaign["id"].(string)
 
+	// Set campaign to active status so it can accept signups
+	statusPath := fmt.Sprintf("/api/v1/campaigns/%s/status", campaignID)
+	statusResp, _ := makeAuthenticatedRequest(t, http.MethodPatch, statusPath, map[string]interface{}{"status": "active"}, token)
+	if statusResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to set campaign status to active")
+	}
+
 	// Add some test signups to the campaign
 	for i := 0; i < 5; i++ {
 		signupReq := map[string]interface{}{
@@ -273,6 +280,13 @@ func TestAPI_Analytics_SignupsBySource(t *testing.T) {
 	var createdCampaign map[string]interface{}
 	parseJSONResponse(t, createBody, &createdCampaign)
 	campaignID := createdCampaign["id"].(string)
+
+	// Set campaign to active status so it can accept signups
+	statusPath := fmt.Sprintf("/api/v1/campaigns/%s/status", campaignID)
+	statusResp, _ := makeAuthenticatedRequest(t, http.MethodPatch, statusPath, map[string]interface{}{"status": "active"}, token)
+	if statusResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to set campaign status to active")
+	}
 
 	// Add signups with different UTM sources
 	for i := 0; i < 3; i++ {
@@ -553,6 +567,13 @@ func TestAPI_Analytics_SignupsBySource_GapFilling(t *testing.T) {
 	parseJSONResponse(t, createBody, &createdCampaign)
 	campaignID := createdCampaign["id"].(string)
 
+	// Set campaign to active status so it can accept signups
+	statusPath := fmt.Sprintf("/api/v1/campaigns/%s/status", campaignID)
+	statusResp, _ := makeAuthenticatedRequest(t, http.MethodPatch, statusPath, map[string]interface{}{"status": "active"}, token)
+	if statusResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to set campaign status to active")
+	}
+
 	// Add one signup with a source
 	signupReq := map[string]interface{}{
 		"email":          fmt.Sprintf("gap-source-test-%s@example.com", uuid.New().String()[:8]),
@@ -652,6 +673,13 @@ func TestAPI_Analytics_SignupsOverTime_GapFilling(t *testing.T) {
 	var createdCampaign map[string]interface{}
 	parseJSONResponse(t, createBody, &createdCampaign)
 	campaignID := createdCampaign["id"].(string)
+
+	// Set campaign to active status so it can accept signups
+	statusPath := fmt.Sprintf("/api/v1/campaigns/%s/status", campaignID)
+	statusResp, _ := makeAuthenticatedRequest(t, http.MethodPatch, statusPath, map[string]interface{}{"status": "active"}, token)
+	if statusResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to set campaign status to active")
+	}
 
 	// Add one signup
 	signupReq := map[string]interface{}{
