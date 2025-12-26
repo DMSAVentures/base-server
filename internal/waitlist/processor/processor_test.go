@@ -499,3 +499,526 @@ func TestVerifyUserByToken_AlreadyVerified(t *testing.T) {
 		t.Errorf("expected ErrEmailAlreadyVerified, got %v", err)
 	}
 }
+
+func TestListUsers_WithExtendedFilters_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	users := []store.WaitlistUser{
+		{ID: uuid.New(), Email: "user1@example.com", Position: 1},
+		{ID: uuid.New(), Email: "user2@example.com", Position: 2},
+	}
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(users, nil)
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(2, nil)
+
+	result, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		Page:  1,
+		Limit: 20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if len(result.Users) != 2 {
+		t.Errorf("expected 2 users, got %d", len(result.Users))
+	}
+	if result.TotalCount != 2 {
+		t.Errorf("expected total count 2, got %d", result.TotalCount)
+	}
+}
+
+func TestListUsers_WithStatusFilter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	users := []store.WaitlistUser{
+		{ID: uuid.New(), Email: "verified@example.com", Status: store.WaitlistUserStatusVerified},
+	}
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	// Verify filter params are correctly passed
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+			if len(params.Statuses) != 1 || params.Statuses[0] != "verified" {
+				t.Errorf("expected status filter [verified], got %v", params.Statuses)
+			}
+			return users, nil
+		})
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(1, nil)
+
+	result, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		Statuses: []string{"verified"},
+		Page:     1,
+		Limit:    20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if len(result.Users) != 1 {
+		t.Errorf("expected 1 user, got %d", len(result.Users))
+	}
+}
+
+func TestListUsers_WithSourceFilter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	// Verify multiple sources are passed correctly
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+			if len(params.Sources) != 2 {
+				t.Errorf("expected 2 sources, got %d", len(params.Sources))
+			}
+			return []store.WaitlistUser{}, nil
+		})
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(0, nil)
+
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		Sources: []string{"organic", "referral"},
+		Page:    1,
+		Limit:   20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestListUsers_WithPositionRangeFilter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	minPos := 5
+	maxPos := 10
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+			if params.MinPosition == nil || *params.MinPosition != minPos {
+				t.Errorf("expected min position %d, got %v", minPos, params.MinPosition)
+			}
+			if params.MaxPosition == nil || *params.MaxPosition != maxPos {
+				t.Errorf("expected max position %d, got %v", maxPos, params.MaxPosition)
+			}
+			return []store.WaitlistUser{}, nil
+		})
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(0, nil)
+
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		MinPosition: &minPos,
+		MaxPosition: &maxPos,
+		Page:        1,
+		Limit:       20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestListUsers_WithHasReferralsFilter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	hasReferrals := true
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+			if params.HasReferrals == nil || *params.HasReferrals != true {
+				t.Errorf("expected hasReferrals true, got %v", params.HasReferrals)
+			}
+			return []store.WaitlistUser{}, nil
+		})
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(0, nil)
+
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		HasReferrals: &hasReferrals,
+		Page:         1,
+		Limit:        20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestListUsers_WithCustomFieldsFilter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	customFields := map[string]string{
+		"company": "Acme",
+		"role":    "Developer",
+	}
+
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+			if len(params.CustomFields) != 2 {
+				t.Errorf("expected 2 custom fields, got %d", len(params.CustomFields))
+			}
+			if params.CustomFields["company"] != "Acme" {
+				t.Errorf("expected company=Acme, got %s", params.CustomFields["company"])
+			}
+			if params.CustomFields["role"] != "Developer" {
+				t.Errorf("expected role=Developer, got %s", params.CustomFields["role"])
+			}
+			return []store.WaitlistUser{}, nil
+		})
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(0, nil)
+
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		CustomFields: customFields,
+		Page:         1,
+		Limit:        20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestListUsers_WithDateRangeFilter(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	dateFrom := "2024-01-01"
+	dateTo := "2024-12-31"
+
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+			if params.DateFrom == nil {
+				t.Error("expected DateFrom to be set")
+			}
+			if params.DateTo == nil {
+				t.Error("expected DateTo to be set")
+			}
+			return []store.WaitlistUser{}, nil
+		})
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(0, nil)
+
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		DateFrom: &dateFrom,
+		DateTo:   &dateTo,
+		Page:     1,
+		Limit:    20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestListUsers_WithSortingParams(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+			if params.SortBy != "created_at" {
+				t.Errorf("expected SortBy=created_at, got %s", params.SortBy)
+			}
+			if params.SortOrder != "desc" {
+				t.Errorf("expected SortOrder=desc, got %s", params.SortOrder)
+			}
+			return []store.WaitlistUser{}, nil
+		})
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(0, nil)
+
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		SortBy:    "created_at",
+		SortOrder: "desc",
+		Page:      1,
+		Limit:     20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestListUsers_WithCombinedFilters(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	hasReferrals := true
+	minPos := 1
+	maxPos := 100
+
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+			// Verify all filters are passed
+			if len(params.Statuses) != 1 || params.Statuses[0] != "verified" {
+				t.Errorf("expected status verified, got %v", params.Statuses)
+			}
+			if len(params.Sources) != 1 || params.Sources[0] != "organic" {
+				t.Errorf("expected source organic, got %v", params.Sources)
+			}
+			if params.HasReferrals == nil || !*params.HasReferrals {
+				t.Error("expected hasReferrals=true")
+			}
+			if params.MinPosition == nil || *params.MinPosition != 1 {
+				t.Errorf("expected minPosition=1, got %v", params.MinPosition)
+			}
+			if params.MaxPosition == nil || *params.MaxPosition != 100 {
+				t.Errorf("expected maxPosition=100, got %v", params.MaxPosition)
+			}
+			if params.CustomFields["company"] != "Acme" {
+				t.Errorf("expected company=Acme, got %v", params.CustomFields["company"])
+			}
+			return []store.WaitlistUser{}, nil
+		})
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(0, nil)
+
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		Statuses:     []string{"verified"},
+		Sources:      []string{"organic"},
+		HasReferrals: &hasReferrals,
+		MinPosition:  &minPos,
+		MaxPosition:  &maxPos,
+		CustomFields: map[string]string{"company": "Acme"},
+		Page:         1,
+		Limit:        20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+}
+
+func TestListUsers_WithInvalidStatus(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		Statuses: []string{"invalid_status"},
+		Page:     1,
+		Limit:    20,
+	})
+
+	if !errors.Is(err, ErrInvalidStatus) {
+		t.Errorf("expected ErrInvalidStatus, got %v", err)
+	}
+}
+
+func TestListUsers_Pagination(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	// Verify offset calculation: page 3 with limit 25 = offset 50
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+			if params.Limit != 25 {
+				t.Errorf("expected limit 25, got %d", params.Limit)
+			}
+			if params.Offset != 50 { // (3-1) * 25 = 50
+				t.Errorf("expected offset 50, got %d", params.Offset)
+			}
+			return []store.WaitlistUser{}, nil
+		})
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(100, nil)
+
+	result, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		Page:  3,
+		Limit: 25,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if result.Page != 3 {
+		t.Errorf("expected page 3, got %d", result.Page)
+	}
+	if result.PageSize != 25 {
+		t.Errorf("expected page size 25, got %d", result.PageSize)
+	}
+	if result.TotalPages != 4 { // 100 / 25 = 4
+		t.Errorf("expected 4 total pages, got %d", result.TotalPages)
+	}
+}
+
+func TestListUsers_EmptyResult(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+	mockStore.EXPECT().ListWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(nil, nil)
+	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(0, nil)
+
+	result, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		Page:  1,
+		Limit: 20,
+	})
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if result.Users == nil {
+		t.Error("expected empty slice, got nil")
+	}
+	if len(result.Users) != 0 {
+		t.Errorf("expected 0 users, got %d", len(result.Users))
+	}
+}

@@ -694,3 +694,189 @@ func (s *Store) CountRecentSignupsByIP(ctx context.Context, campaignID uuid.UUID
 	}
 	return count, nil
 }
+
+// ExtendedListWaitlistUsersParams represents comprehensive filtering parameters
+type ExtendedListWaitlistUsersParams struct {
+	CampaignID   uuid.UUID
+	Statuses     []string          // Multiple status values (OR condition)
+	Sources      []string          // Multiple source values (OR condition)
+	HasReferrals *bool             // Filter for users with referrals > 0
+	MinPosition  *int              // Position range
+	MaxPosition  *int
+	DateFrom     *time.Time        // Date range
+	DateTo       *time.Time
+	CustomFields map[string]string // JSONB metadata filters (AND condition)
+	SortBy       string
+	SortOrder    string
+	Limit        int
+	Offset       int
+}
+
+// ListWaitlistUsersWithExtendedFilters retrieves users with comprehensive filtering
+func (s *Store) ListWaitlistUsersWithExtendedFilters(ctx context.Context, params ExtendedListWaitlistUsersParams) ([]WaitlistUser, error) {
+	query := `SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+	FROM waitlist_users
+	WHERE campaign_id = $1 AND deleted_at IS NULL`
+
+	args := []interface{}{params.CampaignID}
+	argCount := 1
+
+	// Add status filter (multiple values with OR)
+	if len(params.Statuses) > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND status = ANY($%d)", argCount)
+		args = append(args, params.Statuses)
+	}
+
+	// Add source filter (multiple values with OR)
+	if len(params.Sources) > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND source = ANY($%d)", argCount)
+		args = append(args, params.Sources)
+	}
+
+	// Add has referrals filter
+	if params.HasReferrals != nil && *params.HasReferrals {
+		query += " AND referral_count > 0"
+	}
+
+	// Add position range filters
+	if params.MinPosition != nil {
+		argCount++
+		query += fmt.Sprintf(" AND position >= $%d", argCount)
+		args = append(args, *params.MinPosition)
+	}
+
+	if params.MaxPosition != nil {
+		argCount++
+		query += fmt.Sprintf(" AND position <= $%d", argCount)
+		args = append(args, *params.MaxPosition)
+	}
+
+	// Add date range filters
+	if params.DateFrom != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at >= $%d", argCount)
+		args = append(args, *params.DateFrom)
+	}
+
+	if params.DateTo != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at <= $%d", argCount)
+		args = append(args, *params.DateTo)
+	}
+
+	// Add custom field filters (JSONB containment)
+	for key, value := range params.CustomFields {
+		argCount++
+		// Use JSONB containment operator for exact match
+		query += fmt.Sprintf(" AND metadata @> $%d::jsonb", argCount)
+		jsonValue := fmt.Sprintf(`{"%s": "%s"}`, key, value)
+		args = append(args, jsonValue)
+	}
+
+	// Add sorting
+	sortBy := "position"
+	validSortFields := map[string]bool{
+		"position":       true,
+		"created_at":     true,
+		"referral_count": true,
+		"email":          true,
+		"status":         true,
+		"source":         true,
+	}
+	if params.SortBy != "" && validSortFields[params.SortBy] {
+		sortBy = params.SortBy
+	}
+
+	sortOrder := "ASC"
+	if params.SortOrder == "desc" {
+		sortOrder = "DESC"
+	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
+
+	// Add pagination
+	argCount++
+	query += fmt.Sprintf(" LIMIT $%d", argCount)
+	args = append(args, params.Limit)
+
+	argCount++
+	query += fmt.Sprintf(" OFFSET $%d", argCount)
+	args = append(args, params.Offset)
+
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list waitlist users with extended filters: %w", err)
+	}
+
+	return users, nil
+}
+
+// CountWaitlistUsersWithExtendedFilters counts users matching extended filter criteria
+func (s *Store) CountWaitlistUsersWithExtendedFilters(ctx context.Context, params ExtendedListWaitlistUsersParams) (int, error) {
+	query := `SELECT COUNT(*) FROM waitlist_users WHERE campaign_id = $1 AND deleted_at IS NULL`
+	args := []interface{}{params.CampaignID}
+	argCount := 1
+
+	// Add status filter
+	if len(params.Statuses) > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND status = ANY($%d)", argCount)
+		args = append(args, params.Statuses)
+	}
+
+	// Add source filter
+	if len(params.Sources) > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND source = ANY($%d)", argCount)
+		args = append(args, params.Sources)
+	}
+
+	// Add has referrals filter
+	if params.HasReferrals != nil && *params.HasReferrals {
+		query += " AND referral_count > 0"
+	}
+
+	// Add position range filters
+	if params.MinPosition != nil {
+		argCount++
+		query += fmt.Sprintf(" AND position >= $%d", argCount)
+		args = append(args, *params.MinPosition)
+	}
+
+	if params.MaxPosition != nil {
+		argCount++
+		query += fmt.Sprintf(" AND position <= $%d", argCount)
+		args = append(args, *params.MaxPosition)
+	}
+
+	// Add date range filters
+	if params.DateFrom != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at >= $%d", argCount)
+		args = append(args, *params.DateFrom)
+	}
+
+	if params.DateTo != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at <= $%d", argCount)
+		args = append(args, *params.DateTo)
+	}
+
+	// Add custom field filters
+	for key, value := range params.CustomFields {
+		argCount++
+		query += fmt.Sprintf(" AND metadata @> $%d::jsonb", argCount)
+		jsonValue := fmt.Sprintf(`{"%s": "%s"}`, key, value)
+		args = append(args, jsonValue)
+	}
+
+	var count int
+	err := s.db.GetContext(ctx, &count, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count waitlist users with extended filters: %w", err)
+	}
+	return count, nil
+}

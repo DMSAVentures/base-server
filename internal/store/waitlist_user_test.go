@@ -536,3 +536,433 @@ func TestStore_SearchWaitlistUsersByEmail(t *testing.T) {
 		t.Errorf("Search '%s' got %d users, want 2", query, len(users))
 	}
 }
+
+func TestStore_ListWaitlistUsersWithExtendedFilters(t *testing.T) {
+	t.Parallel()
+	testDB := SetupTestDB(t, TestDBTypePostgres)
+
+	ctx := context.Background()
+	account := createTestAccount(t, testDB)
+	campaign := createTestCampaign(t, testDB, account.ID, "Extended Filter Test-"+uuid.New().String(), "extended-filter-test-"+uuid.New().String())
+
+	// Create users with different attributes for filtering
+	// User 1: verified, organic source, with referrals, position 1, company=Acme
+	user1, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
+		CampaignID:       campaign.ID,
+		Email:            uuid.New().String() + "@example.com",
+		ReferralCode:     "REF1-" + uuid.New().String(),
+		Position:         1,
+		OriginalPosition: 1,
+		Source:           stringPtr("organic"),
+		Metadata: JSONB{
+			"company": "Acme",
+			"role":    "Developer",
+		},
+		TermsAccepted: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create user1: %v", err)
+	}
+	testDB.Store.VerifyWaitlistUserEmail(ctx, user1.ID)
+	testDB.Store.IncrementReferralCount(ctx, user1.ID)
+	testDB.Store.IncrementReferralCount(ctx, user1.ID)
+
+	// User 2: unverified, referral source, no referrals, position 2, company=Beta
+	_, err = testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
+		CampaignID:       campaign.ID,
+		Email:            uuid.New().String() + "@example.com",
+		ReferralCode:     "REF2-" + uuid.New().String(),
+		Position:         2,
+		OriginalPosition: 2,
+		Source:           stringPtr("referral"),
+		Metadata: JSONB{
+			"company": "Beta",
+			"role":    "Manager",
+		},
+		TermsAccepted: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create user2: %v", err)
+	}
+
+	// User 3: verified, twitter source, with referrals, position 5, company=Acme
+	user3, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
+		CampaignID:       campaign.ID,
+		Email:            uuid.New().String() + "@example.com",
+		ReferralCode:     "REF3-" + uuid.New().String(),
+		Position:         5,
+		OriginalPosition: 5,
+		Source:           stringPtr("twitter"),
+		Metadata: JSONB{
+			"company": "Acme",
+			"role":    "Designer",
+		},
+		TermsAccepted: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create user3: %v", err)
+	}
+	testDB.Store.VerifyWaitlistUserEmail(ctx, user3.ID)
+	testDB.Store.IncrementReferralCount(ctx, user3.ID)
+
+	// User 4: unverified, organic source, no referrals, position 10, company=Gamma
+	_, err = testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
+		CampaignID:       campaign.ID,
+		Email:            uuid.New().String() + "@example.com",
+		ReferralCode:     "REF4-" + uuid.New().String(),
+		Position:         10,
+		OriginalPosition: 10,
+		Source:           stringPtr("organic"),
+		Metadata: JSONB{
+			"company": "Gamma",
+			"role":    "Developer",
+		},
+		TermsAccepted: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create user4: %v", err)
+	}
+
+	tests := []struct {
+		name          string
+		params        ExtendedListWaitlistUsersParams
+		expectedCount int
+		description   string
+	}{
+		{
+			name: "filter by multiple statuses",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Statuses:   []string{"pending", "verified"},
+				Limit:      10,
+				Offset:     0,
+			},
+			expectedCount: 4, // All users are pending or verified
+			description:   "Should return all users with pending or verified status",
+		},
+		{
+			name: "filter by single source",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Sources:    []string{"organic"},
+				Limit:      10,
+				Offset:     0,
+			},
+			expectedCount: 2, // Users 1 and 4
+			description:   "Should return only organic source users",
+		},
+		{
+			name: "filter by multiple sources",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Sources:    []string{"organic", "referral"},
+				Limit:      10,
+				Offset:     0,
+			},
+			expectedCount: 3, // Users 1, 2, and 4
+			description:   "Should return organic and referral source users",
+		},
+		{
+			name: "filter by hasReferrals",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:   campaign.ID,
+				HasReferrals: boolPtr(true),
+				Limit:        10,
+				Offset:       0,
+			},
+			expectedCount: 2, // Users 1 and 3
+			description:   "Should return only users with referrals",
+		},
+		{
+			name: "filter by position range",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:  campaign.ID,
+				MinPosition: intPtr(2),
+				MaxPosition: intPtr(6),
+				Limit:       10,
+				Offset:      0,
+			},
+			expectedCount: 2, // Users 2 (position 2) and 3 (position 5)
+			description:   "Should return users with position between 2 and 6",
+		},
+		{
+			name: "filter by custom field (company=Acme)",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:   campaign.ID,
+				CustomFields: map[string]string{"company": "Acme"},
+				Limit:        10,
+				Offset:       0,
+			},
+			expectedCount: 2, // Users 1 and 3
+			description:   "Should return only users from Acme company",
+		},
+		{
+			name: "filter by custom field (role=Developer)",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:   campaign.ID,
+				CustomFields: map[string]string{"role": "Developer"},
+				Limit:        10,
+				Offset:       0,
+			},
+			expectedCount: 2, // Users 1 and 4
+			description:   "Should return only developers",
+		},
+		{
+			name: "combine source and hasReferrals filters",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:   campaign.ID,
+				Sources:      []string{"organic"},
+				HasReferrals: boolPtr(true),
+				Limit:        10,
+				Offset:       0,
+			},
+			expectedCount: 1, // Only User 1
+			description:   "Should return organic users with referrals",
+		},
+		{
+			name: "combine custom fields and source filter",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:   campaign.ID,
+				CustomFields: map[string]string{"company": "Acme"},
+				Sources:      []string{"organic"},
+				Limit:        10,
+				Offset:       0,
+			},
+			expectedCount: 1, // Only User 1 (Acme + organic)
+			description:   "Should return organic users from Acme",
+		},
+		{
+			name: "sort by position ascending",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				SortBy:     "position",
+				SortOrder:  "asc",
+				Limit:      10,
+				Offset:     0,
+			},
+			expectedCount: 4,
+			description:   "Should return all users sorted by position ascending",
+		},
+		{
+			name: "sort by position descending",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				SortBy:     "position",
+				SortOrder:  "desc",
+				Limit:      10,
+				Offset:     0,
+			},
+			expectedCount: 4,
+			description:   "Should return all users sorted by position descending",
+		},
+		{
+			name: "pagination with limit and offset",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				SortBy:     "position",
+				SortOrder:  "asc",
+				Limit:      2,
+				Offset:     1,
+			},
+			expectedCount: 2, // Skip first, get next 2
+			description:   "Should return 2 users starting from offset 1",
+		},
+		{
+			name: "no results for non-matching filter",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:   campaign.ID,
+				CustomFields: map[string]string{"company": "NonExistent"},
+				Limit:        10,
+				Offset:       0,
+			},
+			expectedCount: 0,
+			description:   "Should return no users for non-existing company",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			users, err := testDB.Store.ListWaitlistUsersWithExtendedFilters(ctx, tt.params)
+			if err != nil {
+				t.Fatalf("ListWaitlistUsersWithExtendedFilters() error = %v", err)
+			}
+
+			if len(users) != tt.expectedCount {
+				t.Errorf("%s: got %d users, want %d", tt.description, len(users), tt.expectedCount)
+			}
+		})
+	}
+
+	// Test sorting order verification
+	t.Run("verify sort order ascending", func(t *testing.T) {
+		users, err := testDB.Store.ListWaitlistUsersWithExtendedFilters(ctx, ExtendedListWaitlistUsersParams{
+			CampaignID: campaign.ID,
+			SortBy:     "position",
+			SortOrder:  "asc",
+			Limit:      10,
+			Offset:     0,
+		})
+		if err != nil {
+			t.Fatalf("ListWaitlistUsersWithExtendedFilters() error = %v", err)
+		}
+
+		for i := 1; i < len(users); i++ {
+			if users[i].Position < users[i-1].Position {
+				t.Errorf("Users not sorted in ascending order: position %d came after %d",
+					users[i].Position, users[i-1].Position)
+			}
+		}
+	})
+
+	t.Run("verify sort order descending", func(t *testing.T) {
+		users, err := testDB.Store.ListWaitlistUsersWithExtendedFilters(ctx, ExtendedListWaitlistUsersParams{
+			CampaignID: campaign.ID,
+			SortBy:     "position",
+			SortOrder:  "desc",
+			Limit:      10,
+			Offset:     0,
+		})
+		if err != nil {
+			t.Fatalf("ListWaitlistUsersWithExtendedFilters() error = %v", err)
+		}
+
+		for i := 1; i < len(users); i++ {
+			if users[i].Position > users[i-1].Position {
+				t.Errorf("Users not sorted in descending order: position %d came after %d",
+					users[i].Position, users[i-1].Position)
+			}
+		}
+	})
+}
+
+func TestStore_CountWaitlistUsersWithExtendedFilters(t *testing.T) {
+	t.Parallel()
+	testDB := SetupTestDB(t, TestDBTypePostgres)
+
+	ctx := context.Background()
+	account := createTestAccount(t, testDB)
+	campaign := createTestCampaign(t, testDB, account.ID, "Count Extended Test-"+uuid.New().String(), "count-extended-test-"+uuid.New().String())
+
+	// Create 5 users with different attributes
+	for i := 0; i < 5; i++ {
+		source := "organic"
+		if i%2 == 0 {
+			source = "referral"
+		}
+		company := "Acme"
+		if i > 2 {
+			company = "Beta"
+		}
+
+		user, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
+			CampaignID:       campaign.ID,
+			Email:            uuid.New().String() + "@example.com",
+			ReferralCode:     "CREF-" + uuid.New().String(),
+			Position:         i + 1,
+			OriginalPosition: i + 1,
+			Source:           stringPtr(source),
+			Metadata: JSONB{
+				"company": company,
+			},
+			TermsAccepted: true,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create user %d: %v", i, err)
+		}
+
+		// Give some users referrals
+		if i < 2 {
+			testDB.Store.IncrementReferralCount(ctx, user.ID)
+		}
+	}
+
+	tests := []struct {
+		name          string
+		params        ExtendedListWaitlistUsersParams
+		expectedCount int
+	}{
+		{
+			name: "count all users",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+			},
+			expectedCount: 5,
+		},
+		{
+			name: "count by source organic",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Sources:    []string{"organic"},
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "count by source referral",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Sources:    []string{"referral"},
+			},
+			expectedCount: 3,
+		},
+		{
+			name: "count with hasReferrals",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:   campaign.ID,
+				HasReferrals: boolPtr(true),
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "count by custom field company=Acme",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:   campaign.ID,
+				CustomFields: map[string]string{"company": "Acme"},
+			},
+			expectedCount: 3,
+		},
+		{
+			name: "count by position range",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:  campaign.ID,
+				MinPosition: intPtr(2),
+				MaxPosition: intPtr(4),
+			},
+			expectedCount: 3,
+		},
+		{
+			name: "count with combined filters",
+			params: ExtendedListWaitlistUsersParams{
+				CampaignID:   campaign.ID,
+				Sources:      []string{"referral"},
+				CustomFields: map[string]string{"company": "Acme"},
+			},
+			expectedCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := testDB.Store.CountWaitlistUsersWithExtendedFilters(ctx, tt.params)
+			if err != nil {
+				t.Fatalf("CountWaitlistUsersWithExtendedFilters() error = %v", err)
+			}
+
+			if count != tt.expectedCount {
+				t.Errorf("got count %d, want %d", count, tt.expectedCount)
+			}
+		})
+	}
+}
+
+// Helper functions for test data
+func stringPtr(s string) *string {
+	return &s
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func intPtr(i int) *int {
+	return &i
+}

@@ -71,6 +71,21 @@ func (mr *MockWaitlistStoreMockRecorder) CountWaitlistUsersByCampaign(ctx, campa
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountWaitlistUsersByCampaign", reflect.TypeOf((*MockWaitlistStore)(nil).CountWaitlistUsersByCampaign), ctx, campaignID)
 }
 
+// CountWaitlistUsersWithExtendedFilters mocks base method.
+func (m *MockWaitlistStore) CountWaitlistUsersWithExtendedFilters(ctx context.Context, params store.ExtendedListWaitlistUsersParams) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountWaitlistUsersWithExtendedFilters", ctx, params)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountWaitlistUsersWithExtendedFilters indicates an expected call of CountWaitlistUsersWithExtendedFilters.
+func (mr *MockWaitlistStoreMockRecorder) CountWaitlistUsersWithExtendedFilters(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountWaitlistUsersWithExtendedFilters", reflect.TypeOf((*MockWaitlistStore)(nil).CountWaitlistUsersWithExtendedFilters), ctx, params)
+}
+
 // CountWaitlistUsersWithFilters mocks base method.
 func (m *MockWaitlistStore) CountWaitlistUsersWithFilters(ctx context.Context, campaignID uuid.UUID, status *string, verified *bool) (int, error) {
 	m.ctrl.T.Helper()
@@ -277,6 +292,21 @@ func (m *MockWaitlistStore) IncrementVerifiedReferralCount(ctx context.Context, 
 func (mr *MockWaitlistStoreMockRecorder) IncrementVerifiedReferralCount(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementVerifiedReferralCount", reflect.TypeOf((*MockWaitlistStore)(nil).IncrementVerifiedReferralCount), ctx, userID)
+}
+
+// ListWaitlistUsersWithExtendedFilters mocks base method.
+func (m *MockWaitlistStore) ListWaitlistUsersWithExtendedFilters(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListWaitlistUsersWithExtendedFilters", ctx, params)
+	ret0, _ := ret[0].([]store.WaitlistUser)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListWaitlistUsersWithExtendedFilters indicates an expected call of ListWaitlistUsersWithExtendedFilters.
+func (mr *MockWaitlistStoreMockRecorder) ListWaitlistUsersWithExtendedFilters(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListWaitlistUsersWithExtendedFilters", reflect.TypeOf((*MockWaitlistStore)(nil).ListWaitlistUsersWithExtendedFilters), ctx, params)
 }
 
 // SearchWaitlistUsers mocks base method.

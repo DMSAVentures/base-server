@@ -137,6 +137,15 @@ func (h *Handler) HandleVerifyEmail(c *gin.Context) {
 }
 
 // HandleListUsers handles GET /api/v1/campaigns/:campaign_id/users
+// Supports query parameters:
+// - page, limit: pagination
+// - status[]: multiple status values (e.g., status[]=pending&status[]=verified)
+// - source[]: multiple source values
+// - has_referrals: boolean
+// - min_position, max_position: position range
+// - date_from, date_to: ISO date strings
+// - custom_fields[field_name]: custom field filters (e.g., custom_fields[company]=Acme)
+// - sort, order: sorting
 func (h *Handler) HandleListUsers(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -163,7 +172,7 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 		return
 	}
 
-	// Parse query parameters
+	// Parse pagination parameters
 	page := 1
 	if pageStr := c.Query("page"); pageStr != "" {
 		if _, err := fmt.Sscanf(pageStr, "%d", &page); err != nil || page < 1 {
@@ -178,27 +187,81 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 		}
 	}
 
-	var status *string
-	if statusStr := c.Query("status"); statusStr != "" {
-		status = &statusStr
+	// Parse status array (supports both status[] and status)
+	var statuses []string
+	if statusArray := c.QueryArray("status[]"); len(statusArray) > 0 {
+		statuses = statusArray
+	} else if statusStr := c.Query("status"); statusStr != "" {
+		statuses = []string{statusStr}
 	}
 
-	var verified *bool
-	if verifiedStr := c.Query("verified"); verifiedStr != "" {
-		v := verifiedStr == "true"
-		verified = &v
+	// Parse source array
+	var sources []string
+	if sourceArray := c.QueryArray("source[]"); len(sourceArray) > 0 {
+		sources = sourceArray
+	} else if sourceStr := c.Query("source"); sourceStr != "" {
+		sources = []string{sourceStr}
+	}
+
+	// Parse has_referrals boolean
+	var hasReferrals *bool
+	if hasReferralsStr := c.Query("has_referrals"); hasReferralsStr != "" {
+		v := hasReferralsStr == "true"
+		hasReferrals = &v
+	}
+
+	// Parse position range
+	var minPosition, maxPosition *int
+	if minPosStr := c.Query("min_position"); minPosStr != "" {
+		var v int
+		if _, err := fmt.Sscanf(minPosStr, "%d", &v); err == nil {
+			minPosition = &v
+		}
+	}
+	if maxPosStr := c.Query("max_position"); maxPosStr != "" {
+		var v int
+		if _, err := fmt.Sscanf(maxPosStr, "%d", &v); err == nil {
+			maxPosition = &v
+		}
+	}
+
+	// Parse date range
+	var dateFrom, dateTo *string
+	if dateFromStr := c.Query("date_from"); dateFromStr != "" {
+		dateFrom = &dateFromStr
+	}
+	if dateToStr := c.Query("date_to"); dateToStr != "" {
+		dateTo = &dateToStr
+	}
+
+	// Parse custom field filters (custom_fields[field_name]=value)
+	customFields := make(map[string]string)
+	for key, values := range c.Request.URL.Query() {
+		if strings.HasPrefix(key, "custom_fields[") && strings.HasSuffix(key, "]") {
+			// Extract field name from custom_fields[field_name]
+			fieldName := key[14 : len(key)-1] // Remove "custom_fields[" and "]"
+			if len(values) > 0 && fieldName != "" {
+				customFields[fieldName] = values[0]
+			}
+		}
 	}
 
 	sortBy := c.DefaultQuery("sort", "position")
 	sortOrder := c.DefaultQuery("order", "asc")
 
 	req := processor.ListUsersRequest{
-		Status:    status,
-		Verified:  verified,
-		SortBy:    sortBy,
-		SortOrder: sortOrder,
-		Page:      page,
-		Limit:     limit,
+		Statuses:     statuses,
+		Sources:      sources,
+		HasReferrals: hasReferrals,
+		MinPosition:  minPosition,
+		MaxPosition:  maxPosition,
+		DateFrom:     dateFrom,
+		DateTo:       dateTo,
+		CustomFields: customFields,
+		SortBy:       sortBy,
+		SortOrder:    sortOrder,
+		Page:         page,
+		Limit:        limit,
 	}
 
 	response, err := h.processor.ListUsers(ctx, accountID, campaignID, req)

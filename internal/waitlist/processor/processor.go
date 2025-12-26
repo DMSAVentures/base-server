@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -38,6 +39,9 @@ type WaitlistStore interface {
 	// Channel code methods
 	CreateUserChannelCodes(ctx context.Context, userID uuid.UUID, codes map[string]string) ([]store.UserChannelCode, error)
 	GetUserByChannelCode(ctx context.Context, code string) (*store.WaitlistUser, string, error)
+	// Extended filtering methods
+	ListWaitlistUsersWithExtendedFilters(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error)
+	CountWaitlistUsersWithExtendedFilters(ctx context.Context, params store.ExtendedListWaitlistUsersParams) (int, error)
 }
 
 // EventDispatcher defines the event operations required by WaitlistProcessor
@@ -332,14 +336,20 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 	}, nil
 }
 
-// ListUsersRequest represents parameters for listing users
+// ListUsersRequest represents parameters for listing users with extended filtering
 type ListUsersRequest struct {
-	Status    *string
-	Verified  *bool
-	SortBy    string
-	SortOrder string
-	Page      int
-	Limit     int
+	Statuses     []string          // Multiple status values
+	Sources      []string          // Multiple source values
+	HasReferrals *bool             // Filter for users with referrals
+	MinPosition  *int              // Position range
+	MaxPosition  *int
+	DateFrom     *string           // ISO date string
+	DateTo       *string           // ISO date string
+	CustomFields map[string]string // Custom field filters (from metadata JSONB)
+	SortBy       string
+	SortOrder    string
+	Page         int
+	Limit        int
 }
 
 // ListUsersResponse represents the paginated response
@@ -351,7 +361,7 @@ type ListUsersResponse struct {
 	TotalPages int                  `json:"total_pages"`
 }
 
-// ListUsers retrieves waitlist users with filters and pagination
+// ListUsers retrieves waitlist users with extended filters and pagination
 func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID uuid.UUID, req ListUsersRequest) (ListUsersResponse, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
@@ -371,24 +381,66 @@ func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID
 		req.Limit = 20
 	}
 
-	// Validate status if provided
-	if req.Status != nil && !isValidUserStatus(*req.Status) {
-		return ListUsersResponse{}, ErrInvalidStatus
+	// Validate statuses if provided
+	for _, status := range req.Statuses {
+		if !isValidUserStatus(status) {
+			return ListUsersResponse{}, ErrInvalidStatus
+		}
 	}
 
 	offset := (req.Page - 1) * req.Limit
 
-	params := store.ListWaitlistUsersWithFiltersParams{
-		CampaignID: campaignID,
-		Status:     req.Status,
-		Verified:   req.Verified,
-		SortBy:     req.SortBy,
-		SortOrder:  req.SortOrder,
-		Limit:      req.Limit,
-		Offset:     offset,
+	// Parse date strings to time.Time
+	var dateFrom, dateTo *time.Time
+	if req.DateFrom != nil && *req.DateFrom != "" {
+		parsed, err := time.Parse(time.RFC3339, *req.DateFrom)
+		if err != nil {
+			// Try parsing as date only (YYYY-MM-DD)
+			parsed, err = time.Parse("2006-01-02", *req.DateFrom)
+			if err != nil {
+				p.logger.Error(ctx, "failed to parse date_from", err)
+			} else {
+				dateFrom = &parsed
+			}
+		} else {
+			dateFrom = &parsed
+		}
 	}
 
-	users, err := p.store.GetWaitlistUsersByCampaignWithFilters(ctx, params)
+	if req.DateTo != nil && *req.DateTo != "" {
+		parsed, err := time.Parse(time.RFC3339, *req.DateTo)
+		if err != nil {
+			// Try parsing as date only (YYYY-MM-DD)
+			parsed, err = time.Parse("2006-01-02", *req.DateTo)
+			if err != nil {
+				p.logger.Error(ctx, "failed to parse date_to", err)
+			} else {
+				// Set to end of day
+				parsed = parsed.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+				dateTo = &parsed
+			}
+		} else {
+			dateTo = &parsed
+		}
+	}
+
+	params := store.ExtendedListWaitlistUsersParams{
+		CampaignID:   campaignID,
+		Statuses:     req.Statuses,
+		Sources:      req.Sources,
+		HasReferrals: req.HasReferrals,
+		MinPosition:  req.MinPosition,
+		MaxPosition:  req.MaxPosition,
+		DateFrom:     dateFrom,
+		DateTo:       dateTo,
+		CustomFields: req.CustomFields,
+		SortBy:       req.SortBy,
+		SortOrder:    req.SortOrder,
+		Limit:        req.Limit,
+		Offset:       offset,
+	}
+
+	users, err := p.store.ListWaitlistUsersWithExtendedFilters(ctx, params)
 	if err != nil {
 		p.logger.Error(ctx, "failed to list users", err)
 		return ListUsersResponse{}, err
@@ -399,8 +451,8 @@ func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID
 		users = []store.WaitlistUser{}
 	}
 
-	// Get total count
-	totalCount, err := p.store.CountWaitlistUsersWithFilters(ctx, campaignID, req.Status, req.Verified)
+	// Get total count with same filters
+	totalCount, err := p.store.CountWaitlistUsersWithExtendedFilters(ctx, params)
 	if err != nil {
 		p.logger.Error(ctx, "failed to count users", err)
 		return ListUsersResponse{}, err
