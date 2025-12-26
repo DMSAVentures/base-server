@@ -10,58 +10,16 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/mock/gomock"
 )
 
-// createTestAccount creates an account for testing
-func createTestAccount(t *testing.T, testDB *store.TestDB) store.Account {
-	t.Helper()
-	ctx := context.Background()
-
-	// Create a user first
-	var user store.User
-	err := testDB.GetDB().GetContext(ctx, &user,
-		`INSERT INTO users (first_name, last_name) VALUES ($1, $2) RETURNING id, first_name, last_name`,
-		"Test", "User")
-	if err != nil {
-		t.Fatalf("failed to create test user: %v", err)
-	}
-
-	// Create account
-	account, err := testDB.Store.CreateAccount(ctx, store.CreateAccountParams{
-		Name:        "Test Account",
-		Slug:        "test-account-" + uuid.New().String()[:8],
-		OwnerUserID: user.ID,
-		Plan:        "pro",
-	})
-	if err != nil {
-		t.Fatalf("failed to create test account: %v", err)
-	}
-	return account
-}
-
-// createTestCampaign creates a campaign for testing
-func createTestCampaign(t *testing.T, testDB *store.TestDB, accountID uuid.UUID) store.Campaign {
-	t.Helper()
-	ctx := context.Background()
-
-	campaign, err := testDB.Store.CreateCampaign(ctx, store.CreateCampaignParams{
-		AccountID: accountID,
-		Name:      "Test Campaign",
-		Slug:      "test-campaign-" + uuid.New().String()[:8],
-		Type:      "waitlist",
-	})
-	if err != nil {
-		t.Fatalf("failed to create test campaign: %v", err)
-	}
-	return campaign
-}
-
 func TestGenerateSignature(t *testing.T) {
-	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
-	defer testDB.Close()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
+	mockStore := NewMockWebhookStore(ctrl)
 	logger := observability.NewLogger()
-	service := New(&testDB.Store, logger)
+	service := New(mockStore, logger)
 
 	secret := "test-secret"
 	payload := []byte(`{"test":"data"}`)
@@ -85,11 +43,12 @@ func TestGenerateSignature(t *testing.T) {
 }
 
 func TestCalculateNextRetry(t *testing.T) {
-	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
-	defer testDB.Close()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
+	mockStore := NewMockWebhookStore(ctrl)
 	logger := observability.NewLogger()
-	service := New(&testDB.Store, logger)
+	service := New(mockStore, logger)
 
 	tests := []struct {
 		attemptNumber int
@@ -117,11 +76,12 @@ func TestCalculateNextRetry(t *testing.T) {
 }
 
 func TestSubscribesToEvent(t *testing.T) {
-	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
-	defer testDB.Close()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
+	mockStore := NewMockWebhookStore(ctrl)
 	logger := observability.NewLogger()
-	service := New(&testDB.Store, logger)
+	service := New(mockStore, logger)
 
 	subscribedEvents := []string{"user.created", "user.verified", "referral.created"}
 
@@ -146,16 +106,14 @@ func TestSubscribesToEvent(t *testing.T) {
 	}
 }
 
-func TestDispatchEvent(t *testing.T) {
-	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
+func TestDispatchEvent_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	// Create a test HTTP server to receive webhooks
 	receivedWebhooks := 0
 	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedWebhooks++
-		// Verify headers
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Error("Expected Content-Type: application/json")
 		}
@@ -166,35 +124,44 @@ func TestDispatchEvent(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	// Create test account
-	account := createTestAccount(t, testDB)
+	mockStore := NewMockWebhookStore(ctrl)
+	logger := observability.NewLogger()
+	service := New(mockStore, logger)
 
-	// Create a webhook pointing to our test server
 	ctx := context.Background()
-	webhook, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
-		AccountID:    account.ID,
-		CampaignID:   nil,
+	accountID := uuid.New()
+	webhookID := uuid.New()
+	deliveryID := uuid.New()
+
+	webhook := store.Webhook{
+		ID:           webhookID,
+		AccountID:    accountID,
 		URL:          testServer.URL,
 		Secret:       "test-secret",
 		Events:       []string{"user.created", "user.verified"},
+		Status:       "active",
 		RetryEnabled: true,
 		MaxRetries:   5,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create webhook: %v", err)
 	}
 
-	logger := observability.NewLogger()
-	service := New(&testDB.Store, logger)
+	// Setup mock expectations
+	mockStore.EXPECT().GetWebhooksByAccount(gomock.Any(), accountID).Return([]store.Webhook{webhook}, nil)
+	mockStore.EXPECT().CreateWebhookDelivery(gomock.Any(), gomock.Any()).Return(store.WebhookDelivery{
+		ID:        deliveryID,
+		WebhookID: webhookID,
+		EventType: "user.created",
+		Status:    "pending",
+	}, nil)
+	mockStore.EXPECT().UpdateWebhookDeliveryStatus(gomock.Any(), deliveryID, gomock.Any()).Return(nil)
+	mockStore.EXPECT().IncrementWebhookSent(gomock.Any(), webhookID).Return(nil)
 
-	// Test dispatch
 	eventType := "user.created"
 	data := map[string]interface{}{
 		"user_id": "123",
 		"email":   "test@example.com",
 	}
 
-	err = service.DispatchEvent(ctx, account.ID, nil, eventType, data)
+	err := service.DispatchEvent(ctx, accountID, nil, eventType, data)
 	if err != nil {
 		t.Errorf("DispatchEvent failed: %v", err)
 	}
@@ -202,61 +169,11 @@ func TestDispatchEvent(t *testing.T) {
 	if receivedWebhooks != 1 {
 		t.Errorf("Expected 1 webhook to be received, got %d", receivedWebhooks)
 	}
-
-	// Verify delivery was recorded in database
-	deliveries, err := testDB.Store.GetWebhookDeliveriesByWebhook(ctx, webhook.ID, 10, 0)
-	if err != nil {
-		t.Fatalf("Failed to get deliveries: %v", err)
-	}
-	if len(deliveries) != 1 {
-		t.Errorf("Expected 1 delivery record, got %d", len(deliveries))
-	}
-	if len(deliveries) > 0 && deliveries[0].Status != "success" {
-		t.Errorf("Expected delivery status 'success', got '%s'", deliveries[0].Status)
-	}
-}
-
-func TestTestWebhook(t *testing.T) {
-	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
-
-	// Create a test HTTP server
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer testServer.Close()
-
-	// Create test account
-	account := createTestAccount(t, testDB)
-
-	ctx := context.Background()
-	webhook, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
-		AccountID:    account.ID,
-		CampaignID:   nil,
-		URL:          testServer.URL,
-		Secret:       "test-secret",
-		Events:       []string{"webhook.test"},
-		RetryEnabled: true,
-		MaxRetries:   5,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create webhook: %v", err)
-	}
-
-	logger := observability.NewLogger()
-	service := New(&testDB.Store, logger)
-
-	err = service.TestWebhook(ctx, webhook.ID)
-	if err != nil {
-		t.Errorf("TestWebhook failed: %v", err)
-	}
 }
 
 func TestDispatchEvent_WebhookNotSubscribed(t *testing.T) {
-	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	// Create a test HTTP server - should NOT receive any webhooks
 	receivedWebhooks := 0
@@ -266,28 +183,29 @@ func TestDispatchEvent_WebhookNotSubscribed(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	// Create test account
-	account := createTestAccount(t, testDB)
+	mockStore := NewMockWebhookStore(ctrl)
+	logger := observability.NewLogger()
+	service := New(mockStore, logger)
 
 	ctx := context.Background()
-	_, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
-		AccountID:    account.ID,
-		CampaignID:   nil,
+	accountID := uuid.New()
+	webhookID := uuid.New()
+
+	webhook := store.Webhook{
+		ID:           webhookID,
+		AccountID:    accountID,
 		URL:          testServer.URL,
 		Secret:       "test-secret",
 		Events:       []string{"user.deleted"}, // subscribed to different event
+		Status:       "active",
 		RetryEnabled: true,
 		MaxRetries:   5,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create webhook: %v", err)
 	}
 
-	logger := observability.NewLogger()
-	service := New(&testDB.Store, logger)
+	mockStore.EXPECT().GetWebhooksByAccount(gomock.Any(), accountID).Return([]store.Webhook{webhook}, nil)
 
 	// Dispatch an event the webhook is NOT subscribed to
-	err = service.DispatchEvent(ctx, account.ID, nil, "user.created", map[string]interface{}{"test": true})
+	err := service.DispatchEvent(ctx, accountID, nil, "user.created", map[string]interface{}{"test": true})
 	if err != nil {
 		t.Errorf("DispatchEvent failed: %v", err)
 	}
@@ -299,9 +217,8 @@ func TestDispatchEvent_WebhookNotSubscribed(t *testing.T) {
 }
 
 func TestDispatchEvent_PausedWebhook(t *testing.T) {
-	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	// Create a test HTTP server - should NOT receive any webhooks
 	receivedWebhooks := 0
@@ -311,37 +228,28 @@ func TestDispatchEvent_PausedWebhook(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	// Create test account
-	account := createTestAccount(t, testDB)
+	mockStore := NewMockWebhookStore(ctrl)
+	logger := observability.NewLogger()
+	service := New(mockStore, logger)
 
 	ctx := context.Background()
-	// Create webhook and then update it to paused
-	webhook, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
-		AccountID:    account.ID,
-		CampaignID:   nil,
+	accountID := uuid.New()
+	webhookID := uuid.New()
+
+	webhook := store.Webhook{
+		ID:           webhookID,
+		AccountID:    accountID,
 		URL:          testServer.URL,
 		Secret:       "test-secret",
 		Events:       []string{"user.created"},
+		Status:       "paused", // Webhook is paused
 		RetryEnabled: true,
 		MaxRetries:   5,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create webhook: %v", err)
 	}
 
-	// Update webhook to paused status
-	pausedStatus := "paused"
-	_, err = testDB.Store.UpdateWebhook(ctx, webhook.ID, store.UpdateWebhookParams{
-		Status: &pausedStatus,
-	})
-	if err != nil {
-		t.Fatalf("Failed to pause webhook: %v", err)
-	}
+	mockStore.EXPECT().GetWebhooksByAccount(gomock.Any(), accountID).Return([]store.Webhook{webhook}, nil)
 
-	logger := observability.NewLogger()
-	service := New(&testDB.Store, logger)
-
-	err = service.DispatchEvent(ctx, account.ID, nil, "user.created", map[string]interface{}{"test": true})
+	err := service.DispatchEvent(ctx, accountID, nil, "user.created", map[string]interface{}{"test": true})
 	if err != nil {
 		t.Errorf("DispatchEvent failed: %v", err)
 	}
@@ -353,9 +261,8 @@ func TestDispatchEvent_PausedWebhook(t *testing.T) {
 }
 
 func TestDispatchEvent_CampaignSpecific(t *testing.T) {
-	testDB := store.SetupTestDB(t, store.TestDBTypePostgres)
-	defer testDB.Close()
-	testDB.Truncate(t)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
 	// Create a test HTTP server
 	receivedWebhooks := 0
@@ -365,31 +272,40 @@ func TestDispatchEvent_CampaignSpecific(t *testing.T) {
 	}))
 	defer testServer.Close()
 
-	// Create test account and campaign
-	account := createTestAccount(t, testDB)
-	campaign := createTestCampaign(t, testDB, account.ID)
+	mockStore := NewMockWebhookStore(ctrl)
+	logger := observability.NewLogger()
+	service := New(mockStore, logger)
 
 	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+	webhookID := uuid.New()
+	deliveryID := uuid.New()
 
-	// Create a webhook for a specific campaign
-	_, err := testDB.Store.CreateWebhook(ctx, store.CreateWebhookParams{
-		AccountID:    account.ID,
-		CampaignID:   &campaign.ID,
+	webhook := store.Webhook{
+		ID:           webhookID,
+		AccountID:    accountID,
+		CampaignID:   &campaignID,
 		URL:          testServer.URL,
 		Secret:       "test-secret",
 		Events:       []string{"user.created"},
+		Status:       "active",
 		RetryEnabled: true,
 		MaxRetries:   5,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create webhook: %v", err)
 	}
 
-	logger := observability.NewLogger()
-	service := New(&testDB.Store, logger)
+	// First call: dispatch event for the correct campaign
+	mockStore.EXPECT().GetWebhooksByAccount(gomock.Any(), accountID).Return([]store.Webhook{webhook}, nil)
+	mockStore.EXPECT().CreateWebhookDelivery(gomock.Any(), gomock.Any()).Return(store.WebhookDelivery{
+		ID:        deliveryID,
+		WebhookID: webhookID,
+		EventType: "user.created",
+		Status:    "pending",
+	}, nil)
+	mockStore.EXPECT().UpdateWebhookDeliveryStatus(gomock.Any(), deliveryID, gomock.Any()).Return(nil)
+	mockStore.EXPECT().IncrementWebhookSent(gomock.Any(), webhookID).Return(nil)
 
-	// Dispatch event for the correct campaign
-	err = service.DispatchEvent(ctx, account.ID, &campaign.ID, "user.created", map[string]interface{}{"test": true})
+	err := service.DispatchEvent(ctx, accountID, &campaignID, "user.created", map[string]interface{}{"test": true})
 	if err != nil {
 		t.Errorf("DispatchEvent failed: %v", err)
 	}
@@ -398,15 +314,130 @@ func TestDispatchEvent_CampaignSpecific(t *testing.T) {
 		t.Errorf("Expected 1 webhook to be received, got %d", receivedWebhooks)
 	}
 
-	// Dispatch event for a different campaign - should NOT trigger webhook
+	// Second call: dispatch event for a different campaign - should NOT trigger webhook
 	receivedWebhooks = 0
 	otherCampaignID := uuid.New()
-	err = service.DispatchEvent(ctx, account.ID, &otherCampaignID, "user.created", map[string]interface{}{"test": true})
+	mockStore.EXPECT().GetWebhooksByAccount(gomock.Any(), accountID).Return([]store.Webhook{webhook}, nil)
+
+	err = service.DispatchEvent(ctx, accountID, &otherCampaignID, "user.created", map[string]interface{}{"test": true})
 	if err != nil {
 		t.Errorf("DispatchEvent failed: %v", err)
 	}
 
 	if receivedWebhooks != 0 {
 		t.Errorf("Expected 0 webhooks for different campaign, got %d", receivedWebhooks)
+	}
+}
+
+func TestTestWebhook_Success(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a test HTTP server
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testServer.Close()
+
+	mockStore := NewMockWebhookStore(ctrl)
+	logger := observability.NewLogger()
+	service := New(mockStore, logger)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	webhookID := uuid.New()
+	deliveryID := uuid.New()
+
+	webhook := store.Webhook{
+		ID:           webhookID,
+		AccountID:    accountID,
+		URL:          testServer.URL,
+		Secret:       "test-secret",
+		Events:       []string{"webhook.test"},
+		Status:       "active",
+		RetryEnabled: true,
+		MaxRetries:   5,
+	}
+
+	mockStore.EXPECT().GetWebhookByID(gomock.Any(), webhookID).Return(webhook, nil)
+	mockStore.EXPECT().CreateWebhookDelivery(gomock.Any(), gomock.Any()).Return(store.WebhookDelivery{
+		ID:        deliveryID,
+		WebhookID: webhookID,
+		EventType: "webhook.test",
+		Status:    "pending",
+	}, nil)
+	mockStore.EXPECT().UpdateWebhookDeliveryStatus(gomock.Any(), deliveryID, gomock.Any()).Return(nil)
+	mockStore.EXPECT().IncrementWebhookSent(gomock.Any(), webhookID).Return(nil)
+
+	err := service.TestWebhook(ctx, webhookID)
+	if err != nil {
+		t.Errorf("TestWebhook failed: %v", err)
+	}
+}
+
+func TestTestWebhook_WebhookNotFound(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWebhookStore(ctrl)
+	logger := observability.NewLogger()
+	service := New(mockStore, logger)
+
+	ctx := context.Background()
+	webhookID := uuid.New()
+
+	mockStore.EXPECT().GetWebhookByID(gomock.Any(), webhookID).Return(store.Webhook{}, store.ErrNotFound)
+
+	err := service.TestWebhook(ctx, webhookID)
+	if err == nil {
+		t.Error("Expected error when webhook not found")
+	}
+}
+
+func TestDispatchEvent_DeliveryFailed(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a test HTTP server that returns 500
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer testServer.Close()
+
+	mockStore := NewMockWebhookStore(ctrl)
+	logger := observability.NewLogger()
+	service := New(mockStore, logger)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	webhookID := uuid.New()
+	deliveryID := uuid.New()
+
+	webhook := store.Webhook{
+		ID:           webhookID,
+		AccountID:    accountID,
+		URL:          testServer.URL,
+		Secret:       "test-secret",
+		Events:       []string{"user.created"},
+		Status:       "active",
+		RetryEnabled: true,
+		MaxRetries:   5,
+	}
+
+	mockStore.EXPECT().GetWebhooksByAccount(gomock.Any(), accountID).Return([]store.Webhook{webhook}, nil)
+	mockStore.EXPECT().CreateWebhookDelivery(gomock.Any(), gomock.Any()).Return(store.WebhookDelivery{
+		ID:            deliveryID,
+		WebhookID:     webhookID,
+		EventType:     "user.created",
+		Status:        "pending",
+		AttemptNumber: 1,
+	}, nil)
+	mockStore.EXPECT().UpdateWebhookDeliveryStatus(gomock.Any(), deliveryID, gomock.Any()).Return(nil)
+	mockStore.EXPECT().IncrementDeliveryAttempt(gomock.Any(), deliveryID, gomock.Any()).Return(nil)
+
+	err := service.DispatchEvent(ctx, accountID, nil, "user.created", map[string]interface{}{"test": true})
+	// DispatchEvent continues even if individual webhooks fail
+	if err != nil {
+		t.Errorf("DispatchEvent should not fail: %v", err)
 	}
 }

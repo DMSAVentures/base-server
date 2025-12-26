@@ -1,5 +1,7 @@
 package service
 
+//go:generate go run go.uber.org/mock/mockgen@latest -source=service.go -destination=mocks_test.go -package=service
+
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
