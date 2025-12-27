@@ -137,9 +137,6 @@ func TestStore_CreateWaitlistUser(t *testing.T) {
 				metroCode := "807"
 				deviceType := "mobile"
 				deviceOS := "ios"
-				asn := "AS16509"
-				tlsVersion := "TLSv1.3"
-				httpVersion := "HTTP/2"
 				return CreateWaitlistUserParams{
 					CampaignID:       campaign.ID,
 					Email:            uuid.New().String() + "@example.com",
@@ -157,9 +154,6 @@ func TestStore_CreateWaitlistUser(t *testing.T) {
 					MetroCode:        &metroCode,
 					DeviceType:       &deviceType,
 					DeviceOS:         &deviceOS,
-					ASN:              &asn,
-					TLSVersion:       &tlsVersion,
-					HTTPVersion:      &httpVersion,
 					TermsAccepted:    true,
 				}
 			},
@@ -194,23 +188,14 @@ func TestStore_CreateWaitlistUser(t *testing.T) {
 				if user.MetroCode == nil || *user.MetroCode != "807" {
 					t.Errorf("MetroCode = %v, want 807", user.MetroCode)
 				}
-				// Validate device data
+				// Validate device data (detected via User-Agent parsing)
 				if user.DeviceType == nil || *user.DeviceType != "mobile" {
 					t.Errorf("DeviceType = %v, want mobile", user.DeviceType)
 				}
 				if user.DeviceOS == nil || *user.DeviceOS != "ios" {
 					t.Errorf("DeviceOS = %v, want ios", user.DeviceOS)
 				}
-				// Validate connection info
-				if user.ASN == nil || *user.ASN != "AS16509" {
-					t.Errorf("ASN = %v, want AS16509", user.ASN)
-				}
-				if user.TLSVersion == nil || *user.TLSVersion != "TLSv1.3" {
-					t.Errorf("TLSVersion = %v, want TLSv1.3", user.TLSVersion)
-				}
-				if user.HTTPVersion == nil || *user.HTTPVersion != "HTTP/2" {
-					t.Errorf("HTTPVersion = %v, want HTTP/2", user.HTTPVersion)
-				}
+				// Note: ASN, TLSVersion, HTTPVersion not forwarded from CloudFront (10 header limit)
 			},
 		},
 	}

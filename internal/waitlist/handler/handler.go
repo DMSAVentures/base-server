@@ -108,10 +108,6 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 		// CloudFront device detection (enums)
 		DeviceType: cfInfo.DeviceType,
 		DeviceOS:   cfInfo.DeviceOS,
-		// CloudFront connection info
-		ASN:         cfInfo.ASN,
-		TLSVersion:  cfInfo.TLSVersion,
-		HTTPVersion: cfInfo.HTTPVersion,
 	}
 
 	response, err := h.processor.SignupUser(ctx, campaignID, processorReq, h.baseURL)

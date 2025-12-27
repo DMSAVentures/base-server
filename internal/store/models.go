@@ -428,11 +428,6 @@ type WaitlistUser struct {
 	// DeviceOS enum values: android, ios, other
 	DeviceOS *string `db:"device_os" json:"device_os,omitempty"`
 
-	// CloudFront connection info
-	ASN         *string `db:"asn" json:"asn,omitempty"`
-	TLSVersion  *string `db:"tls_version" json:"tls_version,omitempty"`
-	HTTPVersion *string `db:"http_version" json:"http_version,omitempty"`
-
 	Metadata JSONB `db:"metadata" json:"metadata,omitempty"`
 
 	MarketingConsent   bool       `db:"marketing_consent" json:"marketing_consent"`

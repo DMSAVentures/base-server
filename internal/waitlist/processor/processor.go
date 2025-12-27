@@ -117,10 +117,6 @@ type SignupUserRequest struct {
 	// CloudFront device detection (enum values)
 	DeviceType *string // desktop, mobile, tablet, smarttv, unknown
 	DeviceOS   *string // android, ios, other
-	// CloudFront connection info
-	ASN         *string
-	TLSVersion  *string
-	HTTPVersion *string
 }
 
 // SignupUserResponse represents the response after signing up a user
@@ -259,22 +255,22 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 
 	// Create user
 	createParams := store.CreateWaitlistUserParams{
-		CampaignID:        campaignID,
-		Email:             strings.ToLower(strings.TrimSpace(req.Email)),
-		FirstName:         req.FirstName,
-		LastName:          req.LastName,
-		ReferralCode:      referralCode,
-		ReferredByID:      referredByID,
-		Position:          position,
-		OriginalPosition:  position,
-		Source:            source,
-		UTMSource:         req.UTMSource,
-		UTMMedium:         req.UTMMedium,
-		UTMCampaign:       req.UTMCampaign,
-		UTMTerm:           req.UTMTerm,
-		UTMContent:        req.UTMContent,
-		IPAddress:         req.IPAddress,
-		UserAgent:         req.UserAgent,
+		CampaignID:       campaignID,
+		Email:            strings.ToLower(strings.TrimSpace(req.Email)),
+		FirstName:        req.FirstName,
+		LastName:         req.LastName,
+		ReferralCode:     referralCode,
+		ReferredByID:     referredByID,
+		Position:         position,
+		OriginalPosition: position,
+		Source:           source,
+		UTMSource:        req.UTMSource,
+		UTMMedium:        req.UTMMedium,
+		UTMCampaign:      req.UTMCampaign,
+		UTMTerm:          req.UTMTerm,
+		UTMContent:       req.UTMContent,
+		IPAddress:        req.IPAddress,
+		UserAgent:        req.UserAgent,
 		// CloudFront geographic data
 		Country:      req.Country,
 		Region:       req.Region,
@@ -285,12 +281,8 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 		Longitude:    req.Longitude,
 		MetroCode:    req.MetroCode,
 		// CloudFront device detection (enums)
-		DeviceType: req.DeviceType,
-		DeviceOS:   req.DeviceOS,
-		// CloudFront connection info
-		ASN:               req.ASN,
-		TLSVersion:        req.TLSVersion,
-		HTTPVersion:       req.HTTPVersion,
+		DeviceType:        req.DeviceType,
+		DeviceOS:          req.DeviceOS,
 		Metadata:          metadata,
 		MarketingConsent:  req.MarketingConsent,
 		TermsAccepted:     req.TermsAccepted,
@@ -371,10 +363,10 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 
 // ListUsersRequest represents parameters for listing users with extended filtering
 type ListUsersRequest struct {
-	Statuses     []string          // Multiple status values
-	Sources      []string          // Multiple source values
-	HasReferrals *bool             // Filter for users with referrals
-	MinPosition  *int              // Position range
+	Statuses     []string // Multiple status values
+	Sources      []string // Multiple source values
+	HasReferrals *bool    // Filter for users with referrals
+	MinPosition  *int     // Position range
 	MaxPosition  *int
 	DateFrom     *string           // ISO date string
 	DateTo       *string           // ISO date string

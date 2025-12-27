@@ -43,12 +43,8 @@ type CreateWaitlistUserParams struct {
 	// CloudFront device detection (enum values)
 	DeviceType *string // desktop, mobile, tablet, smarttv, unknown
 	DeviceOS   *string // android, ios, other
-	// CloudFront connection info
-	ASN         *string
-	TLSVersion  *string
-	HTTPVersion *string
 
-	Metadata JSONB
+	Metadata          JSONB
 	MarketingConsent  bool
 	TermsAccepted     bool
 	VerificationToken *string
@@ -70,11 +66,11 @@ INSERT INTO waitlist_users (
 	source, utm_source, utm_medium, utm_campaign, utm_term, utm_content,
 	ip_address, user_agent, country_code, city, device_fingerprint,
 	country, region, region_code, postal_code, user_timezone, latitude, longitude, metro_code,
-	device_type, device_os, asn, tls_version, http_version,
+	device_type, device_os,
 	metadata, marketing_consent, terms_accepted, verification_token
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36)
-RETURNING id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, country, region, region_code, postal_code, user_timezone, latitude, longitude, metro_code, device_type, device_os, asn, tls_version, http_version, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33)
+RETURNING id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, country, region, region_code, postal_code, user_timezone, latitude, longitude, metro_code, device_type, device_os, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
 `
 
 // CreateWaitlistUser creates a new waitlist user
@@ -112,10 +108,6 @@ func (s *Store) CreateWaitlistUser(ctx context.Context, params CreateWaitlistUse
 		// CloudFront device detection (enums)
 		params.DeviceType,
 		params.DeviceOS,
-		// CloudFront connection info
-		params.ASN,
-		params.TLSVersion,
-		params.HTTPVersion,
 		params.Metadata,
 		params.MarketingConsent,
 		params.TermsAccepted,
@@ -127,7 +119,7 @@ func (s *Store) CreateWaitlistUser(ctx context.Context, params CreateWaitlistUse
 }
 
 // waitlistUserColumns contains all columns for SELECT queries
-const waitlistUserColumns = `id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, country, region, region_code, postal_code, user_timezone, latitude, longitude, metro_code, device_type, device_os, asn, tls_version, http_version, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at`
+const waitlistUserColumns = `id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, country, region, region_code, postal_code, user_timezone, latitude, longitude, metro_code, device_type, device_os, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at`
 
 const sqlGetWaitlistUserByID = `
 SELECT ` + waitlistUserColumns + `
@@ -440,17 +432,17 @@ func (s *Store) GetWaitlistUserByVerificationToken(ctx context.Context, token st
 
 // SearchWaitlistUsersParams represents parameters for searching waitlist users
 type SearchWaitlistUsersParams struct {
-	CampaignID    uuid.UUID
-	Query         *string
-	Statuses      []string
-	Verified      *bool
-	MinReferrals  *int
-	DateFrom      *string
-	DateTo        *string
-	SortBy        string
-	SortOrder     string
-	Limit         int
-	Offset        int
+	CampaignID   uuid.UUID
+	Query        *string
+	Statuses     []string
+	Verified     *bool
+	MinReferrals *int
+	DateFrom     *string
+	DateTo       *string
+	SortBy       string
+	SortOrder    string
+	Limit        int
+	Offset       int
 }
 
 // SearchWaitlistUsers performs advanced search with filters
@@ -735,12 +727,12 @@ func (s *Store) CountRecentSignupsByIP(ctx context.Context, campaignID uuid.UUID
 // ExtendedListWaitlistUsersParams represents comprehensive filtering parameters
 type ExtendedListWaitlistUsersParams struct {
 	CampaignID   uuid.UUID
-	Statuses     []string          // Multiple status values (OR condition)
-	Sources      []string          // Multiple source values (OR condition)
-	HasReferrals *bool             // Filter for users with referrals > 0
-	MinPosition  *int              // Position range
+	Statuses     []string // Multiple status values (OR condition)
+	Sources      []string // Multiple source values (OR condition)
+	HasReferrals *bool    // Filter for users with referrals > 0
+	MinPosition  *int     // Position range
 	MaxPosition  *int
-	DateFrom     *time.Time        // Date range
+	DateFrom     *time.Time // Date range
 	DateTo       *time.Time
 	CustomFields map[string]string // JSONB metadata filters (AND condition)
 	SortBy       string
