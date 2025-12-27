@@ -7,8 +7,10 @@ import (
 	analyticsProcessor "base-server/internal/analytics/processor"
 	authProcessor "base-server/internal/auth/processor"
 	campaignProcessor "base-server/internal/campaign/processor"
+	emailblastsProcessor "base-server/internal/emailblasts/processor"
 	referralProcessor "base-server/internal/referral/processor"
 	rewardsProcessor "base-server/internal/rewards/processor"
+	segmentProcessor "base-server/internal/segments/processor"
 	"base-server/internal/store"
 	waitlistProcessor "base-server/internal/waitlist/processor"
 )
@@ -172,6 +174,62 @@ func MapError(err error) *APIError {
 
 	case errors.Is(err, analyticsProcessor.ErrInvalidGranularity):
 		return BadRequest(CodeInvalidGranularity, "Invalid granularity")
+
+	// Map segment processor errors
+	case errors.Is(err, segmentProcessor.ErrSegmentNotFound):
+		return NotFound(CodeSegmentNotFound, "Segment not found")
+
+	case errors.Is(err, segmentProcessor.ErrCampaignNotFound):
+		return NotFound(CodeCampaignNotFound, "Campaign not found")
+
+	case errors.Is(err, segmentProcessor.ErrUnauthorized):
+		return Forbidden("You do not have access to this segment")
+
+	case errors.Is(err, segmentProcessor.ErrInvalidCriteria):
+		return BadRequest(CodeInvalidFilterCriteria, "Invalid filter criteria")
+
+	case errors.Is(err, segmentProcessor.ErrSegmentInUse):
+		return Conflict(CodeSegmentInUse, "Segment is in use by an email blast and cannot be deleted")
+
+	// Map email blast processor errors
+	case errors.Is(err, emailblastsProcessor.ErrBlastNotFound):
+		return NotFound(CodeBlastNotFound, "Email blast not found")
+
+	case errors.Is(err, emailblastsProcessor.ErrSegmentNotFound):
+		return NotFound(CodeSegmentNotFound, "Segment not found")
+
+	case errors.Is(err, emailblastsProcessor.ErrTemplateNotFound):
+		return NotFound(CodeTemplateNotFound, "Email template not found")
+
+	case errors.Is(err, emailblastsProcessor.ErrCampaignNotFound):
+		return NotFound(CodeCampaignNotFound, "Campaign not found")
+
+	case errors.Is(err, emailblastsProcessor.ErrUnauthorized):
+		return Forbidden("You do not have access to this email blast")
+
+	case errors.Is(err, emailblastsProcessor.ErrBlastCannotModify):
+		return BadRequest(CodeBlastCannotModify, "Email blast cannot be modified in its current status")
+
+	case errors.Is(err, emailblastsProcessor.ErrBlastCannotDelete):
+		return BadRequest(CodeBlastCannotModify, "Email blast cannot be deleted in its current status")
+
+	case errors.Is(err, emailblastsProcessor.ErrBlastCannotStart):
+		return BadRequest(CodeBlastCannotModify, "Email blast cannot be started in its current status")
+
+	case errors.Is(err, emailblastsProcessor.ErrBlastCannotPause):
+		return BadRequest(CodeBlastCannotModify, "Email blast cannot be paused in its current status")
+
+	case errors.Is(err, emailblastsProcessor.ErrBlastCannotResume):
+		return BadRequest(CodeBlastCannotModify, "Email blast cannot be resumed in its current status")
+
+	case errors.Is(err, emailblastsProcessor.ErrBlastCannotCancel):
+		return BadRequest(CodeBlastCannotModify, "Email blast cannot be cancelled in its current status")
+
+	case errors.Is(err, emailblastsProcessor.ErrInvalidScheduleTime):
+		return BadRequest(CodeInvalidInput, "Scheduled time must be in the future")
+
+	case errors.Is(err, emailblastsProcessor.ErrNoRecipients):
+		return BadRequest(CodeInvalidInput, "Segment has no matching users to send to")
 
 	// Map store errors
 	case errors.Is(err, store.ErrNotFound):

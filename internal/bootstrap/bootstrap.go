@@ -13,6 +13,7 @@ import (
 	AICapabilities "base-server/internal/ai-capabilities/processor"
 	analyticsHandler "base-server/internal/analytics/handler"
 	analyticsProcessor "base-server/internal/analytics/processor"
+	apikeysHandler "base-server/internal/apikeys/handler"
 	"base-server/internal/auth/handler"
 	"base-server/internal/auth/processor"
 	campaignHandler "base-server/internal/campaign/handler"
@@ -22,6 +23,9 @@ import (
 	"base-server/internal/clients/mail"
 	"base-server/internal/clients/turnstile"
 	"base-server/internal/email"
+	emailblastsHandler "base-server/internal/emailblasts/handler"
+	emailblastsProcessor "base-server/internal/emailblasts/processor"
+	emailTem
 	emailTemplateHandler "base-server/internal/emailtemplates/handler"
 	emailTemplateProcessor "base-server/internal/emailtemplates/processor"
 	integrationConsumer "base-server/internal/integrations/consumer"
@@ -35,6 +39,8 @@ import (
 	referralProcessor "base-server/internal/referral/processor"
 	rewardHandler "base-server/internal/rewards/handler"
 	rewardProcessor "base-server/internal/rewards/processor"
+	segmentsHandler "base-server/internal/segments/handler"
+	segmentsProcessor "base-server/internal/segments/processor"
 	spamConsumer "base-server/internal/spam/consumer"
 	spamProcessor "base-server/internal/spam/processor"
 	voiceCallHandler "base-server/internal/voicecall/handler"
@@ -68,8 +74,11 @@ type Dependencies struct {
 	ReferralHandler      referralHandler.Handler
 	RewardHandler        rewardHandler.Handler
 	EmailTemplateHandler emailTemplateHandler.Handler
-	WebhookHandler *webhookHandler.Handler
-	ZapierHandler  *zapierHandler.Handler
+	WebhookHandler       *webhookHandler.Handler
+	ZapierHandler        *zapierHandler.Handler
+	APIKeysHandler       *apikeysHandler.Handler
+	SegmentsHandler      segmentsHandler.Handler
+	EmailblastsHandler   emailblastsHandler.Handler
 
 	// Background workers
 	WebhookConsumer     workers.EventConsumer
@@ -195,6 +204,14 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	emailTemplateProc := emailTemplateProcessor.New(&deps.Store, emailService, logger)
 	deps.EmailTemplateHandler = emailTemplateHandler.New(emailTemplateProc, logger)
 
+	// Initialize segments processor and handler
+	segmentsProc := segmentsProcessor.New(&deps.Store, logger)
+	deps.SegmentsHandler = segmentsHandler.New(segmentsProc, logger)
+
+	// Initialize email blasts processor and handler
+	emailblastsProc := emailblastsProcessor.New(&deps.Store, logger)
+	deps.EmailblastsHandler = emailblastsHandler.New(emailblastsProc, logger)
+
 	// Initialize webhook services
 	webhookSvc := webhookService.New(&deps.Store, logger)
 	webhookProc := webhookEventProcessor.New(&deps.Store, logger, webhookSvc)
@@ -231,6 +248,9 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	// Initialize integration services (Zapier, Slack, etc.)
 	// Initialize Zapier handler (uses API key auth, no OAuth needed)
 	deps.ZapierHandler = zapierHandler.NewHandler(&deps.Store, logger)
+
+	// Initialize API Keys handler
+	deps.APIKeysHandler = apikeysHandler.New(&deps.Store, logger)
 
 	// Initialize integration service with deliverers
 	intService := integrationService.New(&deps.Store, logger)

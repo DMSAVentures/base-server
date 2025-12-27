@@ -68,6 +68,15 @@ const (
 	CodeCaptchaRequired       = "CAPTCHA_REQUIRED"
 	CodeCaptchaFailed         = "CAPTCHA_FAILED"
 	CodeCampaignNotActive     = "CAMPAIGN_NOT_ACTIVE"
+
+	// Segment and Email Blast error codes
+	CodeSegmentNotFound       = "SEGMENT_NOT_FOUND"
+	CodeSegmentInUse          = "SEGMENT_IN_USE"
+	CodeInvalidFilterCriteria = "INVALID_FILTER_CRITERIA"
+	CodeBlastNotFound         = "BLAST_NOT_FOUND"
+	CodeBlastInProgress       = "BLAST_IN_PROGRESS"
+	CodeBlastCannotModify     = "BLAST_CANNOT_MODIFY"
+	CodeTemplateNotFound      = "TEMPLATE_NOT_FOUND"
 )
 
 // NotFound creates a 404 Not Found error

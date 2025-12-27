@@ -5,13 +5,16 @@ import (
 
 	aiHandler "base-server/internal/ai-capabilities/handler"
 	analyticsHandler "base-server/internal/analytics/handler"
+	apikeysHandler "base-server/internal/apikeys/handler"
 	authHandler "base-server/internal/auth/handler"
 	campaignHandler "base-server/internal/campaign/handler"
+	emailblastsHandler "base-server/internal/emailblasts/handler"
 	emailTemplateHandler "base-server/internal/emailtemplates/handler"
 	zapierHandler "base-server/internal/integrations/zapier"
 	billingHandler "base-server/internal/money/billing/handler"
 	referralHandler "base-server/internal/referral/handler"
 	rewardHandler "base-server/internal/rewards/handler"
+	segmentsHandler "base-server/internal/segments/handler"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	waitlistHandler "base-server/internal/waitlist/handler"
 	webhookHandler "base-server/internal/webhooks/handler"
@@ -33,10 +36,13 @@ type API struct {
 	voicecallHandler     voiceCallHandler.Handler
 	webhookHandler       *webhookHandler.Handler
 	zapierHandler        *zapierHandler.Handler
+	apikeysHandler       *apikeysHandler.Handler
+	segmentsHandler      segmentsHandler.Handler
+	emailblastsHandler   emailblastsHandler.Handler
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	waitlistHandler waitlistHandler.Handler, analyticsHandler analyticsHandler.Handler, referralHandler referralHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler, zapierHandler *zapierHandler.Handler) API {
+	waitlistHandler waitlistHandler.Handler, analyticsHandler analyticsHandler.Handler, referralHandler referralHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler, zapierHandler *zapierHandler.Handler, apikeysHandler *apikeysHandler.Handler, segmentsHandler segmentsHandler.Handler, emailblastsHandler emailblastsHandler.Handler) API {
 	return API{
 		router:               router,
 		authHandler:          authHandler,
@@ -51,6 +57,9 @@ func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandl
 		voicecallHandler:     voicecallHandler,
 		webhookHandler:       webhookHandler,
 		zapierHandler:        zapierHandler,
+		apikeysHandler:       apikeysHandler,
+		segmentsHandler:      segmentsHandler,
+		emailblastsHandler:   emailblastsHandler,
 	}
 }
 
@@ -89,6 +98,17 @@ func (a *API) RegisterRoutes() {
 			webhookGroup.DELETE("/:webhook_id", a.webhookHandler.HandleDeleteWebhook)
 			webhookGroup.GET("/:webhook_id/deliveries", a.webhookHandler.HandleListWebhookDeliveries)
 			webhookGroup.POST("/:webhook_id/test", a.webhookHandler.HandleTestWebhook)
+		}
+
+		// API Keys management routes
+		apiKeysGroup := protectedGroup.Group("/api-keys")
+		{
+			apiKeysGroup.POST("", a.apikeysHandler.HandleCreateAPIKey)
+			apiKeysGroup.GET("", a.apikeysHandler.HandleListAPIKeys)
+			apiKeysGroup.GET("/scopes", a.apikeysHandler.HandleGetScopes)
+			apiKeysGroup.GET("/:id", a.apikeysHandler.HandleGetAPIKey)
+			apiKeysGroup.PUT("/:id", a.apikeysHandler.HandleUpdateAPIKey)
+			apiKeysGroup.DELETE("/:id", a.apikeysHandler.HandleRevokeAPIKey)
 		}
 	}
 
@@ -169,6 +189,35 @@ func (a *API) RegisterRoutes() {
 			{
 				referralsGroup.GET("", a.referralHandler.HandleListReferrals)
 				referralsGroup.POST("/track", a.referralHandler.HandleTrackReferral)
+			}
+
+			// Segments routes
+			segmentsGroup := campaignsGroup.Group("/:campaign_id/segments")
+			{
+				segmentsGroup.POST("", a.segmentsHandler.HandleCreateSegment)
+				segmentsGroup.GET("", a.segmentsHandler.HandleListSegments)
+				segmentsGroup.POST("/preview", a.segmentsHandler.HandlePreviewSegment)
+				segmentsGroup.GET("/:segment_id", a.segmentsHandler.HandleGetSegment)
+				segmentsGroup.PUT("/:segment_id", a.segmentsHandler.HandleUpdateSegment)
+				segmentsGroup.DELETE("/:segment_id", a.segmentsHandler.HandleDeleteSegment)
+				segmentsGroup.POST("/:segment_id/refresh", a.segmentsHandler.HandleRefreshSegmentCount)
+			}
+
+			// Email Blasts routes
+			blastsGroup := campaignsGroup.Group("/:campaign_id/blasts")
+			{
+				blastsGroup.POST("", a.emailblastsHandler.HandleCreateEmailBlast)
+				blastsGroup.GET("", a.emailblastsHandler.HandleListEmailBlasts)
+				blastsGroup.GET("/:blast_id", a.emailblastsHandler.HandleGetEmailBlast)
+				blastsGroup.PUT("/:blast_id", a.emailblastsHandler.HandleUpdateEmailBlast)
+				blastsGroup.DELETE("/:blast_id", a.emailblastsHandler.HandleDeleteEmailBlast)
+				blastsGroup.POST("/:blast_id/send", a.emailblastsHandler.HandleSendBlastNow)
+				blastsGroup.POST("/:blast_id/schedule", a.emailblastsHandler.HandleScheduleBlast)
+				blastsGroup.POST("/:blast_id/pause", a.emailblastsHandler.HandlePauseBlast)
+				blastsGroup.POST("/:blast_id/resume", a.emailblastsHandler.HandleResumeBlast)
+				blastsGroup.POST("/:blast_id/cancel", a.emailblastsHandler.HandleCancelBlast)
+				blastsGroup.GET("/:blast_id/analytics", a.emailblastsHandler.HandleGetBlastAnalytics)
+				blastsGroup.GET("/:blast_id/recipients", a.emailblastsHandler.HandleListBlastRecipients)
 			}
 		}
 	}

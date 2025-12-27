@@ -72,6 +72,9 @@ func (s *Server) Setup() {
 		s.deps.VoiceCallHandler,
 		s.deps.WebhookHandler,
 		s.deps.ZapierHandler,
+		s.deps.APIKeysHandler,
+		s.deps.SegmentsHandler,
+		s.deps.EmailblastsHandler,
 	)
 	api.RegisterRoutes()
 }

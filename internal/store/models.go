@@ -548,6 +548,7 @@ type EmailLog struct {
 	CampaignID uuid.UUID  `db:"campaign_id" json:"campaign_id"`
 	UserID     *uuid.UUID `db:"user_id" json:"user_id,omitempty"`
 	TemplateID *uuid.UUID `db:"template_id" json:"template_id,omitempty"`
+	BlastID    *uuid.UUID `db:"blast_id" json:"blast_id,omitempty"`
 
 	RecipientEmail string `db:"recipient_email" json:"recipient_email"`
 	Subject        string `db:"subject" json:"subject"`
@@ -737,4 +738,145 @@ type FraudDetection struct {
 	ReviewNotes *string    `db:"review_notes" json:"review_notes,omitempty"`
 
 	CreatedAt time.Time `db:"created_at" json:"created_at"`
+}
+
+// ============================================================================
+// Segments and Email Blasts
+// ============================================================================
+
+// SegmentStatus represents the status of a segment
+type SegmentStatus string
+
+const (
+	SegmentStatusActive   SegmentStatus = "active"
+	SegmentStatusArchived SegmentStatus = "archived"
+)
+
+// EmailBlastStatus represents the status of an email blast
+type EmailBlastStatus string
+
+const (
+	EmailBlastStatusDraft      EmailBlastStatus = "draft"
+	EmailBlastStatusScheduled  EmailBlastStatus = "scheduled"
+	EmailBlastStatusProcessing EmailBlastStatus = "processing"
+	EmailBlastStatusSending    EmailBlastStatus = "sending"
+	EmailBlastStatusCompleted  EmailBlastStatus = "completed"
+	EmailBlastStatusPaused     EmailBlastStatus = "paused"
+	EmailBlastStatusCancelled  EmailBlastStatus = "cancelled"
+	EmailBlastStatusFailed     EmailBlastStatus = "failed"
+)
+
+// BlastRecipientStatus represents the status of a blast recipient
+type BlastRecipientStatus string
+
+const (
+	BlastRecipientStatusPending   BlastRecipientStatus = "pending"
+	BlastRecipientStatusQueued    BlastRecipientStatus = "queued"
+	BlastRecipientStatusSending   BlastRecipientStatus = "sending"
+	BlastRecipientStatusSent      BlastRecipientStatus = "sent"
+	BlastRecipientStatusDelivered BlastRecipientStatus = "delivered"
+	BlastRecipientStatusOpened    BlastRecipientStatus = "opened"
+	BlastRecipientStatusClicked   BlastRecipientStatus = "clicked"
+	BlastRecipientStatusBounced   BlastRecipientStatus = "bounced"
+	BlastRecipientStatusFailed    BlastRecipientStatus = "failed"
+)
+
+// SegmentFilterCriteria represents the filter criteria for a segment
+type SegmentFilterCriteria struct {
+	Statuses      []string          `json:"statuses,omitempty"`
+	Sources       []string          `json:"sources,omitempty"`
+	EmailVerified *bool             `json:"email_verified,omitempty"`
+	HasReferrals  *bool             `json:"has_referrals,omitempty"`
+	MinReferrals  *int              `json:"min_referrals,omitempty"`
+	MinPosition   *int              `json:"min_position,omitempty"`
+	MaxPosition   *int              `json:"max_position,omitempty"`
+	DateFrom      *time.Time        `json:"date_from,omitempty"`
+	DateTo        *time.Time        `json:"date_to,omitempty"`
+	CustomFields  map[string]string `json:"custom_fields,omitempty"`
+}
+
+// Segment represents a reusable segment definition for targeting waitlist users
+type Segment struct {
+	ID         uuid.UUID `db:"id" json:"id"`
+	CampaignID uuid.UUID `db:"campaign_id" json:"campaign_id"`
+
+	Name        string  `db:"name" json:"name"`
+	Description *string `db:"description" json:"description,omitempty"`
+
+	FilterCriteria JSONB `db:"filter_criteria" json:"filter_criteria"`
+
+	CachedUserCount int        `db:"cached_user_count" json:"cached_user_count"`
+	CachedAt        *time.Time `db:"cached_at" json:"cached_at,omitempty"`
+
+	Status string `db:"status" json:"status"`
+
+	CreatedAt time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
+	DeletedAt *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
+}
+
+// EmailBlast represents an email blast campaign sent to a segment
+type EmailBlast struct {
+	ID         uuid.UUID `db:"id" json:"id"`
+	CampaignID uuid.UUID `db:"campaign_id" json:"campaign_id"`
+	SegmentID  uuid.UUID `db:"segment_id" json:"segment_id"`
+	TemplateID uuid.UUID `db:"template_id" json:"template_id"`
+
+	Name    string `db:"name" json:"name"`
+	Subject string `db:"subject" json:"subject"`
+
+	ScheduledAt *time.Time `db:"scheduled_at" json:"scheduled_at,omitempty"`
+	StartedAt   *time.Time `db:"started_at" json:"started_at,omitempty"`
+	CompletedAt *time.Time `db:"completed_at" json:"completed_at,omitempty"`
+
+	Status string `db:"status" json:"status"`
+
+	TotalRecipients int `db:"total_recipients" json:"total_recipients"`
+	SentCount       int `db:"sent_count" json:"sent_count"`
+	DeliveredCount  int `db:"delivered_count" json:"delivered_count"`
+	OpenedCount     int `db:"opened_count" json:"opened_count"`
+	ClickedCount    int `db:"clicked_count" json:"clicked_count"`
+	BouncedCount    int `db:"bounced_count" json:"bounced_count"`
+	FailedCount     int `db:"failed_count" json:"failed_count"`
+
+	BatchSize    int        `db:"batch_size" json:"batch_size"`
+	CurrentBatch int        `db:"current_batch" json:"current_batch"`
+	LastBatchAt  *time.Time `db:"last_batch_at" json:"last_batch_at,omitempty"`
+	ErrorMessage *string    `db:"error_message" json:"error_message,omitempty"`
+
+	SendThrottlePerSecond *int `db:"send_throttle_per_second" json:"send_throttle_per_second,omitempty"`
+
+	CreatedBy *uuid.UUID `db:"created_by" json:"created_by,omitempty"`
+
+	CreatedAt time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
+	DeletedAt *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
+}
+
+// BlastRecipient represents an individual recipient within an email blast
+type BlastRecipient struct {
+	ID      uuid.UUID `db:"id" json:"id"`
+	BlastID uuid.UUID `db:"blast_id" json:"blast_id"`
+	UserID  uuid.UUID `db:"user_id" json:"user_id"`
+
+	Email string `db:"email" json:"email"`
+
+	Status string `db:"status" json:"status"`
+
+	EmailLogID *uuid.UUID `db:"email_log_id" json:"email_log_id,omitempty"`
+
+	QueuedAt    *time.Time `db:"queued_at" json:"queued_at,omitempty"`
+	SentAt      *time.Time `db:"sent_at" json:"sent_at,omitempty"`
+	DeliveredAt *time.Time `db:"delivered_at" json:"delivered_at,omitempty"`
+	OpenedAt    *time.Time `db:"opened_at" json:"opened_at,omitempty"`
+	ClickedAt   *time.Time `db:"clicked_at" json:"clicked_at,omitempty"`
+	BouncedAt   *time.Time `db:"bounced_at" json:"bounced_at,omitempty"`
+	FailedAt    *time.Time `db:"failed_at" json:"failed_at,omitempty"`
+
+	ErrorMessage *string `db:"error_message" json:"error_message,omitempty"`
+
+	BatchNumber *int `db:"batch_number" json:"batch_number,omitempty"`
+
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
