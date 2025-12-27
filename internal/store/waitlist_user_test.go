@@ -120,6 +120,99 @@ func TestStore_CreateWaitlistUser(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "create waitlist user with CloudFront geo and device data",
+			setup: func(t *testing.T) CreateWaitlistUserParams {
+				t.Helper()
+				account := createTestAccount(t, testDB)
+				campaign := createTestCampaign(t, testDB, account.ID, "CloudFront Test-"+uuid.New().String(), "cloudfront-test-"+uuid.New().String())
+				country := "United States"
+				region := "California"
+				regionCode := "CA"
+				city := "San Francisco"
+				postalCode := "94102"
+				userTimezone := "America/Los_Angeles"
+				latitude := 37.7749
+				longitude := -122.4194
+				metroCode := "807"
+				deviceType := "mobile"
+				deviceOS := "ios"
+				asn := "AS16509"
+				tlsVersion := "TLSv1.3"
+				httpVersion := "HTTP/2"
+				return CreateWaitlistUserParams{
+					CampaignID:       campaign.ID,
+					Email:            uuid.New().String() + "@example.com",
+					ReferralCode:     "CF-" + uuid.New().String(),
+					Position:         1,
+					OriginalPosition: 1,
+					Country:          &country,
+					Region:           &region,
+					RegionCode:       &regionCode,
+					City:             &city,
+					PostalCode:       &postalCode,
+					UserTimezone:     &userTimezone,
+					Latitude:         &latitude,
+					Longitude:        &longitude,
+					MetroCode:        &metroCode,
+					DeviceType:       &deviceType,
+					DeviceOS:         &deviceOS,
+					ASN:              &asn,
+					TLSVersion:       &tlsVersion,
+					HTTPVersion:      &httpVersion,
+					TermsAccepted:    true,
+				}
+			},
+			wantErr: false,
+			validate: func(t *testing.T, user WaitlistUser, params CreateWaitlistUserParams) {
+				t.Helper()
+				// Validate geographic data
+				if user.Country == nil || *user.Country != "United States" {
+					t.Errorf("Country = %v, want United States", user.Country)
+				}
+				if user.Region == nil || *user.Region != "California" {
+					t.Errorf("Region = %v, want California", user.Region)
+				}
+				if user.RegionCode == nil || *user.RegionCode != "CA" {
+					t.Errorf("RegionCode = %v, want CA", user.RegionCode)
+				}
+				if user.City == nil || *user.City != "San Francisco" {
+					t.Errorf("City = %v, want San Francisco", user.City)
+				}
+				if user.PostalCode == nil || *user.PostalCode != "94102" {
+					t.Errorf("PostalCode = %v, want 94102", user.PostalCode)
+				}
+				if user.UserTimezone == nil || *user.UserTimezone != "America/Los_Angeles" {
+					t.Errorf("UserTimezone = %v, want America/Los_Angeles", user.UserTimezone)
+				}
+				if user.Latitude == nil || *user.Latitude != 37.7749 {
+					t.Errorf("Latitude = %v, want 37.7749", user.Latitude)
+				}
+				if user.Longitude == nil || *user.Longitude != -122.4194 {
+					t.Errorf("Longitude = %v, want -122.4194", user.Longitude)
+				}
+				if user.MetroCode == nil || *user.MetroCode != "807" {
+					t.Errorf("MetroCode = %v, want 807", user.MetroCode)
+				}
+				// Validate device data
+				if user.DeviceType == nil || *user.DeviceType != "mobile" {
+					t.Errorf("DeviceType = %v, want mobile", user.DeviceType)
+				}
+				if user.DeviceOS == nil || *user.DeviceOS != "ios" {
+					t.Errorf("DeviceOS = %v, want ios", user.DeviceOS)
+				}
+				// Validate connection info
+				if user.ASN == nil || *user.ASN != "AS16509" {
+					t.Errorf("ASN = %v, want AS16509", user.ASN)
+				}
+				if user.TLSVersion == nil || *user.TLSVersion != "TLSv1.3" {
+					t.Errorf("TLSVersion = %v, want TLSv1.3", user.TLSVersion)
+				}
+				if user.HTTPVersion == nil || *user.HTTPVersion != "HTTP/2" {
+					t.Errorf("HTTPVersion = %v, want HTTP/2", user.HTTPVersion)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
