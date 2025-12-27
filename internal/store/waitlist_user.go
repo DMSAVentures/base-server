@@ -31,7 +31,24 @@ type CreateWaitlistUserParams struct {
 	CountryCode       *string
 	City              *string
 	DeviceFingerprint *string
-	Metadata          JSONB
+	// CloudFront geographic data
+	Country      *string
+	Region       *string
+	RegionCode   *string
+	PostalCode   *string
+	UserTimezone *string
+	Latitude     *float64
+	Longitude    *float64
+	MetroCode    *string
+	// CloudFront device detection (enum values)
+	DeviceType *string // desktop, mobile, tablet, smarttv, unknown
+	DeviceOS   *string // android, ios, other
+	// CloudFront connection info
+	ASN         *string
+	TLSVersion  *string
+	HTTPVersion *string
+
+	Metadata JSONB
 	MarketingConsent  bool
 	TermsAccepted     bool
 	VerificationToken *string
@@ -52,10 +69,12 @@ INSERT INTO waitlist_users (
 	campaign_id, email, first_name, last_name, referral_code, referred_by_id, position, original_position,
 	source, utm_source, utm_medium, utm_campaign, utm_term, utm_content,
 	ip_address, user_agent, country_code, city, device_fingerprint,
+	country, region, region_code, postal_code, user_timezone, latitude, longitude, metro_code,
+	device_type, device_os, asn, tls_version, http_version,
 	metadata, marketing_consent, terms_accepted, verification_token
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
-RETURNING id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
+RETURNING id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, country, region, region_code, postal_code, user_timezone, latitude, longitude, metro_code, device_type, device_os, asn, tls_version, http_version, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
 `
 
 // CreateWaitlistUser creates a new waitlist user
@@ -81,6 +100,22 @@ func (s *Store) CreateWaitlistUser(ctx context.Context, params CreateWaitlistUse
 		params.CountryCode,
 		params.City,
 		params.DeviceFingerprint,
+		// CloudFront geographic data
+		params.Country,
+		params.Region,
+		params.RegionCode,
+		params.PostalCode,
+		params.UserTimezone,
+		params.Latitude,
+		params.Longitude,
+		params.MetroCode,
+		// CloudFront device detection (enums)
+		params.DeviceType,
+		params.DeviceOS,
+		// CloudFront connection info
+		params.ASN,
+		params.TLSVersion,
+		params.HTTPVersion,
 		params.Metadata,
 		params.MarketingConsent,
 		params.TermsAccepted,
@@ -91,8 +126,11 @@ func (s *Store) CreateWaitlistUser(ctx context.Context, params CreateWaitlistUse
 	return user, nil
 }
 
+// waitlistUserColumns contains all columns for SELECT queries
+const waitlistUserColumns = `id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, country, region, region_code, postal_code, user_timezone, latitude, longitude, metro_code, device_type, device_os, asn, tls_version, http_version, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at`
+
 const sqlGetWaitlistUserByID = `
-SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+SELECT ` + waitlistUserColumns + `
 FROM waitlist_users
 WHERE id = $1 AND deleted_at IS NULL
 `
@@ -111,7 +149,7 @@ func (s *Store) GetWaitlistUserByID(ctx context.Context, userID uuid.UUID) (Wait
 }
 
 const sqlGetWaitlistUserByEmail = `
-SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+SELECT ` + waitlistUserColumns + `
 FROM waitlist_users
 WHERE campaign_id = $1 AND email = $2 AND deleted_at IS NULL
 `
@@ -130,7 +168,7 @@ func (s *Store) GetWaitlistUserByEmail(ctx context.Context, campaignID uuid.UUID
 }
 
 const sqlGetWaitlistUserByReferralCode = `
-SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+SELECT ` + waitlistUserColumns + `
 FROM waitlist_users
 WHERE referral_code = $1 AND deleted_at IS NULL
 `
@@ -149,7 +187,7 @@ func (s *Store) GetWaitlistUserByReferralCode(ctx context.Context, referralCode 
 }
 
 const sqlGetWaitlistUsersByCampaign = `
-SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+SELECT ` + waitlistUserColumns + `
 FROM waitlist_users
 WHERE campaign_id = $1 AND deleted_at IS NULL
 ORDER BY position ASC
@@ -173,7 +211,7 @@ func (s *Store) GetWaitlistUsersByCampaign(ctx context.Context, campaignID uuid.
 }
 
 const sqlGetWaitlistUsersByStatus = `
-SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+SELECT ` + waitlistUserColumns + `
 FROM waitlist_users
 WHERE campaign_id = $1 AND status = $2 AND deleted_at IS NULL
 ORDER BY position ASC
@@ -215,8 +253,7 @@ SET first_name = COALESCE($2, first_name),
     metadata = COALESCE($7, metadata),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
-`
+RETURNING ` + waitlistUserColumns
 
 // UpdateWaitlistUser updates a waitlist user
 func (s *Store) UpdateWaitlistUser(ctx context.Context, userID uuid.UUID, params UpdateWaitlistUserParams) (WaitlistUser, error) {
@@ -383,7 +420,7 @@ func (s *Store) UpdateVerificationToken(ctx context.Context, userID uuid.UUID, t
 }
 
 const sqlGetWaitlistUserByVerificationToken = `
-SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+SELECT ` + waitlistUserColumns + `
 FROM waitlist_users
 WHERE verification_token = $1 AND deleted_at IS NULL
 `
@@ -418,7 +455,7 @@ type SearchWaitlistUsersParams struct {
 
 // SearchWaitlistUsers performs advanced search with filters
 func (s *Store) SearchWaitlistUsers(ctx context.Context, params SearchWaitlistUsersParams) ([]WaitlistUser, error) {
-	query := `SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+	query := `SELECT ` + waitlistUserColumns + `
 	FROM waitlist_users
 	WHERE campaign_id = $1 AND deleted_at IS NULL`
 
@@ -522,7 +559,7 @@ type ListWaitlistUsersWithFiltersParams struct {
 
 // GetWaitlistUsersByCampaignWithFilters retrieves waitlist users with filters and sorting
 func (s *Store) GetWaitlistUsersByCampaignWithFilters(ctx context.Context, params ListWaitlistUsersWithFiltersParams) ([]WaitlistUser, error) {
-	query := `SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+	query := `SELECT ` + waitlistUserColumns + `
 	FROM waitlist_users
 	WHERE campaign_id = $1 AND deleted_at IS NULL`
 
@@ -606,7 +643,7 @@ func (s *Store) CountWaitlistUsersWithFilters(ctx context.Context, campaignID uu
 }
 
 const sqlGetAllWaitlistUsersForPositionCalculation = `
-SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+SELECT ` + waitlistUserColumns + `
 FROM waitlist_users
 WHERE campaign_id = $1 AND deleted_at IS NULL
 ORDER BY created_at ASC, id ASC
@@ -714,7 +751,7 @@ type ExtendedListWaitlistUsersParams struct {
 
 // ListWaitlistUsersWithExtendedFilters retrieves users with comprehensive filtering
 func (s *Store) ListWaitlistUsersWithExtendedFilters(ctx context.Context, params ExtendedListWaitlistUsersParams) ([]WaitlistUser, error) {
-	query := `SELECT id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at
+	query := `SELECT ` + waitlistUserColumns + `
 	FROM waitlist_users
 	WHERE campaign_id = $1 AND deleted_at IS NULL`
 

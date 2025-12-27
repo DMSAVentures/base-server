@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,6 +87,110 @@ func GetRealClientIP(c *gin.Context) string {
 // CloudFront forwards the original User-Agent header, so we use the standard method.
 func GetRealUserAgent(c *gin.Context) string {
 	return c.Request.UserAgent()
+}
+
+// CloudFrontViewerInfo contains all CloudFront viewer headers
+type CloudFrontViewerInfo struct {
+	// Geographic data
+	Country      *string
+	Region       *string
+	RegionCode   *string
+	City         *string
+	PostalCode   *string
+	UserTimezone *string
+	Latitude     *float64
+	Longitude    *float64
+	MetroCode    *string
+
+	// Device detection (enum values)
+	DeviceType *string // desktop, mobile, tablet, smarttv, unknown
+	DeviceOS   *string // android, ios, other
+
+	// Connection info
+	ASN         *string
+	TLSVersion  *string
+	HTTPVersion *string
+}
+
+// strPtrIfNotEmpty returns a pointer to the string if non-empty, otherwise nil
+func strPtrIfNotEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// GetCloudFrontViewerInfo extracts all CloudFront viewer headers from the request.
+func GetCloudFrontViewerInfo(c *gin.Context) CloudFrontViewerInfo {
+	info := CloudFrontViewerInfo{
+		// Geographic data
+		Country:      strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-Country-Name")),
+		Region:       strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-Country-Region-Name")),
+		RegionCode:   strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-Country-Region")),
+		City:         strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-City")),
+		PostalCode:   strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-Postal-Code")),
+		UserTimezone: strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-Time-Zone")),
+		MetroCode:    strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-Metro-Code")),
+
+		// Connection info
+		ASN:         strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-ASN")),
+		TLSVersion:  strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-TLS")),
+		HTTPVersion: strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-HTTP-Version")),
+	}
+
+	// Parse latitude
+	if lat := c.GetHeader("CloudFront-Viewer-Latitude"); lat != "" {
+		if parsed, err := strconv.ParseFloat(lat, 64); err == nil {
+			info.Latitude = &parsed
+		}
+	}
+
+	// Parse longitude
+	if lon := c.GetHeader("CloudFront-Viewer-Longitude"); lon != "" {
+		if parsed, err := strconv.ParseFloat(lon, 64); err == nil {
+			info.Longitude = &parsed
+		}
+	}
+
+	// Device type
+	deviceType := GetDeviceType(c)
+	info.DeviceType = &deviceType
+
+	// Device OS
+	deviceOS := GetDeviceOS(c)
+	info.DeviceOS = &deviceOS
+
+	return info
+}
+
+// GetDeviceType determines the device type from CloudFront headers.
+// Returns "desktop", "mobile", "tablet", "smarttv", or "unknown".
+func GetDeviceType(c *gin.Context) string {
+	if c.GetHeader("CloudFront-Is-Mobile-Viewer") == "true" {
+		return "mobile"
+	}
+	if c.GetHeader("CloudFront-Is-Tablet-Viewer") == "true" {
+		return "tablet"
+	}
+	if c.GetHeader("CloudFront-Is-SmartTV-Viewer") == "true" {
+		return "smarttv"
+	}
+	if c.GetHeader("CloudFront-Is-Desktop-Viewer") == "true" {
+		return "desktop"
+	}
+	return "unknown"
+}
+
+// GetDeviceOS determines the device OS from CloudFront headers.
+// Returns "android", "ios", or "other".
+func GetDeviceOS(c *gin.Context) string {
+	if c.GetHeader("CloudFront-Is-Android-Viewer") == "true" {
+		return "android"
+	}
+	if c.GetHeader("CloudFront-Is-IOS-Viewer") == "true" {
+		return "ios"
+	}
+	return "other"
 }
 
 // Middleware to add observability fields to Gin context.

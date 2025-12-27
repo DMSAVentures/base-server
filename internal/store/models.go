@@ -413,6 +413,26 @@ type WaitlistUser struct {
 	City              *string `db:"city" json:"city,omitempty"`
 	DeviceFingerprint *string `db:"device_fingerprint" json:"-"`
 
+	// CloudFront geographic data
+	Country      *string  `db:"country" json:"country,omitempty"`
+	Region       *string  `db:"region" json:"region,omitempty"`
+	RegionCode   *string  `db:"region_code" json:"region_code,omitempty"`
+	PostalCode   *string  `db:"postal_code" json:"postal_code,omitempty"`
+	UserTimezone *string  `db:"user_timezone" json:"user_timezone,omitempty"`
+	Latitude     *float64 `db:"latitude" json:"latitude,omitempty"`
+	Longitude    *float64 `db:"longitude" json:"longitude,omitempty"`
+	MetroCode    *string  `db:"metro_code" json:"metro_code,omitempty"`
+
+	// CloudFront device detection (enum values: desktop, mobile, tablet, smarttv, unknown)
+	DeviceType *string `db:"device_type" json:"device_type,omitempty"`
+	// DeviceOS enum values: android, ios, other
+	DeviceOS *string `db:"device_os" json:"device_os,omitempty"`
+
+	// CloudFront connection info
+	ASN         *string `db:"asn" json:"asn,omitempty"`
+	TLSVersion  *string `db:"tls_version" json:"tls_version,omitempty"`
+	HTTPVersion *string `db:"http_version" json:"http_version,omitempty"`
+
 	Metadata JSONB `db:"metadata" json:"metadata,omitempty"`
 
 	MarketingConsent   bool       `db:"marketing_consent" json:"marketing_consent"`

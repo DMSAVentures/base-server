@@ -77,6 +77,9 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 	ipAddress := observability.GetRealClientIP(c)
 	userAgent := observability.GetRealUserAgent(c)
 
+	// Extract CloudFront viewer info (already returns *string and *float64)
+	cfInfo := observability.GetCloudFrontViewerInfo(c)
+
 	processorReq := processor.SignupUserRequest{
 		Email:            req.Email,
 		FirstName:        nil,
@@ -93,6 +96,22 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 		IPAddress:        &ipAddress,
 		UserAgent:        &userAgent,
 		CaptchaToken:     req.CaptchaToken,
+		// CloudFront geographic data
+		Country:      cfInfo.Country,
+		Region:       cfInfo.Region,
+		RegionCode:   cfInfo.RegionCode,
+		PostalCode:   cfInfo.PostalCode,
+		UserTimezone: cfInfo.UserTimezone,
+		Latitude:     cfInfo.Latitude,
+		Longitude:    cfInfo.Longitude,
+		MetroCode:    cfInfo.MetroCode,
+		// CloudFront device detection (enums)
+		DeviceType: cfInfo.DeviceType,
+		DeviceOS:   cfInfo.DeviceOS,
+		// CloudFront connection info
+		ASN:         cfInfo.ASN,
+		TLSVersion:  cfInfo.TLSVersion,
+		HTTPVersion: cfInfo.HTTPVersion,
 	}
 
 	response, err := h.processor.SignupUser(ctx, campaignID, processorReq, h.baseURL)

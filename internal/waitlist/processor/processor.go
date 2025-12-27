@@ -105,6 +105,22 @@ type SignupUserRequest struct {
 	IPAddress        *string
 	UserAgent        *string
 	CaptchaToken     *string
+	// CloudFront geographic data
+	Country      *string
+	Region       *string
+	RegionCode   *string
+	PostalCode   *string
+	UserTimezone *string
+	Latitude     *float64
+	Longitude    *float64
+	MetroCode    *string
+	// CloudFront device detection (enum values)
+	DeviceType *string // desktop, mobile, tablet, smarttv, unknown
+	DeviceOS   *string // android, ios, other
+	// CloudFront connection info
+	ASN         *string
+	TLSVersion  *string
+	HTTPVersion *string
 }
 
 // SignupUserResponse represents the response after signing up a user
@@ -259,6 +275,22 @@ func (p *WaitlistProcessor) SignupUser(ctx context.Context, campaignID uuid.UUID
 		UTMContent:        req.UTMContent,
 		IPAddress:         req.IPAddress,
 		UserAgent:         req.UserAgent,
+		// CloudFront geographic data
+		Country:      req.Country,
+		Region:       req.Region,
+		RegionCode:   req.RegionCode,
+		PostalCode:   req.PostalCode,
+		UserTimezone: req.UserTimezone,
+		Latitude:     req.Latitude,
+		Longitude:    req.Longitude,
+		MetroCode:    req.MetroCode,
+		// CloudFront device detection (enums)
+		DeviceType: req.DeviceType,
+		DeviceOS:   req.DeviceOS,
+		// CloudFront connection info
+		ASN:               req.ASN,
+		TLSVersion:        req.TLSVersion,
+		HTTPVersion:       req.HTTPVersion,
 		Metadata:          metadata,
 		MarketingConsent:  req.MarketingConsent,
 		TermsAccepted:     req.TermsAccepted,
