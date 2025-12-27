@@ -42,6 +42,7 @@ const (
 	CodeInternalError         = "INTERNAL_ERROR"
 	CodeSlugExists            = "SLUG_EXISTS"
 	CodeInvalidStatus         = "INVALID_STATUS"
+	CodeInvalidSource         = "INVALID_SOURCE"
 	CodeInvalidType           = "INVALID_TYPE"
 	CodeInvalidReferral       = "INVALID_REFERRAL"
 	CodeInvalidToken          = "INVALID_TOKEN"

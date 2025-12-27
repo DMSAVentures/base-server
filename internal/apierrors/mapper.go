@@ -83,6 +83,9 @@ func MapError(err error) *APIError {
 	case errors.Is(err, waitlistProcessor.ErrInvalidStatus):
 		return BadRequest(CodeInvalidStatus, "Invalid user status")
 
+	case errors.Is(err, waitlistProcessor.ErrInvalidSource):
+		return BadRequest(CodeInvalidSource, "Invalid user source. Valid values: direct, referral, social, ad")
+
 	case errors.Is(err, waitlistProcessor.ErrUnauthorized):
 		return Forbidden("You do not have access to this campaign")
 

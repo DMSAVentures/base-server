@@ -62,6 +62,7 @@ var (
 	ErrEmailAlreadyExists       = errors.New("email already exists for this campaign")
 	ErrInvalidReferralCode      = errors.New("invalid referral code")
 	ErrInvalidStatus            = errors.New("invalid user status")
+	ErrInvalidSource            = errors.New("invalid user source")
 	ErrUnauthorized             = errors.New("unauthorized access to campaign")
 	ErrInvalidVerificationToken = errors.New("invalid verification token")
 	ErrEmailAlreadyVerified     = errors.New("email already verified")
@@ -385,6 +386,13 @@ func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID
 	for _, status := range req.Statuses {
 		if !isValidUserStatus(status) {
 			return ListUsersResponse{}, ErrInvalidStatus
+		}
+	}
+
+	// Validate sources if provided
+	for _, source := range req.Sources {
+		if !isValidUserSource(source) {
+			return ListUsersResponse{}, ErrInvalidSource
 		}
 	}
 
@@ -813,6 +821,16 @@ func isValidUserStatus(status string) bool {
 		store.WaitlistUserStatusBlocked:   true,
 	}
 	return validStatuses[status]
+}
+
+func isValidUserSource(source string) bool {
+	validSources := map[string]bool{
+		store.UserSourceDirect:   true,
+		store.UserSourceReferral: true,
+		store.UserSourceSocial:   true,
+		store.UserSourceAd:       true,
+	}
+	return validSources[source]
 }
 
 // VerifyCampaignOwnership verifies that a campaign belongs to an account (exported for handler use)

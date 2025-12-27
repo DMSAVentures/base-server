@@ -616,7 +616,7 @@ func TestListUsers_WithSourceFilter(t *testing.T) {
 	mockStore.EXPECT().CountWaitlistUsersWithExtendedFilters(gomock.Any(), gomock.Any()).Return(0, nil)
 
 	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
-		Sources: []string{"organic", "referral"},
+		Sources: []string{"direct", "referral"},
 		Page:    1,
 		Limit:   20,
 	})
@@ -873,8 +873,8 @@ func TestListUsers_WithCombinedFilters(t *testing.T) {
 			if len(params.Statuses) != 1 || params.Statuses[0] != "verified" {
 				t.Errorf("expected status verified, got %v", params.Statuses)
 			}
-			if len(params.Sources) != 1 || params.Sources[0] != "organic" {
-				t.Errorf("expected source organic, got %v", params.Sources)
+			if len(params.Sources) != 1 || params.Sources[0] != "social" {
+				t.Errorf("expected source social, got %v", params.Sources)
 			}
 			if params.HasReferrals == nil || !*params.HasReferrals {
 				t.Error("expected hasReferrals=true")
@@ -894,7 +894,7 @@ func TestListUsers_WithCombinedFilters(t *testing.T) {
 
 	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
 		Statuses:     []string{"verified"},
-		Sources:      []string{"organic"},
+		Sources:      []string{"social"},
 		HasReferrals: &hasReferrals,
 		MinPosition:  &minPos,
 		MaxPosition:  &maxPos,
@@ -934,6 +934,66 @@ func TestListUsers_WithInvalidStatus(t *testing.T) {
 
 	if !errors.Is(err, ErrInvalidStatus) {
 		t.Errorf("expected ErrInvalidStatus, got %v", err)
+	}
+}
+
+func TestListUsers_WithInvalidSource(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	// Test with "facebook" which is a valid referral_source but NOT a valid user_source
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		Sources: []string{"facebook"},
+		Page:    1,
+		Limit:   20,
+	})
+
+	if !errors.Is(err, ErrInvalidSource) {
+		t.Errorf("expected ErrInvalidSource, got %v", err)
+	}
+}
+
+func TestListUsers_WithInvalidSourceAmongValid(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockWaitlistStore(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, logger, nil, nil)
+
+	ctx := context.Background()
+	accountID := uuid.New()
+	campaignID := uuid.New()
+
+	mockStore.EXPECT().GetCampaignByID(gomock.Any(), campaignID).Return(store.Campaign{
+		ID:        campaignID,
+		AccountID: accountID,
+	}, nil)
+
+	// Test with mix of valid and invalid sources - should fail on invalid
+	_, err := processor.ListUsers(ctx, accountID, campaignID, ListUsersRequest{
+		Sources: []string{"referral", "facebook"}, // referral is valid, facebook is not
+		Page:    1,
+		Limit:   20,
+	})
+
+	if !errors.Is(err, ErrInvalidSource) {
+		t.Errorf("expected ErrInvalidSource, got %v", err)
 	}
 }
 
