@@ -766,13 +766,13 @@ func (s *Store) ListWaitlistUsersWithExtendedFilters(ctx context.Context, params
 		args = append(args, *params.DateTo)
 	}
 
-	// Add custom field filters (JSONB containment)
+	// Add custom field filters (case-insensitive text match)
 	for key, value := range params.CustomFields {
 		argCount++
-		// Use JSONB containment operator for exact match
-		query += fmt.Sprintf(" AND metadata @> $%d::jsonb", argCount)
-		jsonValue := fmt.Sprintf(`{"%s": "%s"}`, key, value)
-		args = append(args, jsonValue)
+		// Use ILIKE for case-insensitive partial match on JSONB text value
+		query += fmt.Sprintf(" AND metadata ->> $%d ILIKE $%d", argCount, argCount+1)
+		args = append(args, key, "%"+value+"%")
+		argCount++
 	}
 
 	// Add sorting
@@ -865,12 +865,13 @@ func (s *Store) CountWaitlistUsersWithExtendedFilters(ctx context.Context, param
 		args = append(args, *params.DateTo)
 	}
 
-	// Add custom field filters
+	// Add custom field filters (case-insensitive text match)
 	for key, value := range params.CustomFields {
 		argCount++
-		query += fmt.Sprintf(" AND metadata @> $%d::jsonb", argCount)
-		jsonValue := fmt.Sprintf(`{"%s": "%s"}`, key, value)
-		args = append(args, jsonValue)
+		// Use ILIKE for case-insensitive partial match on JSONB text value
+		query += fmt.Sprintf(" AND metadata ->> $%d ILIKE $%d", argCount, argCount+1)
+		args = append(args, key, "%"+value+"%")
+		argCount++
 	}
 
 	var count int
