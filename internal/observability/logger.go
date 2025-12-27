@@ -163,31 +163,64 @@ func GetCloudFrontViewerInfo(c *gin.Context) CloudFrontViewerInfo {
 	return info
 }
 
-// GetDeviceType determines the device type from CloudFront headers.
+// GetDeviceType determines the device type from CloudFront headers and User-Agent parsing.
+// Uses CloudFront-Is-Mobile-Viewer header when available, falls back to User-Agent parsing.
 // Returns "desktop", "mobile", "tablet", "smarttv", or "unknown".
 func GetDeviceType(c *gin.Context) string {
+	// CloudFront mobile header is still available
 	if c.GetHeader("CloudFront-Is-Mobile-Viewer") == "true" {
 		return "mobile"
 	}
-	if c.GetHeader("CloudFront-Is-Tablet-Viewer") == "true" {
+
+	// Parse User-Agent for tablet, smarttv, and desktop detection
+	ua := strings.ToLower(c.Request.UserAgent())
+
+	// Check for tablets (must check before mobile patterns since tablets often contain "mobile")
+	if strings.Contains(ua, "ipad") ||
+		(strings.Contains(ua, "android") && !strings.Contains(ua, "mobile")) ||
+		strings.Contains(ua, "tablet") {
 		return "tablet"
 	}
-	if c.GetHeader("CloudFront-Is-SmartTV-Viewer") == "true" {
+
+	// Check for smart TVs
+	if strings.Contains(ua, "smart-tv") ||
+		strings.Contains(ua, "smarttv") ||
+		strings.Contains(ua, "googletv") ||
+		strings.Contains(ua, "appletv") ||
+		strings.Contains(ua, "roku") ||
+		strings.Contains(ua, "webos") ||
+		strings.Contains(ua, "tizen") {
 		return "smarttv"
 	}
-	if c.GetHeader("CloudFront-Is-Desktop-Viewer") == "true" {
+
+	// Check for mobile (fallback if CloudFront header wasn't present)
+	if strings.Contains(ua, "mobile") ||
+		strings.Contains(ua, "iphone") ||
+		strings.Contains(ua, "ipod") ||
+		(strings.Contains(ua, "android") && strings.Contains(ua, "mobile")) {
+		return "mobile"
+	}
+
+	// If we have a valid User-Agent, assume desktop
+	if ua != "" {
 		return "desktop"
 	}
+
 	return "unknown"
 }
 
-// GetDeviceOS determines the device OS from CloudFront headers.
+// GetDeviceOS determines the device OS from User-Agent parsing.
 // Returns "android", "ios", or "other".
 func GetDeviceOS(c *gin.Context) string {
-	if c.GetHeader("CloudFront-Is-Android-Viewer") == "true" {
+	ua := strings.ToLower(c.Request.UserAgent())
+
+	if strings.Contains(ua, "android") {
 		return "android"
 	}
-	if c.GetHeader("CloudFront-Is-IOS-Viewer") == "true" {
+	if strings.Contains(ua, "iphone") ||
+		strings.Contains(ua, "ipad") ||
+		strings.Contains(ua, "ipod") ||
+		strings.Contains(ua, "ios") {
 		return "ios"
 	}
 	return "other"
