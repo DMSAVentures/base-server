@@ -5,6 +5,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/webhooks/events"
 	"context"
 	"errors"
 	"time"
@@ -51,14 +52,16 @@ var (
 )
 
 type EmailBlastProcessor struct {
-	store  EmailBlastStore
-	logger *observability.Logger
+	store           EmailBlastStore
+	eventDispatcher *events.EventDispatcher
+	logger          *observability.Logger
 }
 
-func New(store EmailBlastStore, logger *observability.Logger) EmailBlastProcessor {
+func New(store EmailBlastStore, eventDispatcher *events.EventDispatcher, logger *observability.Logger) EmailBlastProcessor {
 	return EmailBlastProcessor{
-		store:  store,
-		logger: logger,
+		store:           store,
+		eventDispatcher: eventDispatcher,
+		logger:          logger,
 	}
 }
 
@@ -484,49 +487,19 @@ func (p *EmailBlastProcessor) SendBlastNow(ctx context.Context, accountID, campa
 		return store.EmailBlast{}, ErrBlastCannotStart
 	}
 
-	// Get segment filter criteria
-	segment, err := p.store.GetSegmentByID(ctx, existingBlast.SegmentID)
-	if err != nil {
-		p.logger.Error(ctx, "failed to get segment", err)
-		return store.EmailBlast{}, err
-	}
-
-	// Parse filter criteria
-	criteria, err := store.ParseFilterCriteria(segment.FilterCriteria)
-	if err != nil {
-		p.logger.Error(ctx, "failed to parse filter criteria", err)
-		return store.EmailBlast{}, err
-	}
-
-	// Get matching users and create recipients
-	users, err := p.store.GetUsersForBlast(ctx, campaignID, criteria)
-	if err != nil {
-		p.logger.Error(ctx, "failed to get users for blast", err)
-		return store.EmailBlast{}, err
-	}
-
-	if len(users) == 0 {
-		return store.EmailBlast{}, ErrNoRecipients
-	}
-
-	// Create blast recipients
-	err = p.store.CreateBlastRecipientsBulk(ctx, blastID, users, existingBlast.BatchSize)
-	if err != nil {
-		p.logger.Error(ctx, "failed to create blast recipients", err)
-		return store.EmailBlast{}, err
-	}
-
-	// Update total recipients
-	err = p.store.UpdateEmailBlastTotalRecipients(ctx, blastID, len(users))
-	if err != nil {
-		p.logger.Error(ctx, "failed to update total recipients", err)
-		return store.EmailBlast{}, err
-	}
-
 	// Update status to processing
 	blast, err := p.store.UpdateEmailBlastStatus(ctx, blastID, string(store.EmailBlastStatusProcessing), nil)
 	if err != nil {
 		p.logger.Error(ctx, "failed to update blast status", err)
+		return store.EmailBlast{}, err
+	}
+
+	// Dispatch blast.started event for async processing
+	err = p.eventDispatcher.DispatchBlastStarted(ctx, accountID, campaignID, blastID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to dispatch blast started event", err)
+		// Revert status back to draft
+		_, _ = p.store.UpdateEmailBlastStatus(ctx, blastID, string(store.EmailBlastStatusDraft), nil)
 		return store.EmailBlast{}, err
 	}
 
@@ -584,6 +557,14 @@ func (p *EmailBlastProcessor) ResumeBlast(ctx context.Context, accountID, campai
 	if err != nil {
 		p.logger.Error(ctx, "failed to resume blast", err)
 		return store.EmailBlast{}, err
+	}
+
+	// Dispatch batch event to continue processing from where we left off
+	nextBatch := existingBlast.CurrentBatch + 1
+	err = p.eventDispatcher.DispatchBlastBatchSend(ctx, accountID, campaignID, blastID, nextBatch)
+	if err != nil {
+		p.logger.Error(ctx, "failed to dispatch resume batch event", err)
+		// Don't fail the resume, the batch will be picked up on next scheduler run
 	}
 
 	p.logger.Info(ctx, "email blast resumed successfully")

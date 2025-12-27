@@ -105,11 +105,6 @@ type CloudFrontViewerInfo struct {
 	// Device detection (enum values)
 	DeviceType *string // desktop, mobile, tablet, smarttv, unknown
 	DeviceOS   *string // android, ios, other
-
-	// Connection info
-	ASN         *string
-	TLSVersion  *string
-	HTTPVersion *string
 }
 
 // strPtrIfNotEmpty returns a pointer to the string if non-empty, otherwise nil
@@ -131,11 +126,6 @@ func GetCloudFrontViewerInfo(c *gin.Context) CloudFrontViewerInfo {
 		PostalCode:   strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-Postal-Code")),
 		UserTimezone: strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-Time-Zone")),
 		MetroCode:    strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-Metro-Code")),
-
-		// Connection info
-		ASN:         strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-ASN")),
-		TLSVersion:  strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-TLS")),
-		HTTPVersion: strPtrIfNotEmpty(c.GetHeader("CloudFront-Viewer-HTTP-Version")),
 	}
 
 	// Parse latitude

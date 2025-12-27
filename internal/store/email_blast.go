@@ -518,6 +518,67 @@ func (s *Store) GetMaxBatchNumber(ctx context.Context, blastID uuid.UUID) (int, 
 	return maxBatch, nil
 }
 
+const sqlGetBlastRecipientsByBatch = `
+SELECT id, blast_id, user_id, email, status, email_log_id, queued_at, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, batch_number, created_at, updated_at
+FROM blast_recipients
+WHERE blast_id = $1 AND batch_number = $2
+ORDER BY created_at ASC
+`
+
+// GetBlastRecipientsByBatch retrieves all recipients for a specific batch
+func (s *Store) GetBlastRecipientsByBatch(ctx context.Context, blastID uuid.UUID, batchNumber int) ([]BlastRecipient, error) {
+	var recipients []BlastRecipient
+	err := s.db.SelectContext(ctx, &recipients, sqlGetBlastRecipientsByBatch, blastID, batchNumber)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get blast recipients by batch: %w", err)
+	}
+	return recipients, nil
+}
+
+const sqlCountBlastRecipientsByStatus = `
+SELECT COUNT(*)
+FROM blast_recipients
+WHERE blast_id = $1 AND status = $2
+`
+
+// CountBlastRecipientsByStatus counts recipients with a specific status
+func (s *Store) CountBlastRecipientsByStatus(ctx context.Context, blastID uuid.UUID, status string) (int, error) {
+	var count int
+	err := s.db.GetContext(ctx, &count, sqlCountBlastRecipientsByStatus, blastID, status)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count blast recipients by status: %w", err)
+	}
+	return count, nil
+}
+
+const sqlUpdateEmailBlastProgressWithSent = `
+UPDATE email_blasts
+SET sent_count = $2,
+    current_batch = $3,
+    last_batch_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND deleted_at IS NULL
+`
+
+// UpdateEmailBlastProgressWithSent updates sent count and batch progress
+func (s *Store) UpdateEmailBlastProgressWithSent(ctx context.Context, blastID uuid.UUID, sentCount int, currentBatch int) error {
+	res, err := s.db.ExecContext(ctx, sqlUpdateEmailBlastProgressWithSent, blastID, sentCount, currentBatch)
+	if err != nil {
+		return fmt.Errorf("failed to update email blast progress: %w", err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
 // ScheduleBlast updates a blast to scheduled status with a scheduled time
 func (s *Store) ScheduleBlast(ctx context.Context, blastID uuid.UUID, scheduledAt time.Time) (EmailBlast, error) {
 	const query = `

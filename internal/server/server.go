@@ -118,6 +118,16 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 
+	// Start blast event consumer (processes email blasts)
+	go func() {
+		if err := s.deps.BlastConsumer.Start(ctx); err != nil {
+			s.logger.Error(ctx, "blast event consumer stopped with error", err)
+		}
+	}()
+
+	// Start blast scheduler (checks for scheduled blasts)
+	go s.deps.BlastScheduler.Start(ctx)
+
 	// Create HTTP server
 	s.httpServer = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.config.Server.Port),
@@ -156,6 +166,8 @@ func (s *Server) WaitForShutdown(ctx context.Context) error {
 	s.deps.PositionConsumer.Stop()
 	s.deps.SpamConsumer.Stop()
 	s.deps.IntegrationConsumer.Stop()
+	s.deps.BlastConsumer.Stop()
+	s.deps.BlastScheduler.Stop()
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling

@@ -25,7 +25,6 @@ import (
 	"base-server/internal/email"
 	emailblastsHandler "base-server/internal/emailblasts/handler"
 	emailblastsProcessor "base-server/internal/emailblasts/processor"
-	emailTem
 	emailTemplateHandler "base-server/internal/emailtemplates/handler"
 	emailTemplateProcessor "base-server/internal/emailtemplates/processor"
 	integrationConsumer "base-server/internal/integrations/consumer"
@@ -54,6 +53,8 @@ import (
 	webhookService "base-server/internal/webhooks/service"
 	webhookWorker "base-server/internal/webhooks/worker"
 	"base-server/internal/workers"
+	blastWorker "base-server/internal/workers/blast"
+	posi
 	positionWorker "base-server/internal/workers/position"
 )
 
@@ -86,7 +87,9 @@ type Dependencies struct {
 	PositionConsumer    workers.EventConsumer
 	SpamConsumer        workers.EventConsumer
 	IntegrationConsumer workers.EventConsumer
+	BlastConsumer       workers.EventConsumer
 	WebhookWorker       *webhookWorker.WebhookWorker
+	BlastScheduler      *blastWorker.BlastScheduler
 
 	// Kafka clients (for cleanup)
 	KafkaProducer *kafkaClient.Producer
@@ -209,7 +212,7 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	deps.SegmentsHandler = segmentsHandler.New(segmentsProc, logger)
 
 	// Initialize email blasts processor and handler
-	emailblastsProc := emailblastsProcessor.New(&deps.Store, logger)
+	emailblastsProc := emailblastsProcessor.New(&deps.Store, eventDispatcher, logger)
 	deps.EmailblastsHandler = emailblastsHandler.New(emailblastsProc, logger)
 
 	// Initialize webhook services
@@ -262,6 +265,17 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	deps.IntegrationConsumer = workers.NewConsumer(integrationConsumerConfig, integrationEvtProcessor, logger)
 
 	logger.Info(ctx, "Integrations system initialized")
+
+	// Initialize blast event processor and consumer with worker pool
+	blastEvtProcessor := blastWorker.NewBlastEventProcessor(&deps.Store, emailService, eventDispatcher, logger)
+	blastConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-blast", cfg.Kafka.Topic)
+	blastConsumerConfig.WorkerPoolConfig.NumWorkers = 5 // Configurable via cfg if needed
+	deps.BlastConsumer = workers.NewConsumer(blastConsumerConfig, blastEvtProcessor, logger)
+
+	// Initialize blast scheduler (checks for scheduled blasts every 30 seconds)
+	deps.BlastScheduler = blastWorker.NewBlastScheduler(&deps.Store, eventDispatcher, logger, 30*time.Second)
+
+	logger.Info(ctx, "Email blast system initialized")
 
 	return deps, nil
 }
