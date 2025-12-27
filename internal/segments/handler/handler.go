@@ -134,7 +134,13 @@ func (h *Handler) HandleListSegments(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, segments)
+	c.JSON(http.StatusOK, gin.H{
+		"segments":    segments,
+		"total":       len(segments),
+		"page":        1,
+		"limit":       100,
+		"total_pages": 1,
+	})
 }
 
 // HandleGetSegment handles GET /api/v1/campaigns/:campaign_id/segments/:segment_id

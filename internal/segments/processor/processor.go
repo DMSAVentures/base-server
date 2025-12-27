@@ -323,7 +323,7 @@ type PreviewSegmentRequest struct {
 
 // SegmentPreview represents the preview response
 type SegmentPreview struct {
-	TotalCount  int                  `json:"total_count"`
+	Count       int                  `json:"count"`
 	SampleUsers []store.WaitlistUser `json:"sample_users"`
 }
 
@@ -375,7 +375,7 @@ func (p *SegmentProcessor) PreviewSegment(ctx context.Context, accountID, campai
 	}
 
 	return SegmentPreview{
-		TotalCount:  count,
+		Count:       count,
 		SampleUsers: users,
 	}, nil
 }
