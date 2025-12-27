@@ -180,10 +180,14 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 		}
 	}
 
-	limit := 20
+	limit := 25
 	if limitStr := c.Query("limit"); limitStr != "" {
-		if _, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil || limit < 1 || limit > 100 {
-			limit = 20
+		if _, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil || limit < 1 {
+			limit = 25
+		}
+		// Cap at 10000 for export use cases
+		if limit > 10000 {
+			limit = 10000
 		}
 	}
 
@@ -480,10 +484,13 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 		}
 	}
 
-	limit := 20
+	limit := 25
 	if limitStr := c.Query("limit"); limitStr != "" {
-		if _, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil || limit < 1 || limit > 100 {
-			limit = 20
+		if _, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil || limit < 1 {
+			limit = 25
+		}
+		if limit > 10000 {
+			limit = 10000
 		}
 	}
 

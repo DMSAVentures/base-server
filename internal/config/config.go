@@ -58,10 +58,11 @@ type KafkaConfig struct {
 
 // WorkerPoolConfig holds worker pool configuration for event processing
 type WorkerPoolConfig struct {
-	WebhookWorkers  int // Number of workers for webhook event processing
-	EmailWorkers    int // Number of workers for email event processing
-	PositionWorkers int // Number of workers for position calculation event processing
-	SpamWorkers     int // Number of workers for spam detection event processing
+	WebhookWorkers     int // Number of workers for webhook event processing
+	EmailWorkers       int // Number of workers for email event processing
+	PositionWorkers    int // Number of workers for position calculation event processing
+	SpamWorkers        int // Number of workers for spam detection event processing
+	IntegrationWorkers int // Number of workers for integration event processing (Zapier, Slack, etc.)
 }
 
 // ServerConfig holds HTTP server configuration
@@ -166,6 +167,12 @@ func Load() (*Config, error) {
 	cfg.WorkerPool.SpamWorkers, err = strconv.Atoi(spamWorkers)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse SPAM_WORKERS: %w", err)
+	}
+
+	integrationWorkers := getEnvWithDefault("INTEGRATION_WORKERS", "5")
+	cfg.WorkerPool.IntegrationWorkers, err = strconv.Atoi(integrationWorkers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse INTEGRATION_WORKERS: %w", err)
 	}
 
 	// Server configuration

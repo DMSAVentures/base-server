@@ -24,6 +24,9 @@ import (
 	"base-server/internal/email"
 	emailTemplateHandler "base-server/internal/emailtemplates/handler"
 	emailTemplateProcessor "base-server/internal/emailtemplates/processor"
+	integrationConsumer "base-server/internal/integrations/consumer"
+	integrationService "base-server/internal/integrations/service"
+	zapierHandler "base-server/internal/integrations/zapier"
 	billingHandler "base-server/internal/money/billing/handler"
 	billingProcessor "base-server/internal/money/billing/processor"
 	"base-server/internal/money/products"
@@ -65,14 +68,16 @@ type Dependencies struct {
 	ReferralHandler      referralHandler.Handler
 	RewardHandler        rewardHandler.Handler
 	EmailTemplateHandler emailTemplateHandler.Handler
-	WebhookHandler       *webhookHandler.Handler
+	WebhookHandler *webhookHandler.Handler
+	ZapierHandler  *zapierHandler.Handler
 
 	// Background workers
-	WebhookConsumer  workers.EventConsumer
-	EmailConsumer    workers.EventConsumer
-	PositionConsumer workers.EventConsumer
-	SpamConsumer     workers.EventConsumer
-	WebhookWorker    *webhookWorker.WebhookWorker
+	WebhookConsumer     workers.EventConsumer
+	EmailConsumer       workers.EventConsumer
+	PositionConsumer    workers.EventConsumer
+	SpamConsumer        workers.EventConsumer
+	IntegrationConsumer workers.EventConsumer
+	WebhookWorker       *webhookWorker.WebhookWorker
 
 	// Kafka clients (for cleanup)
 	KafkaProducer *kafkaClient.Producer
@@ -222,6 +227,21 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	spamConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-spam", cfg.Kafka.Topic)
 	spamConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.SpamWorkers
 	deps.SpamConsumer = workers.NewConsumer(spamConsumerConfig, spamEvtProcessor, logger)
+
+	// Initialize integration services (Zapier, Slack, etc.)
+	// Initialize Zapier handler (uses API key auth, no OAuth needed)
+	deps.ZapierHandler = zapierHandler.NewHandler(&deps.Store, logger)
+
+	// Initialize integration service with deliverers
+	intService := integrationService.New(&deps.Store, logger)
+
+	// Initialize integration event processor and consumer with worker pool
+	integrationEvtProcessor := integrationConsumer.NewIntegrationEventProcessor(intService, &deps.Store, logger)
+	integrationConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-integrations", cfg.Kafka.Topic)
+	integrationConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.IntegrationWorkers
+	deps.IntegrationConsumer = workers.NewConsumer(integrationConsumerConfig, integrationEvtProcessor, logger)
+
+	logger.Info(ctx, "Integrations system initialized")
 
 	return deps, nil
 }

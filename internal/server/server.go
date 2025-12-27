@@ -71,6 +71,7 @@ func (s *Server) Setup() {
 		s.deps.AIHandler,
 		s.deps.VoiceCallHandler,
 		s.deps.WebhookHandler,
+		s.deps.ZapierHandler,
 	)
 	api.RegisterRoutes()
 }
@@ -105,6 +106,12 @@ func (s *Server) Start(ctx context.Context) error {
 	go func() {
 		if err := s.deps.SpamConsumer.Start(ctx); err != nil {
 			s.logger.Error(ctx, "spam detection consumer stopped with error", err)
+		}
+	}()
+
+	go func() {
+		if err := s.deps.IntegrationConsumer.Start(ctx); err != nil {
+			s.logger.Error(ctx, "integration event consumer stopped with error", err)
 		}
 	}()
 
@@ -145,6 +152,7 @@ func (s *Server) WaitForShutdown(ctx context.Context) error {
 	s.deps.EmailConsumer.Stop()
 	s.deps.PositionConsumer.Stop()
 	s.deps.SpamConsumer.Stop()
+	s.deps.IntegrationConsumer.Stop()
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling

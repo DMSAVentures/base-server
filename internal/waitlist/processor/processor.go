@@ -378,8 +378,11 @@ func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID
 	if req.Page < 1 {
 		req.Page = 1
 	}
-	if req.Limit < 1 || req.Limit > 100 {
-		req.Limit = 20
+	if req.Limit < 1 {
+		req.Limit = 25
+	}
+	if req.Limit > 10000 {
+		req.Limit = 10000
 	}
 
 	// Validate statuses if provided
@@ -641,8 +644,11 @@ func (p *WaitlistProcessor) SearchUsers(ctx context.Context, accountID, campaign
 	if req.Page < 1 {
 		req.Page = 1
 	}
-	if req.Limit < 1 || req.Limit > 100 {
-		req.Limit = 20
+	if req.Limit < 1 {
+		req.Limit = 25
+	}
+	if req.Limit > 10000 {
+		req.Limit = 10000
 	}
 
 	// Validate statuses if provided

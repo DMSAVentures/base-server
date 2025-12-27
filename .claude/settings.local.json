@@ -13,7 +13,8 @@
       "Bash(cat:*)",
       "Bash(export TEST_DB_USER=base_user:*)",
       "Bash(export TEST_DB_PASS=base_password)",
-      "Bash(export TEST_DB_NAME=base_db)"
+      "Bash(export TEST_DB_NAME=base_db)",
+      "Bash(wc:*)"
     ],
     "deny": [],
     "ask": []

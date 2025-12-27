@@ -1,18 +1,20 @@
 package api
 
 import (
+	"net/http"
+
 	aiHandler "base-server/internal/ai-capabilities/handler"
 	analyticsHandler "base-server/internal/analytics/handler"
 	authHandler "base-server/internal/auth/handler"
 	campaignHandler "base-server/internal/campaign/handler"
 	emailTemplateHandler "base-server/internal/emailtemplates/handler"
+	zapierHandler "base-server/internal/integrations/zapier"
 	billingHandler "base-server/internal/money/billing/handler"
 	referralHandler "base-server/internal/referral/handler"
 	rewardHandler "base-server/internal/rewards/handler"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	waitlistHandler "base-server/internal/waitlist/handler"
 	webhookHandler "base-server/internal/webhooks/handler"
-	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,10 +32,11 @@ type API struct {
 	aiHandler            aiHandler.Handler
 	voicecallHandler     voiceCallHandler.Handler
 	webhookHandler       *webhookHandler.Handler
+	zapierHandler        *zapierHandler.Handler
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	waitlistHandler waitlistHandler.Handler, analyticsHandler analyticsHandler.Handler, referralHandler referralHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler) API {
+	waitlistHandler waitlistHandler.Handler, analyticsHandler analyticsHandler.Handler, referralHandler referralHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler, zapierHandler *zapierHandler.Handler) API {
 	return API{
 		router:               router,
 		authHandler:          authHandler,
@@ -47,6 +50,7 @@ func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandl
 		aiHandler:            aiHandler,
 		voicecallHandler:     voicecallHandler,
 		webhookHandler:       webhookHandler,
+		zapierHandler:        zapierHandler,
 	}
 }
 
@@ -183,6 +187,28 @@ func (a *API) RegisterRoutes() {
 	apiGroup.GET("audio/transcribe", a.voicecallHandler.HandleVoice)               // WebSocket requires GET
 	apiGroup.POST("phone/answer-agent", a.voicecallHandler.HandleAnswerVoiceAgent) // TwiML for voice agent
 	apiGroup.GET("phone/voice-agent", a.voicecallHandler.HandleVoiceAgent)         // WebSocket for voice agent
+
+	// Zapier API routes (API Key authenticated)
+	zapierGroup := apiGroup.Group("/v1/zapier", a.zapierHandler.APIKeyMiddleware())
+	{
+		zapierGroup.GET("/me", a.zapierHandler.HandleMe)
+		zapierGroup.POST("/subscribe", a.zapierHandler.HandleSubscribe)
+		zapierGroup.DELETE("/subscribe/:id", a.zapierHandler.HandleUnsubscribe)
+		zapierGroup.GET("/sample/:event", a.zapierHandler.HandleSampleData)
+		zapierGroup.GET("/campaigns", a.zapierHandler.HandleListCampaigns)
+	}
+
+	// Integration management routes (JWT protected, for the UI)
+	integrationsGroup := protectedGroup.Group("/integrations")
+	{
+		// Zapier management
+		zapierMgmtGroup := integrationsGroup.Group("/zapier")
+		{
+			zapierMgmtGroup.GET("/status", a.zapierHandler.HandleStatus)
+			zapierMgmtGroup.GET("/subscriptions", a.zapierHandler.HandleSubscriptions)
+			zapierMgmtGroup.POST("/disconnect", a.zapierHandler.HandleDisconnect)
+		}
+	}
 }
 
 func (a *API) Health() {
