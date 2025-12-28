@@ -3,6 +3,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"context"
 	"errors"
 	"testing"
@@ -10,6 +11,35 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/mock/gomock"
 )
+
+// mockTierStore is a test implementation that returns unlimited tier info
+type mockTierStore struct{}
+
+func (m *mockTierStore) GetTierInfoByAccountID(ctx context.Context, accountID uuid.UUID) (store.TierInfo, error) {
+	return store.TierInfo{
+		PriceDescription: "team",
+		Features:         map[string]bool{"webhooks_zapier": true, "email_blasts": true, "json_export": true},
+		Limits:           map[string]*int{"campaigns": nil, "leads": nil}, // nil means unlimited
+	}, nil
+}
+
+func (m *mockTierStore) GetTierInfoByUserID(ctx context.Context, userID uuid.UUID) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+func (m *mockTierStore) GetTierInfoByPriceID(ctx context.Context, priceID uuid.UUID) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+func (m *mockTierStore) GetFreeTierInfo(ctx context.Context) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+// createTestTierService creates a TierService with unlimited access for testing
+func createTestTierService() *tiers.TierService {
+	logger := observability.NewLogger()
+	return tiers.New(&mockTierStore{}, logger)
+}
 
 // Test CreateWebhook
 
@@ -21,7 +51,7 @@ func TestCreateWebhook_Success(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -85,7 +115,7 @@ func TestCreateWebhook_DefaultMaxRetries(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -121,7 +151,7 @@ func TestCreateWebhook_EmptyEvents(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -148,7 +178,7 @@ func TestCreateWebhook_InvalidEvent(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -175,7 +205,7 @@ func TestCreateWebhook_StoreError(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -208,7 +238,7 @@ func TestUpdateWebhook_Success(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -252,7 +282,7 @@ func TestUpdateWebhook_InvalidEvent(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -276,7 +306,7 @@ func TestUpdateWebhook_InvalidStatus(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -301,7 +331,7 @@ func TestUpdateWebhook_StoreError(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -330,7 +360,7 @@ func TestUpdateWebhook_NotFound(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -360,7 +390,7 @@ func TestGetWebhook_Success(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -394,7 +424,7 @@ func TestGetWebhook_NotFound(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -417,7 +447,7 @@ func TestGetWebhook_StoreError(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -443,7 +473,7 @@ func TestGetWebhooksByAccount_Success(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -474,7 +504,7 @@ func TestGetWebhooksByAccount_EmptyList(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -503,7 +533,7 @@ func TestGetWebhooksByAccount_StoreError(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -529,7 +559,7 @@ func TestGetWebhooksByCampaign_Success(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -559,7 +589,7 @@ func TestGetWebhooksByCampaign_EmptyList(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -588,7 +618,7 @@ func TestGetWebhooksByCampaign_StoreError(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -614,7 +644,7 @@ func TestDeleteWebhook_Success(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -637,7 +667,7 @@ func TestDeleteWebhook_NotFound(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -660,7 +690,7 @@ func TestDeleteWebhook_StoreError(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -686,7 +716,7 @@ func TestGetWebhookDeliveries_Success(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -719,7 +749,7 @@ func TestGetWebhookDeliveries_EmptyList(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -750,7 +780,7 @@ func TestGetWebhookDeliveries_StoreError(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -778,7 +808,7 @@ func TestTestWebhook_Success(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -801,7 +831,7 @@ func TestTestWebhook_ServiceError(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()
@@ -827,7 +857,7 @@ func TestCreateWebhook_AllValidEvents(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -883,7 +913,7 @@ func TestUpdateWebhook_AllValidStatuses(t *testing.T) {
 	mockService := NewMockWebhookService(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockService)
+	processor := New(mockStore, createTestTierService(), logger, mockService)
 
 	ctx := context.Background()
 	webhookID := uuid.New()

@@ -5,12 +5,18 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+)
+
+var (
+	ErrWebhooksNotAvailable = errors.New("webhooks are not available in your plan")
 )
 
 // WebhookStore defines the database operations required by WebhookProcessor
@@ -32,14 +38,16 @@ type WebhookService interface {
 // WebhookProcessor handles webhook business logic
 type WebhookProcessor struct {
 	store          WebhookStore
+	tierService    *tiers.TierService
 	logger         *observability.Logger
 	webhookService WebhookService
 }
 
 // New creates a new WebhookProcessor
-func New(store WebhookStore, logger *observability.Logger, webhookService WebhookService) *WebhookProcessor {
+func New(store WebhookStore, tierService *tiers.TierService, logger *observability.Logger, webhookService WebhookService) *WebhookProcessor {
 	return &WebhookProcessor{
 		store:          store,
+		tierService:    tierService,
 		logger:         logger,
 		webhookService: webhookService,
 	}
@@ -61,6 +69,16 @@ func (p *WebhookProcessor) CreateWebhook(ctx context.Context, params CreateWebho
 		observability.Field{Key: "account_id", Value: params.AccountID},
 		observability.Field{Key: "url", Value: params.URL},
 	)
+
+	// Check if account has webhooks feature
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, params.AccountID, "webhooks_zapier")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check webhooks feature", err)
+		return store.Webhook{}, "", err
+	}
+	if !hasFeature {
+		return store.Webhook{}, "", ErrWebhooksNotAvailable
+	}
 
 	// Generate a secret for HMAC signing
 	secret, err := p.generateSecret()

@@ -5,6 +5,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"context"
 	"errors"
 
@@ -23,6 +24,7 @@ type CampaignStore interface {
 	UpdateCampaign(ctx context.Context, accountID, campaignID uuid.UUID, params store.UpdateCampaignParams) (store.Campaign, error)
 	UpdateCampaignStatus(ctx context.Context, accountID, campaignID uuid.UUID, status string) (store.Campaign, error)
 	DeleteCampaign(ctx context.Context, accountID, campaignID uuid.UUID) error
+	CountCampaignsByAccountID(ctx context.Context, accountID uuid.UUID) (int, error)
 
 	// Email Settings
 	UpsertCampaignEmailSettings(ctx context.Context, params store.CreateCampaignEmailSettingsParams) (store.CampaignEmailSettings, error)
@@ -59,17 +61,20 @@ var (
 	ErrInvalidCampaignStatus = errors.New("invalid campaign status")
 	ErrInvalidCampaignType   = errors.New("invalid campaign type")
 	ErrUnauthorized          = errors.New("unauthorized access to campaign")
+	ErrCampaignLimitReached  = errors.New("campaign limit reached for your plan")
 )
 
 type CampaignProcessor struct {
-	store  CampaignStore
-	logger *observability.Logger
+	store       CampaignStore
+	tierService *tiers.TierService
+	logger      *observability.Logger
 }
 
-func New(store CampaignStore, logger *observability.Logger) CampaignProcessor {
+func New(store CampaignStore, tierService *tiers.TierService, logger *observability.Logger) CampaignProcessor {
 	return CampaignProcessor{
-		store:  store,
-		logger: logger,
+		store:       store,
+		tierService: tierService,
+		logger:      logger,
 	}
 }
 
@@ -170,6 +175,31 @@ func (p *CampaignProcessor) CreateCampaign(ctx context.Context, accountID uuid.U
 	// Validate campaign type
 	if !isValidCampaignType(params.Type) {
 		return store.Campaign{}, ErrInvalidCampaignType
+	}
+
+	// Check campaign limit
+	campaignLimit, err := p.tierService.GetLimitByAccountID(ctx, accountID, "campaigns")
+	if err != nil {
+		p.logger.Error(ctx, "failed to get campaign limit", err)
+		return store.Campaign{}, err
+	}
+
+	// If limit is not nil (not unlimited), check against current count
+	if campaignLimit != nil {
+		currentCount, err := p.store.CountCampaignsByAccountID(ctx, accountID)
+		if err != nil {
+			p.logger.Error(ctx, "failed to count campaigns", err)
+			return store.Campaign{}, err
+		}
+
+		if currentCount >= *campaignLimit {
+			ctx = observability.WithFields(ctx,
+				observability.Field{Key: "current_count", Value: currentCount},
+				observability.Field{Key: "limit", Value: *campaignLimit},
+			)
+			p.logger.Warn(ctx, "campaign limit reached")
+			return store.Campaign{}, ErrCampaignLimitReached
+		}
 	}
 
 	// Check if slug already exists for this account

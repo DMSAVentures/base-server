@@ -3,6 +3,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"context"
 	"errors"
 	"testing"
@@ -10,6 +11,35 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/mock/gomock"
 )
+
+// mockTierStore is a test implementation that returns unlimited tier info
+type mockTierStore struct{}
+
+func (m *mockTierStore) GetTierInfoByAccountID(ctx context.Context, accountID uuid.UUID) (store.TierInfo, error) {
+	return store.TierInfo{
+		PriceDescription: "team",
+		Features:         map[string]bool{"webhooks_zapier": true, "email_blasts": true, "json_export": true},
+		Limits:           map[string]*int{"campaigns": nil, "leads": nil}, // nil means unlimited
+	}, nil
+}
+
+func (m *mockTierStore) GetTierInfoByUserID(ctx context.Context, userID uuid.UUID) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+func (m *mockTierStore) GetTierInfoByPriceID(ctx context.Context, priceID uuid.UUID) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+func (m *mockTierStore) GetFreeTierInfo(ctx context.Context) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+// createTestTierService creates a TierService with unlimited access for testing
+func createTestTierService() *tiers.TierService {
+	logger := observability.NewLogger()
+	return tiers.New(&mockTierStore{}, logger)
+}
 
 func TestSignupUser_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -20,7 +50,7 @@ func TestSignupUser_Success(t *testing.T) {
 	mockCaptcha := NewMockCaptchaVerifier(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockEventDispatcher, mockCaptcha)
+	processor := New(mockStore, createTestTierService(), logger, mockEventDispatcher, mockCaptcha)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -68,7 +98,7 @@ func TestSignupUser_CampaignNotFound(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -94,7 +124,7 @@ func TestSignupUser_EmailAlreadyExists(t *testing.T) {
 	mockCaptcha := NewMockCaptchaVerifier(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, mockCaptcha)
+	processor := New(mockStore, createTestTierService(), logger, nil, mockCaptcha)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -129,7 +159,7 @@ func TestSignupUser_CampaignNotActive_Draft(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -159,7 +189,7 @@ func TestSignupUser_CampaignNotActive_Paused(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -189,7 +219,7 @@ func TestSignupUser_CampaignNotActive_Completed(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -219,7 +249,7 @@ func TestListUsers_Success(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -254,7 +284,7 @@ func TestListUsers_CampaignNotFound(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -276,7 +306,7 @@ func TestListUsers_Unauthorized(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -302,7 +332,7 @@ func TestGetUser_Success(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -336,7 +366,7 @@ func TestGetUser_NotFound(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -363,7 +393,7 @@ func TestDeleteUser_Success(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -394,7 +424,7 @@ func TestDeleteUser_NotFound(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -422,7 +452,7 @@ func TestVerifyUserByToken_Success(t *testing.T) {
 	mockEventDispatcher := NewMockEventDispatcher(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, mockEventDispatcher, nil)
+	processor := New(mockStore, createTestTierService(), logger, mockEventDispatcher, nil)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -458,7 +488,7 @@ func TestVerifyUserByToken_InvalidToken(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -480,7 +510,7 @@ func TestVerifyUserByToken_AlreadyVerified(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -507,7 +537,7 @@ func TestListUsers_WithExtendedFilters_Success(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -548,7 +578,7 @@ func TestListUsers_WithStatusFilter(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -594,7 +624,7 @@ func TestListUsers_WithSourceFilter(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -633,7 +663,7 @@ func TestListUsers_WithPositionRangeFilter(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -677,7 +707,7 @@ func TestListUsers_WithHasReferralsFilter(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -716,7 +746,7 @@ func TestListUsers_WithCustomFieldsFilter(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -765,7 +795,7 @@ func TestListUsers_WithDateRangeFilter(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -810,7 +840,7 @@ func TestListUsers_WithSortingParams(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -852,7 +882,7 @@ func TestListUsers_WithCombinedFilters(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -915,7 +945,7 @@ func TestListUsers_WithInvalidStatus(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -944,7 +974,7 @@ func TestListUsers_WithInvalidSource(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -974,7 +1004,7 @@ func TestListUsers_WithInvalidSourceAmongValid(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -1004,7 +1034,7 @@ func TestListUsers_Pagination(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -1054,7 +1084,7 @@ func TestListUsers_EmptyResult(t *testing.T) {
 	mockStore := NewMockWaitlistStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger, nil, nil)
+	processor := New(mockStore, createTestTierService(), logger, nil, nil)
 
 	ctx := context.Background()
 	accountID := uuid.New()

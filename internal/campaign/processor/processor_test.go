@@ -3,6 +3,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"context"
 	"errors"
 	"testing"
@@ -11,6 +12,35 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// mockTierStore is a test implementation that returns unlimited tier info
+type mockTierStore struct{}
+
+func (m *mockTierStore) GetTierInfoByAccountID(ctx context.Context, accountID uuid.UUID) (store.TierInfo, error) {
+	return store.TierInfo{
+		PriceDescription: "team",
+		Features:         map[string]bool{"webhooks_zapier": true, "email_blasts": true, "json_export": true},
+		Limits:           map[string]*int{"campaigns": nil, "leads": nil}, // nil means unlimited
+	}, nil
+}
+
+func (m *mockTierStore) GetTierInfoByUserID(ctx context.Context, userID uuid.UUID) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+func (m *mockTierStore) GetTierInfoByPriceID(ctx context.Context, priceID uuid.UUID) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+func (m *mockTierStore) GetFreeTierInfo(ctx context.Context) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+// createTestTierService creates a TierService with unlimited access for testing
+func createTestTierService() *tiers.TierService {
+	logger := observability.NewLogger()
+	return tiers.New(&mockTierStore{}, logger)
+}
+
 func TestCreateCampaign_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -18,7 +48,7 @@ func TestCreateCampaign_Success(t *testing.T) {
 	mockStore := NewMockCampaignStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -53,7 +83,7 @@ func TestCreateCampaign_SlugExists(t *testing.T) {
 	mockStore := NewMockCampaignStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -80,7 +110,7 @@ func TestGetCampaign_Success(t *testing.T) {
 	mockStore := NewMockCampaignStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -106,7 +136,7 @@ func TestGetCampaign_NotFound(t *testing.T) {
 	mockStore := NewMockCampaignStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -129,7 +159,7 @@ func TestGetCampaign_Unauthorized(t *testing.T) {
 	mockStore := NewMockCampaignStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -153,7 +183,7 @@ func TestListCampaigns_Success(t *testing.T) {
 	mockStore := NewMockCampaignStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -183,7 +213,7 @@ func TestDeleteCampaign_Success(t *testing.T) {
 	mockStore := NewMockCampaignStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -206,7 +236,7 @@ func TestDeleteCampaign_NotFound(t *testing.T) {
 	mockStore := NewMockCampaignStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()

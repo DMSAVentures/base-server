@@ -5,6 +5,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"base-server/internal/waitlist/utils"
 	"context"
 	"errors"
@@ -70,18 +71,21 @@ var (
 	ErrCaptchaRequired          = errors.New("captcha verification required")
 	ErrCaptchaFailed            = errors.New("captcha verification failed")
 	ErrCampaignNotActive        = errors.New("campaign is not accepting signups")
+	ErrJSONExportNotAvailable   = errors.New("JSON export is not available in your plan")
 )
 
 type WaitlistProcessor struct {
 	store           WaitlistStore
+	tierService     *tiers.TierService
 	logger          *observability.Logger
 	eventDispatcher EventDispatcher
 	captchaVerifier CaptchaVerifier
 }
 
-func New(store WaitlistStore, logger *observability.Logger, eventDispatcher EventDispatcher, captchaVerifier CaptchaVerifier) WaitlistProcessor {
+func New(store WaitlistStore, tierService *tiers.TierService, logger *observability.Logger, eventDispatcher EventDispatcher, captchaVerifier CaptchaVerifier) WaitlistProcessor {
 	return WaitlistProcessor{
 		store:           store,
+		tierService:     tierService,
 		logger:          logger,
 		eventDispatcher: eventDispatcher,
 		captchaVerifier: captchaVerifier,
@@ -495,6 +499,26 @@ func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID
 
 	totalPages := (totalCount + req.Limit - 1) / req.Limit
 
+	// Apply leads limit - truncate users array if beyond allowed limit
+	tierLimit, tierErr := p.tierService.GetLimitByAccountID(ctx, accountID, "leads")
+	if tierErr != nil {
+		p.logger.Error(ctx, "failed to get leads limit", tierErr)
+		// Continue without limit enforcement rather than failing the request
+	} else if tierLimit != nil && totalCount > *tierLimit {
+		// Truncate users array based on limit
+		accessibleCount := *tierLimit
+		if offset >= accessibleCount {
+			// Current page is entirely beyond the limit
+			users = []store.WaitlistUser{}
+		} else if offset+len(users) > accessibleCount {
+			// Truncate to only show accessible users
+			usersToShow := accessibleCount - offset
+			if usersToShow > 0 && usersToShow < len(users) {
+				users = users[:usersToShow]
+			}
+		}
+	}
+
 	return ListUsersResponse{
 		Users:      users,
 		TotalCount: totalCount,
@@ -718,6 +742,19 @@ func (p *WaitlistProcessor) SearchUsers(ctx context.Context, accountID, campaign
 		PageSize:   req.Limit,
 		TotalPages: (totalCount + req.Limit - 1) / req.Limit,
 	}, nil
+}
+
+// CheckJSONExportFeature checks if the account has access to JSON export
+func (p *WaitlistProcessor) CheckJSONExportFeature(ctx context.Context, accountID uuid.UUID) error {
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "json_export")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check JSON export feature", err)
+		return err
+	}
+	if !hasFeature {
+		return ErrJSONExportNotAvailable
+	}
+	return nil
 }
 
 // VerifyUser manually verifies a user's email

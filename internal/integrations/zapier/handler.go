@@ -12,6 +12,7 @@ import (
 	"base-server/internal/integrations"
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	webhookEvents "base-server/internal/webhooks/events"
 
 	"github.com/gin-gonic/gin"
@@ -38,15 +39,17 @@ type ZapierStore interface {
 
 // Handler handles Zapier-specific REST Hook endpoints
 type Handler struct {
-	store  ZapierStore
-	logger *observability.Logger
+	store       ZapierStore
+	tierService *tiers.TierService
+	logger      *observability.Logger
 }
 
 // NewHandler creates a new Zapier handler
-func NewHandler(store ZapierStore, logger *observability.Logger) *Handler {
+func NewHandler(store ZapierStore, tierService *tiers.TierService, logger *observability.Logger) *Handler {
 	return &Handler{
-		store:  store,
-		logger: logger,
+		store:       store,
+		tierService: tierService,
+		logger:      logger,
 	}
 }
 
@@ -155,16 +158,31 @@ func (h *Handler) HandleMe(c *gin.Context) {
 func (h *Handler) HandleSubscribe(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	accountIDStr, _ := c.Get("Account-ID")
+	accountID, _ := uuid.Parse(accountIDStr.(string))
+
+	// Check if account has Zapier feature
+	hasFeature, err := h.tierService.HasFeatureByAccountID(ctx, accountID, "webhooks_zapier")
+	if err != nil {
+		h.logger.Error(ctx, "failed to check Zapier feature", err)
+		apierrors.RespondWithError(c, err)
+		return
+	}
+	if !hasFeature {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Zapier integration is not available in your plan. Please upgrade to Team plan.",
+			"code":  apierrors.CodeFeatureNotAvailable,
+		})
+		return
+	}
+
 	var req SubscribeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		apierrors.RespondWithValidationError(c, err)
 		return
 	}
 
-	accountIDStr, _ := c.Get("Account-ID")
 	apiKeyIDStr, _ := c.Get("API-Key-ID")
-
-	accountID, _ := uuid.Parse(accountIDStr.(string))
 	apiKeyID, _ := uuid.Parse(apiKeyIDStr.(string))
 
 	ctx = observability.WithFields(ctx,

@@ -465,3 +465,17 @@ func (s *Store) LoadCampaignsSettings(ctx context.Context, campaigns []Campaign)
 	}
 	return result, nil
 }
+
+const sqlCountCampaignsByAccountID = `
+SELECT COUNT(*) FROM campaigns WHERE account_id = $1 AND deleted_at IS NULL
+`
+
+// CountCampaignsByAccountID returns the number of campaigns for an account
+func (s *Store) CountCampaignsByAccountID(ctx context.Context, accountID uuid.UUID) (int, error) {
+	var count int
+	err := s.db.GetContext(ctx, &count, sqlCountCampaignsByAccountID, accountID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count campaigns by account id: %w", err)
+	}
+	return count, nil
+}

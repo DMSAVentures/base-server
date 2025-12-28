@@ -758,6 +758,14 @@ func (h *Handler) HandleExportUsers(c *gin.Context) {
 		req.Format = "csv"
 	}
 
+	// Check if JSON export is requested and if account has the feature
+	if req.Format == "json" {
+		if err := h.processor.CheckJSONExportFeature(ctx, accountID); err != nil {
+			apierrors.RespondWithError(c, err)
+			return
+		}
+	}
+
 	// For now, return job accepted with a placeholder download URL
 	// In production, this would queue a background job and generate the file asynchronously
 	jobID := uuid.New()

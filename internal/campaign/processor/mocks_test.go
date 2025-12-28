@@ -42,6 +42,21 @@ func (m *MockCampaignStore) EXPECT() *MockCampaignStoreMockRecorder {
 	return m.recorder
 }
 
+// CountCampaignsByAccountID mocks base method.
+func (m *MockCampaignStore) CountCampaignsByAccountID(ctx context.Context, accountID uuid.UUID) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountCampaignsByAccountID", ctx, accountID)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountCampaignsByAccountID indicates an expected call of CountCampaignsByAccountID.
+func (mr *MockCampaignStoreMockRecorder) CountCampaignsByAccountID(ctx, accountID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountCampaignsByAccountID", reflect.TypeOf((*MockCampaignStore)(nil).CountCampaignsByAccountID), ctx, accountID)
+}
+
 // CreateCampaign mocks base method.
 func (m *MockCampaignStore) CreateCampaign(ctx context.Context, params store.CreateCampaignParams) (store.Campaign, error) {
 	m.ctrl.T.Helper()

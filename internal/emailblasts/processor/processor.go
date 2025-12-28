@@ -5,6 +5,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"base-server/internal/webhooks/events"
 	"context"
 	"errors"
@@ -36,30 +37,33 @@ type EmailBlastStore interface {
 }
 
 var (
-	ErrBlastNotFound       = errors.New("email blast not found")
-	ErrSegmentNotFound     = errors.New("segment not found")
-	ErrTemplateNotFound    = errors.New("email template not found")
-	ErrCampaignNotFound    = errors.New("campaign not found")
-	ErrUnauthorized        = errors.New("unauthorized access to email blast")
-	ErrBlastCannotModify   = errors.New("blast cannot be modified in current status")
-	ErrBlastCannotDelete   = errors.New("blast cannot be deleted in current status")
-	ErrBlastCannotStart    = errors.New("blast cannot be started in current status")
-	ErrBlastCannotPause    = errors.New("blast cannot be paused in current status")
-	ErrBlastCannotResume   = errors.New("blast cannot be resumed in current status")
-	ErrBlastCannotCancel   = errors.New("blast cannot be cancelled in current status")
-	ErrInvalidScheduleTime = errors.New("scheduled time must be in the future")
-	ErrNoRecipients        = errors.New("segment has no matching users")
+	ErrBlastNotFound         = errors.New("email blast not found")
+	ErrSegmentNotFound       = errors.New("segment not found")
+	ErrTemplateNotFound      = errors.New("email template not found")
+	ErrCampaignNotFound      = errors.New("campaign not found")
+	ErrUnauthorized          = errors.New("unauthorized access to email blast")
+	ErrBlastCannotModify     = errors.New("blast cannot be modified in current status")
+	ErrBlastCannotDelete     = errors.New("blast cannot be deleted in current status")
+	ErrBlastCannotStart      = errors.New("blast cannot be started in current status")
+	ErrBlastCannotPause      = errors.New("blast cannot be paused in current status")
+	ErrBlastCannotResume     = errors.New("blast cannot be resumed in current status")
+	ErrBlastCannotCancel     = errors.New("blast cannot be cancelled in current status")
+	ErrInvalidScheduleTime   = errors.New("scheduled time must be in the future")
+	ErrNoRecipients          = errors.New("segment has no matching users")
+	ErrEmailBlastsNotAvailable = errors.New("email blasts are not available in your plan")
 )
 
 type EmailBlastProcessor struct {
 	store           EmailBlastStore
+	tierService     *tiers.TierService
 	eventDispatcher *events.EventDispatcher
 	logger          *observability.Logger
 }
 
-func New(store EmailBlastStore, eventDispatcher *events.EventDispatcher, logger *observability.Logger) EmailBlastProcessor {
+func New(store EmailBlastStore, tierService *tiers.TierService, eventDispatcher *events.EventDispatcher, logger *observability.Logger) EmailBlastProcessor {
 	return EmailBlastProcessor{
 		store:           store,
+		tierService:     tierService,
 		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
@@ -82,6 +86,16 @@ func (p *EmailBlastProcessor) CreateEmailBlast(ctx context.Context, accountID, c
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 	)
+
+	// Check if account has email blasts feature
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "email_blasts")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check email blasts feature", err)
+		return store.EmailBlast{}, err
+	}
+	if !hasFeature {
+		return store.EmailBlast{}, ErrEmailBlastsNotAvailable
+	}
 
 	// Verify campaign exists and belongs to account
 	campaign, err := p.store.GetCampaignByID(ctx, campaignID)

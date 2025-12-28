@@ -186,11 +186,11 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	eventDispatcher := events.NewEventDispatcher(eventProducer, logger)
 
 	// Initialize campaign processor and handler
-	campaignProc := campaignProcessor.New(&deps.Store, logger)
+	campaignProc := campaignProcessor.New(&deps.Store, tierService, logger)
 	deps.CampaignHandler = campaignHandler.New(campaignProc, logger)
 
 	// Initialize waitlist processor, position calculator, and handler
-	waitlistProc := waitlistProcessor.New(&deps.Store, logger, eventDispatcher, turnstileClient)
+	waitlistProc := waitlistProcessor.New(&deps.Store, tierService, logger, eventDispatcher, turnstileClient)
 	positionCalculator := waitlistProcessor.NewPositionCalculator(&deps.Store, logger)
 	deps.WaitlistHandler = waitlistHandler.New(waitlistProc, positionCalculator, logger, cfg.Services.WebAppURI)
 
@@ -215,12 +215,12 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	deps.SegmentsHandler = segmentsHandler.New(segmentsProc, logger)
 
 	// Initialize email blasts processor and handler
-	emailblastsProc := emailblastsProcessor.New(&deps.Store, eventDispatcher, logger)
+	emailblastsProc := emailblastsProcessor.New(&deps.Store, tierService, eventDispatcher, logger)
 	deps.EmailblastsHandler = emailblastsHandler.New(emailblastsProc, logger)
 
 	// Initialize webhook services
 	webhookSvc := webhookService.New(&deps.Store, logger)
-	webhookProc := webhookEventProcessor.New(&deps.Store, logger, webhookSvc)
+	webhookProc := webhookEventProcessor.New(&deps.Store, tierService, logger, webhookSvc)
 	deps.WebhookHandler = webhookHandler.New(webhookProc, logger)
 
 	// Initialize webhook retry worker (runs every 30 seconds)
@@ -253,7 +253,7 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 
 	// Initialize integration services (Zapier, Slack, etc.)
 	// Initialize Zapier handler (uses API key auth, no OAuth needed)
-	deps.ZapierHandler = zapierHandler.NewHandler(&deps.Store, logger)
+	deps.ZapierHandler = zapierHandler.NewHandler(&deps.Store, tierService, logger)
 
 	// Initialize API Keys handler
 	deps.APIKeysHandler = apikeysHandler.New(&deps.Store, logger)

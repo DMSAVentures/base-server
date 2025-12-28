@@ -77,6 +77,13 @@ const (
 	CodeBlastInProgress       = "BLAST_IN_PROGRESS"
 	CodeBlastCannotModify     = "BLAST_CANNOT_MODIFY"
 	CodeTemplateNotFound      = "TEMPLATE_NOT_FOUND"
+
+	// Tier and limit error codes
+	CodeCampaignLimitReached   = "CAMPAIGN_LIMIT_REACHED"
+	CodeLeadsLimitReached      = "LEADS_LIMIT_REACHED"
+	CodeTeamMemberLimitReached = "TEAM_MEMBER_LIMIT_REACHED"
+	CodeFeatureNotAvailable    = "FEATURE_NOT_AVAILABLE"
+	CodeUpgradeRequired        = "UPGRADE_REQUIRED"
 )
 
 // NotFound creates a 404 Not Found error

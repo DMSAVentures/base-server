@@ -14,6 +14,7 @@ import (
 	segmentProcessor "base-server/internal/segments/processor"
 	"base-server/internal/store"
 	waitlistProcessor "base-server/internal/waitlist/processor"
+	webhookProcessor "base-server/internal/webhooks/processor"
 )
 
 // MapError converts domain/processor errors to APIErrors.
@@ -72,6 +73,13 @@ func MapError(err error) *APIError {
 
 	case errors.Is(err, campaignProcessor.ErrUnauthorized):
 		return Forbidden("You do not have access to this campaign")
+
+	case errors.Is(err, campaignProcessor.ErrCampaignLimitReached):
+		return &APIError{
+			StatusCode: 403,
+			Code:       CodeCampaignLimitReached,
+			Message:    "You have reached your campaign limit. Please upgrade your plan to create more campaigns.",
+		}
 
 	// Map waitlist processor errors
 	case errors.Is(err, waitlistProcessor.ErrCampaignNotFound):
@@ -231,6 +239,29 @@ func MapError(err error) *APIError {
 
 	case errors.Is(err, emailblastsProcessor.ErrNoRecipients):
 		return BadRequest(CodeInvalidInput, "Segment has no matching users to send to")
+
+	case errors.Is(err, emailblastsProcessor.ErrEmailBlastsNotAvailable):
+		return &APIError{
+			StatusCode: 403,
+			Code:       CodeFeatureNotAvailable,
+			Message:    "Email blasts are not available in your plan. Please upgrade to Team plan.",
+		}
+
+	// Map webhook processor errors
+	case errors.Is(err, webhookProcessor.ErrWebhooksNotAvailable):
+		return &APIError{
+			StatusCode: 403,
+			Code:       CodeFeatureNotAvailable,
+			Message:    "Webhooks are not available in your plan. Please upgrade to Team plan.",
+		}
+
+	// Map waitlist processor feature errors
+	case errors.Is(err, waitlistProcessor.ErrJSONExportNotAvailable):
+		return &APIError{
+			StatusCode: 403,
+			Code:       CodeFeatureNotAvailable,
+			Message:    "JSON export is not available in your plan. Please upgrade to Pro or Team plan.",
+		}
 
 	// Map billing processor errors
 	case errors.Is(err, billingProcessor.ErrNoActiveSubscription):
