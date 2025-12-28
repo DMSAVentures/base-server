@@ -22,31 +22,13 @@ type EventProcessor interface {
 	Name() string
 }
 
-// EventConsumer defines the interface for consuming events from Kafka
-// and distributing them to a worker pool.
+// EventConsumer defines the interface for consuming events from Kafka.
 type EventConsumer interface {
 	// Start begins consuming events from Kafka and processing them.
-	// Blocks until context is cancelled or an unrecoverable error occurs.
+	// Blocks until Stop is called.
 	Start(ctx context.Context) error
 
-	// Stop gracefully shuts down the consumer, draining in-flight events.
-	Stop()
-}
-
-// WorkerPool defines the interface for managing a pool of event processing workers.
-type WorkerPool interface {
-	// Start initializes the worker pool with N workers.
-	// Each worker will process events by calling the EventProcessor.
-	Start(ctx context.Context) error
-
-	// Submit adds an event to the worker pool for processing.
-	// Blocks if the event queue is full.
-	Submit(ctx context.Context, event EventMessage) error
-
-	// Drain stops accepting new events and waits for in-flight events to complete.
-	// Returns after all workers have finished processing or context is cancelled.
-	Drain(ctx context.Context) error
-
-	// Stop immediately stops all workers.
+	// Stop gracefully shuts down the consumer.
+	// Waits for in-flight events to complete before returning.
 	Stop()
 }

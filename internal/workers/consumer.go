@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"base-server/internal/observability"
@@ -23,225 +24,238 @@ type ConsumerConfig struct {
 	// Topic is the Kafka topic to consume from.
 	Topic string
 
-	// WorkerPool configuration
-	WorkerPoolConfig WorkerPoolConfig
+	// NumWorkers is the number of concurrent workers.
+	NumWorkers int
+
+	// QueueSize is the buffer size for the event channel.
+	QueueSize int
+
+	// DrainTimeout is the maximum time to wait for in-flight events during shutdown.
+	DrainTimeout time.Duration
 }
 
 // DefaultConsumerConfig returns sensible defaults for a consumer.
 func DefaultConsumerConfig(brokers []string, consumerGroup, topic string) ConsumerConfig {
 	return ConsumerConfig{
-		Brokers:          brokers,
-		ConsumerGroup:    consumerGroup,
-		Topic:            topic,
-		WorkerPoolConfig: DefaultWorkerPoolConfig(),
+		Brokers:       brokers,
+		ConsumerGroup: consumerGroup,
+		Topic:         topic,
+		NumWorkers:    10,
+		QueueSize:     100,
+		DrainTimeout:  30 * time.Second,
 	}
 }
 
-// consumer implements the EventConsumer interface with worker pool and proper offset management.
+// eventWithMsg pairs an event with its Kafka message for offset tracking.
+type eventWithMsg struct {
+	event EventMessage
+	msg   kafkago.Message
+}
+
+// consumer implements the EventConsumer interface.
 type consumer struct {
 	config    ConsumerConfig
 	reader    *kafkago.Reader
 	processor EventProcessor
-	pool      WorkerPool
 	logger    *observability.Logger
 
-	// Offset management for safe commits
-	mu              sync.Mutex
-	pendingMessages map[string]*kafkago.Message // event_id -> kafka message (not yet processed)
+	// Event channel for worker distribution
+	eventCh chan eventWithMsg
 
-	// Lifecycle
-	stopOnce sync.Once
-	stopped  bool
+	// Lifecycle management
+	cancelFetch context.CancelFunc // cancels the fetch context
+	doneCh      chan struct{}      // closed when Start() returns
+	stopping    atomic.Bool
+	stopOnce    sync.Once
 }
 
-// NewConsumer creates a new Kafka event consumer with a worker pool.
-// The consumer will:
-// - Fetch messages from Kafka
-// - Distribute them to a pool of N workers
-// - Only commit offsets for successfully processed messages
-// - On failure, messages will be redelivered when consumer restarts
+// NewConsumer creates a new Kafka event consumer.
 func NewConsumer(
 	config ConsumerConfig,
 	processor EventProcessor,
 	logger *observability.Logger,
 ) EventConsumer {
-	c := &consumer{
-		config:          config,
-		processor:       processor,
-		logger:          logger,
-		pendingMessages: make(map[string]*kafkago.Message),
+	// Apply defaults
+	if config.NumWorkers <= 0 {
+		config.NumWorkers = 10
+	}
+	if config.QueueSize <= 0 {
+		config.QueueSize = 100
+	}
+	if config.DrainTimeout <= 0 {
+		config.DrainTimeout = 30 * time.Second
 	}
 
-	// Create Kafka reader with manual offset commits
+	c := &consumer{
+		config:    config,
+		processor: processor,
+		logger:    logger,
+		eventCh:   make(chan eventWithMsg, config.QueueSize),
+		doneCh:    make(chan struct{}),
+	}
+
+	// Create Kafka reader
 	c.reader = kafkago.NewReader(kafkago.ReaderConfig{
-		Brokers:  config.Brokers,
-		Topic:    config.Topic,
-		GroupID:  config.ConsumerGroup,
-		MinBytes: 10e3, // 10KB
-		MaxBytes: 10e6, // 10MB
-		// Start from earliest message if no committed offset exists
-		StartOffset: kafkago.FirstOffset,
-		// Manual commit - we'll commit after successful processing
-		CommitInterval: 0,
+		Brokers:        config.Brokers,
+		Topic:          config.Topic,
+		GroupID:        config.ConsumerGroup,
+		MinBytes:       10e3, // 10KB
+		MaxBytes:       10e6, // 10MB
+		StartOffset:    kafkago.FirstOffset,
+		CommitInterval: 0, // Manual commit
 	})
 
-	// Configure worker pool with result callback for offset management
-	config.WorkerPoolConfig.OnResult = c.handleProcessingResult
-	c.pool = NewWorkerPool(config.WorkerPoolConfig, processor, logger)
+	ctx := observability.WithFields(context.Background(),
+		observability.Field{Key: "processor", Value: processor.Name()},
+		observability.Field{Key: "consumer_group", Value: config.ConsumerGroup},
+		observability.Field{Key: "topic", Value: config.Topic},
+		observability.Field{Key: "num_workers", Value: config.NumWorkers},
+	)
+	logger.Info(ctx, fmt.Sprintf("Initialized consumer for %s processor", processor.Name()))
 
 	return c
 }
 
-// Start begins consuming events from Kafka and processing them with the worker pool.
+// Start begins consuming events and blocks until Stop is called.
 func (c *consumer) Start(ctx context.Context) error {
-	if c.stopped {
-		return fmt.Errorf("consumer already stopped")
-	}
+	defer close(c.doneCh)
 
-	consumerCtx := observability.WithFields(ctx,
+	// Create cancellable context with logging fields
+	ctx, cancel := context.WithCancel(context.Background())
+	c.cancelFetch = cancel
+	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "consumer_group", Value: c.config.ConsumerGroup},
 		observability.Field{Key: "topic", Value: c.config.Topic},
 		observability.Field{Key: "processor", Value: c.processor.Name()},
 	)
 
-	c.logger.Info(consumerCtx, fmt.Sprintf("Starting Kafka consumer for %s processor with %d workers",
-		c.processor.Name(), c.config.WorkerPoolConfig.NumWorkers))
+	c.logger.Info(ctx, fmt.Sprintf("Starting consumer for %s with %d workers",
+		c.processor.Name(), c.config.NumWorkers))
 
-	// Start worker pool
-	if err := c.pool.Start(ctx); err != nil {
-		return fmt.Errorf("failed to start worker pool: %w", err)
+	// Start workers - they process until eventCh is closed
+	var workerWg sync.WaitGroup
+	for i := 0; i < c.config.NumWorkers; i++ {
+		workerWg.Add(1)
+		go c.worker(&workerWg, i, ctx)
 	}
 
-	// Main consumption loop
+	// Fetch loop - runs until Stop() cancels the context
+	c.fetchLoop(ctx)
+
+	// Shutdown: close channel and wait for workers to drain
+	close(c.eventCh)
+
+	// Wait for workers with timeout
+	done := make(chan struct{})
+	go func() {
+		workerWg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		c.logger.Info(ctx, "All workers finished processing")
+	case <-time.After(c.config.DrainTimeout):
+		c.logger.Warn(ctx, "Drain timeout - some events may not have completed")
+	}
+
+	// Close Kafka reader
+	if err := c.reader.Close(); err != nil {
+		c.logger.Error(ctx, "Failed to close Kafka reader", err)
+	}
+
+	c.logger.Info(ctx, fmt.Sprintf("Consumer stopped for %s", c.processor.Name()))
+	return nil
+}
+
+// fetchLoop fetches messages from Kafka until context is cancelled.
+func (c *consumer) fetchLoop(ctx context.Context) {
 	for {
+		// Check if stopping
+		if c.stopping.Load() {
+			return
+		}
+
+		// Fetch message (blocks until message available or context cancelled)
+		msg, err := c.reader.FetchMessage(ctx)
+		if err != nil {
+			if c.stopping.Load() || ctx.Err() != nil {
+				return // Clean shutdown
+			}
+			c.logger.Error(ctx, "Failed to fetch message from Kafka", err)
+			time.Sleep(1 * time.Second)
+			continue
+		}
+
+		// Parse event
+		var event EventMessage
+		if err := json.Unmarshal(msg.Value, &event); err != nil {
+			c.logger.Error(ctx, "Failed to unmarshal event, skipping", err)
+			_ = c.reader.CommitMessages(ctx, msg)
+			continue
+		}
+
+		// Send to workers (blocks if queue full)
 		select {
+		case c.eventCh <- eventWithMsg{event: event, msg: msg}:
 		case <-ctx.Done():
-			c.logger.Info(consumerCtx, "Consumer context cancelled")
-			return ctx.Err()
-
-		default:
-			// Fetch message from Kafka
-			msg, err := c.reader.FetchMessage(ctx)
-			if err != nil {
-				if ctx.Err() != nil {
-					// Context cancelled, exit gracefully
-					return ctx.Err()
-				}
-				c.logger.Error(consumerCtx, "Failed to fetch message from Kafka", err)
-				time.Sleep(1 * time.Second) // Back off on error
-				continue
-			}
-
-			// Parse event message
-			var event EventMessage
-			if err := json.Unmarshal(msg.Value, &event); err != nil {
-				c.logger.Error(consumerCtx, "Failed to unmarshal event, skipping", err)
-				// Commit bad messages to skip them
-				if commitErr := c.reader.CommitMessages(ctx, msg); commitErr != nil {
-					c.logger.Error(consumerCtx, "Failed to commit bad message", commitErr)
-				}
-				continue
-			}
-
-			msgCtx := observability.WithFields(consumerCtx,
-				observability.Field{Key: "event_type", Value: event.Type},
-				observability.Field{Key: "event_id", Value: event.ID},
-				observability.Field{Key: "partition", Value: msg.Partition},
-				observability.Field{Key: "offset", Value: msg.Offset},
-			)
-
-			// Track message for offset management (must happen before Submit)
-			c.trackMessage(event.ID, &msg)
-
-			// Submit to worker pool (blocks if queue is full)
-			// Worker will call handleProcessingResult when done
-			if err := c.pool.Submit(msgCtx, event); err != nil {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				c.logger.Error(msgCtx, "Failed to submit event to worker pool", err)
-				// Clean up pending message since we won't process it
-				c.mu.Lock()
-				delete(c.pendingMessages, event.ID)
-				c.mu.Unlock()
-			}
+			return
 		}
 	}
 }
 
-// Stop gracefully shuts down the consumer, draining in-flight events.
-func (c *consumer) Stop() {
-	c.stopOnce.Do(func() {
-		c.stopped = true
+// worker processes events from the channel until it's closed.
+func (c *consumer) worker(wg *sync.WaitGroup, id int, ctx context.Context) {
+	defer wg.Done()
 
-		ctx := context.Background()
-		ctx = observability.WithFields(ctx,
-			observability.Field{Key: "processor", Value: c.processor.Name()},
-		)
-
-		c.logger.Info(ctx, fmt.Sprintf("Stopping consumer for %s processor",
-			c.processor.Name()))
-
-		// Drain worker pool (wait for in-flight events)
-		drainCtx, cancel := context.WithTimeout(ctx, c.config.WorkerPoolConfig.DrainTimeout)
-		defer cancel()
-
-		if err := c.pool.Drain(drainCtx); err != nil {
-			c.logger.Error(ctx, "Failed to drain worker pool gracefully", err)
-			c.pool.Stop() // Force stop
-		}
-
-		// Close Kafka reader
-		if err := c.reader.Close(); err != nil {
-			c.logger.Error(ctx, "Failed to close Kafka reader", err)
-		}
-
-		c.logger.Info(ctx, fmt.Sprintf("Consumer stopped for %s processor",
-			c.processor.Name()))
-	})
-}
-
-// trackMessage tracks a message that's been submitted for processing.
-func (c *consumer) trackMessage(eventID string, msg *kafkago.Message) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.pendingMessages[eventID] = msg
-}
-
-// handleProcessingResult is called by workers after processing each event.
-// This handles offset commits - only committing on success to enable replay on failure.
-func (c *consumer) handleProcessingResult(result ProcessingResult) {
-	c.mu.Lock()
-	msg, exists := c.pendingMessages[result.Event.ID]
-	c.mu.Unlock()
-
-	if !exists {
-		c.logger.Warn(context.Background(), fmt.Sprintf("Received result for unknown event %s", result.Event.ID))
-		return
-	}
-
-	ctx := observability.WithFields(context.Background(),
-		observability.Field{Key: "event_id", Value: result.Event.ID},
-		observability.Field{Key: "event_type", Value: result.Event.Type},
-		observability.Field{Key: "partition", Value: msg.Partition},
-		observability.Field{Key: "offset", Value: msg.Offset},
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "worker_id", Value: id},
 	)
 
-	if result.Error != nil {
-		// Processing failed - DO NOT commit offset
-		// Message will be redelivered when consumer restarts
-		c.logger.Error(ctx, "Event processing failed, offset NOT committed (will replay on restart)", result.Error)
-	} else {
-		// Processing succeeded - commit offset
-		if err := c.reader.CommitMessages(ctx, *msg); err != nil {
-			c.logger.Error(ctx, "Failed to commit offset", err)
-		} else {
-			c.logger.Info(ctx, "Successfully processed event and committed offset")
+	c.logger.Info(ctx, fmt.Sprintf("Worker %d started for %s processor", id, c.processor.Name()))
+
+	for e := range c.eventCh {
+		eventCtx := observability.WithFields(ctx,
+			observability.Field{Key: "event_id", Value: e.event.ID},
+			observability.Field{Key: "event_type", Value: e.event.Type},
+		)
+
+		// Process the event (no context cancellation - always completes)
+		err := c.processor.Process(eventCtx, e.event)
+
+		if err != nil {
+			c.logger.Error(eventCtx, "Failed to process event", err)
+			// Don't commit - will be redelivered on restart
+		} else if c.reader != nil {
+			// Commit offset on success
+			if commitErr := c.reader.CommitMessages(context.Background(), e.msg); commitErr != nil {
+				c.logger.Error(eventCtx, "Failed to commit offset", commitErr)
+			}
 		}
 	}
 
-	// Remove from pending
-	c.mu.Lock()
-	delete(c.pendingMessages, result.Event.ID)
-	c.mu.Unlock()
+	c.logger.Info(ctx, fmt.Sprintf("Worker %d stopped", id))
+}
+
+// Stop gracefully shuts down the consumer.
+// It signals the fetch loop to stop, waits for in-flight events to complete,
+// and returns only after full shutdown.
+func (c *consumer) Stop() {
+	c.stopOnce.Do(func() {
+		logCtx := observability.WithFields(context.Background(),
+			observability.Field{Key: "processor", Value: c.processor.Name()},
+		)
+		c.logger.Info(logCtx, fmt.Sprintf("Stopping consumer for %s", c.processor.Name()))
+
+		// Signal stopping
+		c.stopping.Store(true)
+
+		// Cancel fetch context to unblock FetchMessage
+		if c.cancelFetch != nil {
+			c.cancelFetch()
+		}
+
+		// Wait for Start() to complete (which waits for workers)
+		<-c.doneCh
+	})
 }

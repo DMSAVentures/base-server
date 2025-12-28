@@ -222,29 +222,29 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	// Initialize webhook retry worker (runs every 30 seconds)
 	deps.WebhookWorker = webhookWorker.New(webhookSvc, logger, 30*time.Second)
 
-	// Initialize webhook event processor and consumer with worker pool
+	// Initialize webhook event processor and consumer
 	webhookEvtProcessor := webhookEventProcessor.NewWebhookEventProcessor(webhookSvc, logger)
 	webhookConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup, cfg.Kafka.Topic)
-	webhookConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.WebhookWorkers
+	webhookConsumerConfig.NumWorkers = cfg.WorkerPool.WebhookWorkers
 	deps.WebhookConsumer = workers.NewConsumer(webhookConsumerConfig, webhookEvtProcessor, logger)
 
-	// Initialize email event processor and consumer with worker pool
+	// Initialize email event processor and consumer
 	emailEvtProcessor := email.NewEmailEventProcessor(emailService, deps.Store, logger)
 	emailConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-email", cfg.Kafka.Topic)
-	emailConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.EmailWorkers
+	emailConsumerConfig.NumWorkers = cfg.WorkerPool.EmailWorkers
 	deps.EmailConsumer = workers.NewConsumer(emailConsumerConfig, emailEvtProcessor, logger)
 
-	// Initialize position calculation event processor and consumer with worker pool
+	// Initialize position calculation event processor and consumer
 	positionEvtProcessor := positionWorker.NewProcessor(positionCalculator, logger)
 	positionConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-position", cfg.Kafka.Topic)
-	positionConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.PositionWorkers
+	positionConsumerConfig.NumWorkers = cfg.WorkerPool.PositionWorkers
 	deps.PositionConsumer = workers.NewConsumer(positionConsumerConfig, positionEvtProcessor, logger)
 
-	// Initialize spam detection processor and consumer with worker pool
+	// Initialize spam detection processor and consumer
 	spamProc := spamProcessor.New(&deps.Store, logger)
 	spamEvtProcessor := spamConsumer.NewSpamEventProcessor(spamProc, deps.Store, logger)
 	spamConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-spam", cfg.Kafka.Topic)
-	spamConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.SpamWorkers
+	spamConsumerConfig.NumWorkers = cfg.WorkerPool.SpamWorkers
 	deps.SpamConsumer = workers.NewConsumer(spamConsumerConfig, spamEvtProcessor, logger)
 
 	// Initialize integration services (Zapier, Slack, etc.)
@@ -257,18 +257,18 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	// Initialize integration service with deliverers
 	intService := integrationService.New(&deps.Store, logger)
 
-	// Initialize integration event processor and consumer with worker pool
+	// Initialize integration event processor and consumer
 	integrationEvtProcessor := integrationConsumer.NewIntegrationEventProcessor(intService, &deps.Store, logger)
 	integrationConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-integrations", cfg.Kafka.Topic)
-	integrationConsumerConfig.WorkerPoolConfig.NumWorkers = cfg.WorkerPool.IntegrationWorkers
+	integrationConsumerConfig.NumWorkers = cfg.WorkerPool.IntegrationWorkers
 	deps.IntegrationConsumer = workers.NewConsumer(integrationConsumerConfig, integrationEvtProcessor, logger)
 
 	logger.Info(ctx, "Integrations system initialized")
 
-	// Initialize blast event processor and consumer with worker pool
+	// Initialize blast event processor and consumer
 	blastEvtProcessor := blastWorker.NewBlastEventProcessor(&deps.Store, emailService, eventDispatcher, logger)
 	blastConsumerConfig := workers.DefaultConsumerConfig(brokerList, cfg.Kafka.ConsumerGroup+"-blast", cfg.Kafka.Topic)
-	blastConsumerConfig.WorkerPoolConfig.NumWorkers = 5 // Configurable via cfg if needed
+	blastConsumerConfig.NumWorkers = 5 // Configurable via cfg if needed
 	deps.BlastConsumer = workers.NewConsumer(blastConsumerConfig, blastEvtProcessor, logger)
 
 	// Initialize blast scheduler (checks for scheduled blasts every 30 seconds)

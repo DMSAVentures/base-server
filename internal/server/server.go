@@ -1,18 +1,20 @@
 package server
 
 import (
-	apisetup "base-server/internal/api"
-	"base-server/internal/bootstrap"
-	"base-server/internal/config"
-	"base-server/internal/observability"
 	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
+
+	apisetup "base-server/internal/api"
+	"base-server/internal/bootstrap"
+	"base-server/internal/config"
+	"base-server/internal/observability"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -159,15 +161,27 @@ func (s *Server) WaitForShutdown(ctx context.Context) error {
 	<-quit
 	s.logger.Info(ctx, "Shutting down server...")
 
-	// Stop webhook worker and consumers
-	s.deps.WebhookWorker.Stop()
-	s.deps.WebhookConsumer.Stop()
-	s.deps.EmailConsumer.Stop()
-	s.deps.PositionConsumer.Stop()
-	s.deps.SpamConsumer.Stop()
-	s.deps.IntegrationConsumer.Stop()
-	s.deps.BlastConsumer.Stop()
-	s.deps.BlastScheduler.Stop()
+	// Stop all consumers and workers in parallel for faster shutdown
+	var wg sync.WaitGroup
+	stopFuncs := []func(){
+		s.deps.WebhookWorker.Stop,
+		s.deps.WebhookConsumer.Stop,
+		s.deps.EmailConsumer.Stop,
+		s.deps.PositionConsumer.Stop,
+		s.deps.SpamConsumer.Stop,
+		s.deps.IntegrationConsumer.Stop,
+		s.deps.BlastConsumer.Stop,
+		s.deps.BlastScheduler.Stop,
+	}
+
+	for _, stopFn := range stopFuncs {
+		wg.Add(1)
+		go func(fn func()) {
+			defer wg.Done()
+			fn()
+		}(stopFn)
+	}
+	wg.Wait()
 
 	// The context is used to inform the server it has 5 seconds to finish
 	// the request it is currently handling
