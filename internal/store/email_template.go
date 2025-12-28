@@ -85,6 +85,24 @@ func (s *Store) GetEmailTemplatesByCampaign(ctx context.Context, campaignID uuid
 	return templates, nil
 }
 
+const sqlGetEmailTemplatesByAccount = `
+SELECT et.id, et.campaign_id, et.name, et.type, et.subject, et.html_body, et.blocks_json, et.enabled, et.send_automatically, et.variant_name, et.variant_weight, et.created_at, et.updated_at, et.deleted_at
+FROM email_templates et
+JOIN campaigns c ON et.campaign_id = c.id
+WHERE c.account_id = $1 AND et.deleted_at IS NULL AND c.deleted_at IS NULL
+ORDER BY et.created_at DESC
+`
+
+// GetEmailTemplatesByAccount retrieves all email templates for an account across all campaigns
+func (s *Store) GetEmailTemplatesByAccount(ctx context.Context, accountID uuid.UUID) ([]EmailTemplate, error) {
+	var templates []EmailTemplate
+	err := s.db.SelectContext(ctx, &templates, sqlGetEmailTemplatesByAccount, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get email templates by account: %w", err)
+	}
+	return templates, nil
+}
+
 const sqlGetEmailTemplateByType = `
 SELECT id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
 FROM email_templates

@@ -20,6 +20,7 @@ type EmailTemplateStore interface {
 	CreateEmailTemplate(ctx context.Context, params store.CreateEmailTemplateParams) (store.EmailTemplate, error)
 	GetEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.EmailTemplate, error)
 	GetEmailTemplatesByCampaign(ctx context.Context, campaignID uuid.UUID) ([]store.EmailTemplate, error)
+	GetEmailTemplatesByAccount(ctx context.Context, accountID uuid.UUID) ([]store.EmailTemplate, error)
 	UpdateEmailTemplate(ctx context.Context, templateID uuid.UUID, params store.UpdateEmailTemplateParams) (store.EmailTemplate, error)
 	DeleteEmailTemplate(ctx context.Context, templateID uuid.UUID) error
 }
@@ -213,6 +214,26 @@ func (p *EmailTemplateProcessor) ListEmailTemplates(ctx context.Context, account
 			}
 		}
 		return filtered, nil
+	}
+
+	return templates, nil
+}
+
+// ListAllEmailTemplates retrieves all email templates for an account across all campaigns
+func (p *EmailTemplateProcessor) ListAllEmailTemplates(ctx context.Context, accountID uuid.UUID) ([]store.EmailTemplate, error) {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "account_id", Value: accountID.String()},
+	)
+
+	templates, err := p.store.GetEmailTemplatesByAccount(ctx, accountID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to list all email templates", err)
+		return nil, err
+	}
+
+	// Ensure templates is never null - return empty array instead
+	if templates == nil {
+		templates = []store.EmailTemplate{}
 	}
 
 	return templates, nil

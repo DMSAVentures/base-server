@@ -127,6 +127,33 @@ func (h *Handler) HandleListEmailTemplates(c *gin.Context) {
 	c.JSON(http.StatusOK, templates)
 }
 
+// HandleListAllEmailTemplates handles GET /api/v1/email-templates
+func (h *Handler) HandleListAllEmailTemplates(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get account ID from context
+	accountIDStr, exists := c.Get("Account-ID")
+	if !exists {
+		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		return
+	}
+
+	accountID, err := uuid.Parse(accountIDStr.(string))
+	if err != nil {
+		h.logger.Error(ctx, "failed to parse account ID", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		return
+	}
+
+	templates, err := h.processor.ListAllEmailTemplates(ctx, accountID)
+	if err != nil {
+		apierrors.RespondWithError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, templates)
+}
+
 // HandleGetEmailTemplate handles GET /api/v1/campaigns/:campaign_id/email-templates/:template_id
 func (h *Handler) HandleGetEmailTemplate(c *gin.Context) {
 	ctx := c.Request.Context()

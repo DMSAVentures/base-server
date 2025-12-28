@@ -115,6 +115,9 @@ func (a *API) RegisterRoutes() {
 	// Campaign API routes (v1)
 	v1Group := apiGroup.Group("/v1", a.authHandler.HandleJWTMiddleware)
 	{
+		// Email Templates routes (account-level)
+		v1Group.GET("/email-templates", a.emailTemplateHandler.HandleListAllEmailTemplates)
+
 		campaignsGroup := v1Group.Group("/campaigns")
 		{
 			campaignsGroup.POST("", a.campaignHandler.HandleCreateCampaign)
