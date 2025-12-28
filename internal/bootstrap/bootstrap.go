@@ -42,6 +42,7 @@ import (
 	segmentsProcessor "base-server/internal/segments/processor"
 	spamConsumer "base-server/internal/spam/consumer"
 	spamProcessor "base-server/internal/spam/processor"
+	"base-server/internal/tiers"
 	voiceCallHandler "base-server/internal/voicecall/handler"
 	voiceCallProcessor "base-server/internal/voicecall/processor"
 	waitlistHandler "base-server/internal/waitlist/handler"
@@ -154,6 +155,9 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	)
 	deps.BillingHandler = billingHandler.New(billingProc, logger)
 
+	// Initialize tier service
+	tierService := tiers.New(&deps.Store, logger)
+
 	// Initialize auth processor and handler
 	authConfig := processor.AuthConfig{
 		Email: processor.EmailConfig{
@@ -167,7 +171,7 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 		},
 	}
 	authProc := processor.New(&deps.Store, authConfig, googleOAuthClient, &billingProc, emailService, logger)
-	deps.AuthHandler = handler.New(authProc, logger)
+	deps.AuthHandler = handler.New(authProc, tierService, logger)
 
 	// Initialize AI capabilities processor and handler
 	aiCapability := AICapabilities.New(logger, cfg.Services.GoogleAIAPIKey, cfg.Services.OpenAIAPIKey, &deps.Store)

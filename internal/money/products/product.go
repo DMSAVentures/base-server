@@ -89,7 +89,7 @@ func (p *ProductService) UpdatePrice(ctx context.Context, priceUpdated stripe.Pr
 		return fmt.Errorf("failed to find associalted product: %w", err)
 	}
 
-	err = p.store.UpdatePriceByStripeID(ctx, product.ID, priceUpdated.Nickname, priceUpdated.ID)
+	err = p.store.UpdatePriceByStripeID(ctx, product.ID, priceUpdated.LookupKey, priceUpdated.ID)
 	if err != nil {
 		p.logger.Error(ctx, "failed to update price", err)
 		return fmt.Errorf("failed to update price: %w", err)

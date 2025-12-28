@@ -4,6 +4,7 @@ import (
 	"base-server/internal/apierrors"
 	"base-server/internal/auth/processor"
 	"base-server/internal/observability"
+	"base-server/internal/tiers"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 type Handler struct {
 	authProcessor processor.AuthProcessor
+	tierService   *tiers.TierService
 	logger        *observability.Logger
 }
 
@@ -29,8 +31,16 @@ type EmailLoginRequest struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
-func New(authProcessor processor.AuthProcessor, logger *observability.Logger) Handler {
-	return Handler{authProcessor: authProcessor, logger: logger}
+func New(authProcessor processor.AuthProcessor, tierService *tiers.TierService, logger *observability.Logger) Handler {
+	return Handler{authProcessor: authProcessor, tierService: tierService, logger: logger}
+}
+
+// UserInfoResponse combines user info with tier information
+type UserInfoResponse struct {
+	FirstName  string         `json:"first_name"`
+	LastName   string         `json:"last_name"`
+	ExternalID uuid.UUID      `json:"external_id"`
+	Tier       *tiers.TierInfo `json:"tier,omitempty"`
 }
 
 func (h *Handler) HandleEmailLogin(c *gin.Context) {
@@ -127,8 +137,31 @@ func (h *Handler) GetUserInfo(context *gin.Context) {
 		return
 	}
 
-	context.JSON(http.StatusOK, user)
-	return
+	// Build response with user info
+	response := UserInfoResponse{
+		FirstName:  user.FirstName,
+		LastName:   user.LastName,
+		ExternalID: user.ExternalID,
+	}
+
+	// Get account ID from context and fetch tier info if tier service is available
+	if h.tierService != nil {
+		accountIDStr, accountOk := context.Get("Account-ID")
+		if accountOk && accountIDStr != "" {
+			accountID, parseErr := uuid.Parse(accountIDStr.(string))
+			if parseErr == nil {
+				tierInfo, tierErr := h.tierService.GetTierInfoByAccountID(ctx, accountID)
+				if tierErr == nil {
+					response.Tier = &tierInfo
+				} else {
+					// Log the error but don't fail the request
+					h.logger.Error(ctx, "failed to get tier info", tierErr)
+				}
+			}
+		}
+	}
+
+	context.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {

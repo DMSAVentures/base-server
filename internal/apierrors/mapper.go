@@ -8,6 +8,7 @@ import (
 	authProcessor "base-server/internal/auth/processor"
 	campaignProcessor "base-server/internal/campaign/processor"
 	emailblastsProcessor "base-server/internal/emailblasts/processor"
+	billingProcessor "base-server/internal/money/billing/processor"
 	referralProcessor "base-server/internal/referral/processor"
 	rewardsProcessor "base-server/internal/rewards/processor"
 	segmentProcessor "base-server/internal/segments/processor"
@@ -230,6 +231,22 @@ func MapError(err error) *APIError {
 
 	case errors.Is(err, emailblastsProcessor.ErrNoRecipients):
 		return BadRequest(CodeInvalidInput, "Segment has no matching users to send to")
+
+	// Map billing processor errors
+	case errors.Is(err, billingProcessor.ErrNoActiveSubscription):
+		return NotFound(CodeNotFound, "No active subscription found")
+
+	case errors.Is(err, billingProcessor.ErrFailedToCreateSubscriptionIntent):
+		return InternalError(err)
+
+	case errors.Is(err, billingProcessor.ErrFailedToCancelSubscription):
+		return InternalError(err)
+
+	case errors.Is(err, billingProcessor.ErrFailedToUpdateSubscription):
+		return InternalError(err)
+
+	case errors.Is(err, billingProcessor.ErrFailedToGetSubscription):
+		return InternalError(err)
 
 	// Map store errors
 	case errors.Is(err, store.ErrNotFound):

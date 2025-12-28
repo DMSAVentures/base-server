@@ -19,6 +19,7 @@ var (
 	ErrFailedToCreateSubscriptionIntent = errors.New("failed to create subscription intent")
 	ErrFailedToCancelSubscription       = errors.New("failed to cancel subscription")
 	ErrFailedToUpdateSubscription       = errors.New("failed to update subscription")
+	ErrFailedToGetSubscription          = errors.New("failed to get subscription")
 )
 
 func (p *BillingProcessor) CreateSubscriptionIntent(ctx context.Context, userID uuid.UUID, priceID string) (string, error) {
@@ -143,11 +144,12 @@ func (p *BillingProcessor) GetActiveSubscription(ctx context.Context, userID uui
 	sub, err := p.subscriptionService.GetSubscriptionByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, subscriptions.ErrNoSubscription) {
+			p.logger.Info(ctx, "no active subscription found for user")
 			return subscriptions.Subscription{}, ErrNoActiveSubscription
 		}
 
 		p.logger.Error(ctx, "failed to get subscription by user id", err)
-		return subscriptions.Subscription{}, errors.New("failed to get subscription by user id")
+		return subscriptions.Subscription{}, ErrFailedToGetSubscription
 	}
 
 	return sub, nil

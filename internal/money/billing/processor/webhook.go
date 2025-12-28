@@ -248,11 +248,20 @@ func (p *BillingProcessor) HandleWebhook(ctx context.Context, event stripe.Event
 			return p.PriceDeleted(ctx, price)
 		}
 
+	case "customer.subscription.created":
+		var subscription stripe.Subscription
+		err := json.Unmarshal(event.Data.Raw, &subscription)
+		if err != nil {
+			p.logger.Error(ctx, "failed to unmarshal subscription", err)
+			return fmt.Errorf("failed to parse subscription from event: %w", err)
+		}
+		return p.SubscriptionCreated(ctx, subscription)
+
 	case "customer.subscription.updated":
 		var subscription stripe.Subscription
 		err := json.Unmarshal(event.Data.Raw, &subscription)
 		if err != nil {
-			p.logger.Error(ctx, "failed to unmarshal price", err)
+			p.logger.Error(ctx, "failed to unmarshal subscription", err)
 			return fmt.Errorf("failed to parse subscription from event: %w", err)
 		}
 

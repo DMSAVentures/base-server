@@ -43,7 +43,6 @@ func TestHandler_HandleMe(t *testing.T) {
 
 	handler, _ := setupTestHandler(t, ctrl)
 
-	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
