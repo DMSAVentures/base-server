@@ -101,6 +101,21 @@ func (mr *MockEmailTemplateStoreMockRecorder) GetEmailTemplateByID(ctx, template
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEmailTemplateByID", reflect.TypeOf((*MockEmailTemplateStore)(nil).GetEmailTemplateByID), ctx, templateID)
 }
 
+// GetEmailTemplatesByAccount mocks base method.
+func (m *MockEmailTemplateStore) GetEmailTemplatesByAccount(ctx context.Context, accountID uuid.UUID) ([]store.EmailTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEmailTemplatesByAccount", ctx, accountID)
+	ret0, _ := ret[0].([]store.EmailTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEmailTemplatesByAccount indicates an expected call of GetEmailTemplatesByAccount.
+func (mr *MockEmailTemplateStoreMockRecorder) GetEmailTemplatesByAccount(ctx, accountID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEmailTemplatesByAccount", reflect.TypeOf((*MockEmailTemplateStore)(nil).GetEmailTemplatesByAccount), ctx, accountID)
+}
+
 // GetEmailTemplatesByCampaign mocks base method.
 func (m *MockEmailTemplateStore) GetEmailTemplatesByCampaign(ctx context.Context, campaignID uuid.UUID) ([]store.EmailTemplate, error) {
 	m.ctrl.T.Helper()
