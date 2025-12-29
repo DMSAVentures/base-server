@@ -2,6 +2,7 @@ package zapier
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,8 @@ import (
 
 	"base-server/internal/integrations"
 	"base-server/internal/observability"
+	"base-server/internal/store"
+	"base-server/internal/tiers"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,11 +25,56 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
+// MockTierStore implements tiers.TierStore for testing
+type MockTierStore struct {
+	hasFeature bool
+	tierInfo   store.TierInfo
+	err        error
+}
+
+func (m *MockTierStore) GetTierInfoByAccountID(ctx context.Context, accountID uuid.UUID) (store.TierInfo, error) {
+	return m.tierInfo, m.err
+}
+
+func (m *MockTierStore) GetTierInfoByUserID(ctx context.Context, userID uuid.UUID) (store.TierInfo, error) {
+	return m.tierInfo, m.err
+}
+
+func (m *MockTierStore) GetTierInfoByPriceID(ctx context.Context, priceID uuid.UUID) (store.TierInfo, error) {
+	return m.tierInfo, m.err
+}
+
+func (m *MockTierStore) GetFreeTierInfo(ctx context.Context) (store.TierInfo, error) {
+	return m.tierInfo, m.err
+}
+
+func newMockTierService(hasZapierFeature bool) *tiers.TierService {
+	mockTierStore := &MockTierStore{
+		tierInfo: store.TierInfo{
+			Features: map[string]bool{
+				"webhooks_zapier": hasZapierFeature,
+			},
+			Limits: map[string]*int{},
+		},
+	}
+	return tiers.New(mockTierStore, observability.NewLogger())
+}
+
 func setupTestHandler(t *testing.T, ctrl *gomock.Controller) (*Handler, *MockIntegrationStore) {
 	t.Helper()
 	mockStore := NewMockIntegrationStore(ctrl)
 	logger := observability.NewLogger()
-	handler := NewHandler(mockStore, logger)
+	tierService := newMockTierService(true) // default: has Zapier feature
+	handler := NewHandler(mockStore, tierService, logger)
+	return handler, mockStore
+}
+
+func setupTestHandlerWithTierService(t *testing.T, ctrl *gomock.Controller, hasZapierFeature bool) (*Handler, *MockIntegrationStore) {
+	t.Helper()
+	mockStore := NewMockIntegrationStore(ctrl)
+	logger := observability.NewLogger()
+	tierService := newMockTierService(hasZapierFeature)
+	handler := NewHandler(mockStore, tierService, logger)
 	return handler, mockStore
 }
 
@@ -132,7 +180,7 @@ func TestHandler_HandleSubscribe(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			handler, mockStore := setupTestHandler(t, ctrl)
+			handler, mockStore := setupTestHandlerWithTierService(t, ctrl, true)
 
 			accountID := uuid.New()
 			apiKeyID := uuid.New()
