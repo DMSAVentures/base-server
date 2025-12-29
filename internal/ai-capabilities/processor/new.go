@@ -9,11 +9,19 @@ import (
 	"base-server/internal/store"
 	"base-server/internal/voice/audio"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
 	"google.golang.org/genai"
+)
+
+// Domain errors for AI processing
+var (
+	ErrConversationNotFound = errors.New("conversation not found")
+	ErrUnauthorized         = errors.New("unauthorized access to conversation")
+	ErrAIServiceError       = errors.New("AI service error")
 )
 
 // AIStore defines the database operations required by AIProcessor

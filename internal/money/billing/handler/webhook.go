@@ -20,13 +20,13 @@ func (h *Handler) HandleUpdateSubscription(c *gin.Context) {
 
 	var req CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
 	err := h.processor.UpdateSubscription(ctx, parsedUserID, req.PriceID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -42,7 +42,7 @@ func (h *Handler) HandleGetPaymentMethod(c *gin.Context) {
 
 	paymentMethod, err := h.processor.GetPaymentMethodForUser(ctx, parsedUserID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -56,26 +56,26 @@ func (h *Handler) HandleWebhook(c *gin.Context) {
 	// Read the request body
 	payload, err := io.ReadAll(c.Request.Body)
 	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "failed to read request body"))
+		apierrors.BadRequest(c, "INVALID_INPUT", "failed to read request body")
 		return
 	}
 
 	// Retrieve the Stripe-Signature header
 	signatureHeader := c.GetHeader("Stripe-Signature")
 	if signatureHeader == "" {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "missing Stripe-Signature header"))
+		apierrors.BadRequest(c, "INVALID_INPUT", "missing Stripe-Signature header")
 		return
 	}
 	event, err := webhook.ConstructEvent(payload, signatureHeader, h.processor.WebhookSecret)
 	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "invalid webhook signature"))
+		apierrors.BadRequest(c, "INVALID_INPUT", "invalid webhook signature")
 		return
 	}
 	// Handle the event
 
 	err = h.processor.HandleWebhook(ctx, event)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

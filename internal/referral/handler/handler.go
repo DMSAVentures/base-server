@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"errors"
+	"net/http"
+	"strconv"
+
 	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"base-server/internal/referral/processor"
-	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -25,6 +27,28 @@ func New(processor processor.ReferralProcessor, logger *observability.Logger, ba
 	}
 }
 
+// handleError maps processor errors to appropriate HTTP responses
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrReferralNotFound):
+		apierrors.NotFound(c, "Referral not found")
+	case errors.Is(err, processor.ErrCampaignNotFound):
+		apierrors.NotFound(c, "Campaign not found")
+	case errors.Is(err, processor.ErrUserNotFound):
+		apierrors.NotFound(c, "User not found")
+	case errors.Is(err, processor.ErrUnauthorized):
+		apierrors.Forbidden(c, "UNAUTHORIZED", "Unauthorized access to campaign")
+	case errors.Is(err, processor.ErrInvalidStatus):
+		apierrors.BadRequest(c, "INVALID_STATUS", "Invalid referral status")
+	case errors.Is(err, processor.ErrInvalidReferral):
+		apierrors.BadRequest(c, "INVALID_REFERRAL", "Invalid referral code")
+	case errors.Is(err, processor.ErrReferralCodeEmpty):
+		apierrors.BadRequest(c, "REFERRAL_CODE_EMPTY", "Referral code is required")
+	default:
+		apierrors.InternalError(c, err)
+	}
+}
+
 // HandleListReferrals handles GET /api/v1/campaigns/:campaign_id/referrals
 func (h *Handler) HandleListReferrals(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -32,14 +56,14 @@ func (h *Handler) HandleListReferrals(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "invalid account id")
 		return
 	}
 
@@ -48,7 +72,7 @@ func (h *Handler) HandleListReferrals(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "invalid campaign id")
 		return
 	}
 
@@ -69,7 +93,7 @@ func (h *Handler) HandleListReferrals(c *gin.Context) {
 
 	response, err := h.processor.ListReferrals(ctx, accountID, campaignID, req)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -91,13 +115,13 @@ func (h *Handler) HandleTrackReferral(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "invalid campaign id")
 		return
 	}
 
 	var req TrackReferralRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -112,7 +136,7 @@ func (h *Handler) HandleTrackReferral(c *gin.Context) {
 
 	response, err := h.processor.TrackReferral(ctx, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -126,14 +150,14 @@ func (h *Handler) HandleGetUserReferrals(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "invalid account id")
 		return
 	}
 
@@ -142,7 +166,7 @@ func (h *Handler) HandleGetUserReferrals(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "invalid campaign id")
 		return
 	}
 
@@ -151,7 +175,7 @@ func (h *Handler) HandleGetUserReferrals(c *gin.Context) {
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse user ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		apierrors.BadRequest(c, "INVALID_USER_ID", "invalid user id")
 		return
 	}
 
@@ -166,7 +190,7 @@ func (h *Handler) HandleGetUserReferrals(c *gin.Context) {
 
 	response, err := h.processor.GetUserReferrals(ctx, accountID, campaignID, userID, req)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -180,14 +204,14 @@ func (h *Handler) HandleGetReferralLink(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "invalid account id")
 		return
 	}
 
@@ -196,7 +220,7 @@ func (h *Handler) HandleGetReferralLink(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "invalid campaign id")
 		return
 	}
 
@@ -205,16 +229,15 @@ func (h *Handler) HandleGetReferralLink(c *gin.Context) {
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse user ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		apierrors.BadRequest(c, "INVALID_USER_ID", "invalid user id")
 		return
 	}
 
 	response, err := h.processor.GetReferralLink(ctx, accountID, campaignID, userID, h.baseURL)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, response)
 }
-

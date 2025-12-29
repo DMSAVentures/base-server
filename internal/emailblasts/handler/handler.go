@@ -1,12 +1,14 @@
 package handler
 
 import (
-	"base-server/internal/apierrors"
-	"base-server/internal/emailblasts/processor"
-	"base-server/internal/observability"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
+
+	"base-server/internal/apierrors"
+	"base-server/internal/emailblasts/processor"
+	"base-server/internal/observability"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -21,6 +23,42 @@ func New(processor processor.EmailBlastProcessor, logger *observability.Logger) 
 	return Handler{
 		processor: processor,
 		logger:    logger,
+	}
+}
+
+// handleError maps processor errors to appropriate API error responses
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrBlastNotFound):
+		apierrors.NotFound(c, "Email blast not found")
+	case errors.Is(err, processor.ErrSegmentNotFound):
+		apierrors.NotFound(c, "Segment not found")
+	case errors.Is(err, processor.ErrTemplateNotFound):
+		apierrors.NotFound(c, "Email template not found")
+	case errors.Is(err, processor.ErrCampaignNotFound):
+		apierrors.NotFound(c, "Campaign not found")
+	case errors.Is(err, processor.ErrUnauthorized):
+		apierrors.Forbidden(c, "FORBIDDEN", "You do not have access to this email blast")
+	case errors.Is(err, processor.ErrBlastCannotModify):
+		apierrors.BadRequest(c, "BLAST_CANNOT_MODIFY", "Email blast cannot be modified in its current status")
+	case errors.Is(err, processor.ErrBlastCannotDelete):
+		apierrors.BadRequest(c, "BLAST_CANNOT_MODIFY", "Email blast cannot be deleted in its current status")
+	case errors.Is(err, processor.ErrBlastCannotStart):
+		apierrors.BadRequest(c, "BLAST_CANNOT_MODIFY", "Email blast cannot be started in its current status")
+	case errors.Is(err, processor.ErrBlastCannotPause):
+		apierrors.BadRequest(c, "BLAST_CANNOT_MODIFY", "Email blast cannot be paused in its current status")
+	case errors.Is(err, processor.ErrBlastCannotResume):
+		apierrors.BadRequest(c, "BLAST_CANNOT_MODIFY", "Email blast cannot be resumed in its current status")
+	case errors.Is(err, processor.ErrBlastCannotCancel):
+		apierrors.BadRequest(c, "BLAST_CANNOT_MODIFY", "Email blast cannot be cancelled in its current status")
+	case errors.Is(err, processor.ErrInvalidScheduleTime):
+		apierrors.BadRequest(c, "INVALID_INPUT", "Scheduled time must be in the future")
+	case errors.Is(err, processor.ErrNoRecipients):
+		apierrors.BadRequest(c, "INVALID_INPUT", "Segment has no matching users to send to")
+	case errors.Is(err, processor.ErrEmailBlastsNotAvailable):
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Email blasts are not available in your plan. Please upgrade to Team plan.")
+	default:
+		apierrors.InternalError(c, err)
 	}
 }
 
@@ -42,7 +80,7 @@ func (h *Handler) HandleCreateEmailBlast(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -72,7 +110,7 @@ func (h *Handler) HandleCreateEmailBlast(c *gin.Context) {
 
 	var req CreateEmailBlastRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -96,7 +134,7 @@ func (h *Handler) HandleCreateEmailBlast(c *gin.Context) {
 
 	blast, err := h.processor.CreateEmailBlast(ctx, accountID, campaignID, userID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -110,7 +148,7 @@ func (h *Handler) HandleListEmailBlasts(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -140,7 +178,7 @@ func (h *Handler) HandleListEmailBlasts(c *gin.Context) {
 
 	response, err := h.processor.ListEmailBlasts(ctx, accountID, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -154,7 +192,7 @@ func (h *Handler) HandleGetEmailBlast(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -185,7 +223,7 @@ func (h *Handler) HandleGetEmailBlast(c *gin.Context) {
 
 	blast, err := h.processor.GetEmailBlast(ctx, accountID, campaignID, blastID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -206,7 +244,7 @@ func (h *Handler) HandleUpdateEmailBlast(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -237,7 +275,7 @@ func (h *Handler) HandleUpdateEmailBlast(c *gin.Context) {
 
 	var req UpdateEmailBlastRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -249,7 +287,7 @@ func (h *Handler) HandleUpdateEmailBlast(c *gin.Context) {
 
 	blast, err := h.processor.UpdateEmailBlast(ctx, accountID, campaignID, blastID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -263,7 +301,7 @@ func (h *Handler) HandleDeleteEmailBlast(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -294,7 +332,7 @@ func (h *Handler) HandleDeleteEmailBlast(c *gin.Context) {
 
 	err = h.processor.DeleteEmailBlast(ctx, accountID, campaignID, blastID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -313,7 +351,7 @@ func (h *Handler) HandleScheduleBlast(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -344,13 +382,13 @@ func (h *Handler) HandleScheduleBlast(c *gin.Context) {
 
 	var req ScheduleBlastRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
 	blast, err := h.processor.ScheduleBlast(ctx, accountID, campaignID, blastID, req.ScheduledAt)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -364,7 +402,7 @@ func (h *Handler) HandleSendBlastNow(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -395,7 +433,7 @@ func (h *Handler) HandleSendBlastNow(c *gin.Context) {
 
 	blast, err := h.processor.SendBlastNow(ctx, accountID, campaignID, blastID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -409,7 +447,7 @@ func (h *Handler) HandlePauseBlast(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -440,7 +478,7 @@ func (h *Handler) HandlePauseBlast(c *gin.Context) {
 
 	blast, err := h.processor.PauseBlast(ctx, accountID, campaignID, blastID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -454,7 +492,7 @@ func (h *Handler) HandleResumeBlast(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -485,7 +523,7 @@ func (h *Handler) HandleResumeBlast(c *gin.Context) {
 
 	blast, err := h.processor.ResumeBlast(ctx, accountID, campaignID, blastID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -499,7 +537,7 @@ func (h *Handler) HandleCancelBlast(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -530,7 +568,7 @@ func (h *Handler) HandleCancelBlast(c *gin.Context) {
 
 	blast, err := h.processor.CancelBlast(ctx, accountID, campaignID, blastID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -544,7 +582,7 @@ func (h *Handler) HandleGetBlastAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -575,7 +613,7 @@ func (h *Handler) HandleGetBlastAnalytics(c *gin.Context) {
 
 	analytics, err := h.processor.GetBlastAnalytics(ctx, accountID, campaignID, blastID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -589,7 +627,7 @@ func (h *Handler) HandleListBlastRecipients(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -628,7 +666,7 @@ func (h *Handler) HandleListBlastRecipients(c *gin.Context) {
 
 	response, err := h.processor.ListBlastRecipients(ctx, accountID, campaignID, blastID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

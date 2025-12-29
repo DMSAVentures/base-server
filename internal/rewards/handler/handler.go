@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"errors"
+	"net/http"
+	"time"
+
 	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"base-server/internal/rewards/processor"
 	"base-server/internal/store"
-	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -21,6 +23,32 @@ func New(processor processor.RewardProcessor, logger *observability.Logger) Hand
 	return Handler{
 		processor: processor,
 		logger:    logger,
+	}
+}
+
+// handleError maps processor errors to appropriate HTTP responses
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrRewardNotFound):
+		apierrors.NotFound(c, "Reward not found")
+	case errors.Is(err, processor.ErrUserRewardNotFound):
+		apierrors.NotFound(c, "User reward not found")
+	case errors.Is(err, processor.ErrInvalidRewardType):
+		apierrors.BadRequest(c, "INVALID_REWARD_TYPE", "Invalid reward type")
+	case errors.Is(err, processor.ErrInvalidTriggerType):
+		apierrors.BadRequest(c, "INVALID_TRIGGER_TYPE", "Invalid trigger type")
+	case errors.Is(err, processor.ErrInvalidDeliveryMethod):
+		apierrors.BadRequest(c, "INVALID_DELIVERY_METHOD", "Invalid delivery method")
+	case errors.Is(err, processor.ErrInvalidRewardStatus):
+		apierrors.BadRequest(c, "INVALID_REWARD_STATUS", "Invalid reward status")
+	case errors.Is(err, processor.ErrUnauthorized):
+		apierrors.Forbidden(c, "UNAUTHORIZED", "Unauthorized access to reward")
+	case errors.Is(err, processor.ErrRewardLimitReached):
+		apierrors.Conflict(c, "REWARD_LIMIT_REACHED", "Reward limit reached")
+	case errors.Is(err, processor.ErrUserLimitReached):
+		apierrors.Conflict(c, "USER_LIMIT_REACHED", "User has already claimed maximum rewards")
+	default:
+		apierrors.InternalError(c, err)
 	}
 }
 
@@ -72,7 +100,7 @@ func (h *Handler) HandleCreateReward(c *gin.Context) {
 
 	var req CreateRewardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -136,7 +164,7 @@ func (h *Handler) HandleCreateReward(c *gin.Context) {
 
 	reward, err := h.processor.CreateReward(ctx, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -158,7 +186,7 @@ func (h *Handler) HandleListRewards(c *gin.Context) {
 
 	rewards, err := h.processor.ListRewards(ctx, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -189,7 +217,7 @@ func (h *Handler) HandleGetReward(c *gin.Context) {
 
 	reward, err := h.processor.GetReward(ctx, campaignID, rewardID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -220,14 +248,14 @@ func (h *Handler) HandleUpdateReward(c *gin.Context) {
 
 	var req UpdateRewardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
 	processorReq := processor.UpdateRewardRequest{
-		Name:           req.Name,
-		Description:    req.Description,
-		Status:         req.Status,
+		Name:        req.Name,
+		Description: req.Description,
+		Status:      req.Status,
 	}
 
 	if req.Config != nil {
@@ -242,7 +270,7 @@ func (h *Handler) HandleUpdateReward(c *gin.Context) {
 
 	reward, err := h.processor.UpdateReward(ctx, campaignID, rewardID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -273,7 +301,7 @@ func (h *Handler) HandleDeleteReward(c *gin.Context) {
 
 	err = h.processor.DeleteReward(ctx, campaignID, rewardID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -304,7 +332,7 @@ func (h *Handler) HandleGrantReward(c *gin.Context) {
 
 	var req GrantRewardRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -315,7 +343,7 @@ func (h *Handler) HandleGrantReward(c *gin.Context) {
 
 	userReward, err := h.processor.GrantReward(ctx, campaignID, userID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -346,7 +374,7 @@ func (h *Handler) HandleGetUserRewards(c *gin.Context) {
 
 	rewards, err := h.processor.GetUserRewards(ctx, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

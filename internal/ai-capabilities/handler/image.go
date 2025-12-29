@@ -16,25 +16,25 @@ func (h *Handler) HandleGenerateImage(c *gin.Context) {
 
 	userID, ok := c.Get("User-ID")
 	if !ok {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("User ID not found in context"))
+		apierrors.Unauthorized(c, "User ID not found in context")
 		return
 	}
 
 	parsedUserID, err := uuid.Parse(userID.(string))
 	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid user ID format"))
+		apierrors.BadRequest(c, "INVALID_INPUT", "Invalid user ID format")
 		return
 	}
 	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID.String()})
 
 	var req CreateConversationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
 	if req.Message == "" {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Message is required"))
+		apierrors.BadRequest(c, "INVALID_INPUT", "Message is required")
 		return
 	}
 
@@ -42,7 +42,7 @@ func (h *Handler) HandleGenerateImage(c *gin.Context) {
 	flusher, ok := w.(http.Flusher)
 
 	if !ok {
-		apierrors.RespondWithError(c, apierrors.InternalError(nil))
+		apierrors.InternalError(c, nil)
 		return
 	}
 
@@ -64,13 +64,13 @@ func (h *Handler) HandleGenerateImage(c *gin.Context) {
 		ctx = observability.WithFields(ctx, observability.Field{Key: "conversation_id", Value: req.ConversationID.String()})
 		responseChan, err = h.aiCapabilities.ContinueImageGenerationConversation(ctx, parsedUserID, req.ConversationID, req.Message)
 		if err != nil {
-			apierrors.RespondWithError(c, err)
+			h.handleError(c, err)
 			return
 		}
 	} else {
 		responseChan, err = h.aiCapabilities.CreateImageGenerationConversation(ctx, parsedUserID, req.Message)
 		if err != nil {
-			apierrors.RespondWithError(c, err)
+			h.handleError(c, err)
 			return
 		}
 	}

@@ -1,62 +1,55 @@
 package apierrors
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 )
 
-// ValidationErrorDetail represents a single field validation error
-type ValidationErrorDetail struct {
-	Field   string `json:"field"`           // Field name that failed validation
-	Message string `json:"message"`         // Human-readable error message
-	Tag     string `json:"tag,omitempty"`   // Validation tag that failed (e.g., "required", "email")
-	Value   string `json:"value,omitempty"` // The value that failed (omitted for security on password fields)
+// ValidationError sends a 400 response for validation errors
+func ValidationError(c *gin.Context, err error) {
+	if err == nil {
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Check if it's a validator error
+	var validationErrs validator.ValidationErrors
+	if errors.As(err, &validationErrs) {
+		message := buildValidationMessage(validationErrs)
+		logger.Error(ctx, "validation failed", err)
+		respond(c, http.StatusBadRequest, "INVALID_INPUT", message)
+		return
+	}
+
+	// Not a validation error - might be a JSON parsing error or other binding issue
+	logger.Error(ctx, "request binding failed", err)
+	c.JSON(http.StatusBadRequest, ErrorResponse{
+		Error: "Invalid request format. Please check your JSON syntax.",
+		Code:  "INVALID_INPUT",
+	})
 }
 
-// ValidationError creates a structured validation error with field details
-func ValidationError(err error) *APIError {
-	var details []ValidationErrorDetail
-
-	// Check if it's a validator.ValidationErrors type
-	if validationErrs, ok := err.(validator.ValidationErrors); ok {
-		for _, fieldErr := range validationErrs {
-			detail := ValidationErrorDetail{
-				Field:   fieldErr.Field(),
-				Tag:     fieldErr.Tag(),
-				Message: getValidationMessage(fieldErr),
-			}
-
-			// Don't include value for sensitive fields
-			if !isSensitiveField(fieldErr.Field()) {
-				detail.Value = fmt.Sprintf("%v", fieldErr.Value())
-			}
-
-			details = append(details, detail)
-		}
+// buildValidationMessage creates a user-friendly message from validation errors
+func buildValidationMessage(validationErrs validator.ValidationErrors) string {
+	if len(validationErrs) == 0 {
+		return "Invalid request"
 	}
 
-	// If we couldn't parse the validation errors, return a generic message
-	if len(details) == 0 {
-		return &APIError{
-			StatusCode: http.StatusBadRequest,
-			Code:       CodeInvalidInput,
-			Message:    "Invalid request. Please check your input.",
-			Internal:   err,
-		}
+	if len(validationErrs) == 1 {
+		return getValidationMessage(validationErrs[0])
 	}
 
-	// Create a user-friendly error message
-	message := buildValidationMessage(details)
-
-	return &APIError{
-		StatusCode: http.StatusBadRequest,
-		Code:       CodeInvalidInput,
-		Message:    message,
-		Internal:   err,
+	var messages []string
+	for _, fieldErr := range validationErrs {
+		messages = append(messages, getValidationMessage(fieldErr))
 	}
+	return "Validation failed: " + strings.Join(messages, "; ")
 }
 
 // getValidationMessage returns a human-readable message for a validation error
@@ -94,48 +87,4 @@ func getValidationMessage(fieldErr validator.FieldError) string {
 	default:
 		return fmt.Sprintf("%s failed validation (%s)", field, tag)
 	}
-}
-
-// buildValidationMessage creates a user-friendly message from validation error details
-func buildValidationMessage(details []ValidationErrorDetail) string {
-	if len(details) == 0 {
-		return "Invalid request"
-	}
-
-	if len(details) == 1 {
-		return details[0].Message
-	}
-
-	// Multiple validation errors - list them
-	var messages []string
-	for _, detail := range details {
-		messages = append(messages, detail.Message)
-	}
-
-	return "Validation failed: " + strings.Join(messages, "; ")
-}
-
-// isSensitiveField checks if a field name indicates sensitive data
-func isSensitiveField(fieldName string) bool {
-	lowerField := strings.ToLower(fieldName)
-	sensitiveFields := []string{
-		"password",
-		"token",
-		"secret",
-		"key",
-		"apikey",
-		"api_key",
-		"creditcard",
-		"credit_card",
-		"ssn",
-		"cvv",
-	}
-
-	for _, sensitive := range sensitiveFields {
-		if strings.Contains(lowerField, sensitive) {
-			return true
-		}
-	}
-
-	return false
 }

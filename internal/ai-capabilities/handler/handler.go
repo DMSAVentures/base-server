@@ -2,13 +2,16 @@ package handler
 
 import (
 	"base-server/internal/ai-capabilities/processor"
+	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
@@ -31,6 +34,20 @@ type SSEErrorPayload struct {
 type CreateConversationRequest struct {
 	Message        string    `json:"message"`
 	ConversationID uuid.UUID `json:"conversation_id"`
+}
+
+// handleError maps processor errors to appropriate API error responses
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrConversationNotFound):
+		apierrors.NotFound(c, "Conversation not found")
+	case errors.Is(err, processor.ErrUnauthorized):
+		apierrors.Forbidden(c, "FORBIDDEN", "You do not have access to this conversation")
+	case errors.Is(err, processor.ErrAIServiceError):
+		apierrors.ServiceUnavailable(c, "AI_SERVICE_ERROR", "AI service is temporarily unavailable", err)
+	default:
+		apierrors.InternalError(c, err)
+	}
 }
 
 // writeSSEEvent sends a full SSE event with event name and data block.

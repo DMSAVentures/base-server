@@ -43,6 +43,16 @@ func New(store APIKeyStore, logger *observability.Logger) *Handler {
 	}
 }
 
+// handleError maps errors to appropriate API responses
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		apierrors.NotFound(c, "API key not found")
+	default:
+		apierrors.InternalError(c, err)
+	}
+}
+
 // CreateAPIKeyRequest represents a request to create an API key
 type CreateAPIKeyRequest struct {
 	Name      string   `json:"name" binding:"required,min=1,max=100"`
@@ -106,7 +116,7 @@ func (h *Handler) HandleCreateAPIKey(c *gin.Context) {
 
 	var req CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -153,7 +163,7 @@ func (h *Handler) HandleCreateAPIKey(c *gin.Context) {
 	})
 	if err != nil {
 		h.logger.Error(ctx, "failed to create API key", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -193,7 +203,7 @@ func (h *Handler) HandleListAPIKeys(c *gin.Context) {
 	apiKeys, err := h.store.GetAPIKeysByAccount(ctx, accountID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to list API keys", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -231,17 +241,17 @@ func (h *Handler) HandleGetAPIKey(c *gin.Context) {
 	apiKey, err := h.store.GetAPIKeyByID(ctx, keyID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
+			apierrors.NotFound(c, "API key not found")
 			return
 		}
 		h.logger.Error(ctx, "failed to get API key", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
 	// Verify the key belongs to this account
 	if apiKey.AccountID != accountID {
-		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
+		apierrors.NotFound(c, "API key not found")
 		return
 	}
 
@@ -273,7 +283,7 @@ func (h *Handler) HandleUpdateAPIKey(c *gin.Context) {
 
 	var req UpdateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -281,16 +291,16 @@ func (h *Handler) HandleUpdateAPIKey(c *gin.Context) {
 	apiKey, err := h.store.GetAPIKeyByID(ctx, keyID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
+			apierrors.NotFound(c, "API key not found")
 			return
 		}
 		h.logger.Error(ctx, "failed to get API key", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
 	if apiKey.AccountID != accountID {
-		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
+		apierrors.NotFound(c, "API key not found")
 		return
 	}
 
@@ -298,7 +308,7 @@ func (h *Handler) HandleUpdateAPIKey(c *gin.Context) {
 	err = h.store.UpdateAPIKeyName(ctx, keyID, req.Name)
 	if err != nil {
 		h.logger.Error(ctx, "failed to update API key", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -308,7 +318,7 @@ func (h *Handler) HandleUpdateAPIKey(c *gin.Context) {
 	apiKey, err = h.store.GetAPIKeyByID(ctx, keyID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to get updated API key", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -350,16 +360,16 @@ func (h *Handler) HandleRevokeAPIKey(c *gin.Context) {
 	apiKey, err := h.store.GetAPIKeyByID(ctx, keyID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
+			apierrors.NotFound(c, "API key not found")
 			return
 		}
 		h.logger.Error(ctx, "failed to get API key", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
 	if apiKey.AccountID != accountID {
-		c.JSON(http.StatusNotFound, gin.H{"error": "API key not found"})
+		apierrors.NotFound(c, "API key not found")
 		return
 	}
 
@@ -367,11 +377,11 @@ func (h *Handler) HandleRevokeAPIKey(c *gin.Context) {
 	err = h.store.RevokeAPIKey(ctx, keyID, userID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "API key not found or already revoked"})
+			apierrors.NotFound(c, "API key not found or already revoked")
 			return
 		}
 		h.logger.Error(ctx, "failed to revoke API key", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"base-server/internal/apierrors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +11,7 @@ func (h *Handler) ListPrices(c *gin.Context) {
 
 	prices, err := h.processor.ListPrices(ctx)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

@@ -1,13 +1,15 @@
 package handler
 
 import (
+	"errors"
+	"net/http"
+	"strconv"
+	"time"
+
 	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"base-server/internal/segments/processor"
 	"base-server/internal/store"
-	"net/http"
-	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,6 +24,23 @@ func New(processor processor.SegmentProcessor, logger *observability.Logger) Han
 	return Handler{
 		processor: processor,
 		logger:    logger,
+	}
+}
+
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrSegmentNotFound):
+		apierrors.NotFound(c, "Segment not found")
+	case errors.Is(err, processor.ErrCampaignNotFound):
+		apierrors.NotFound(c, "Campaign not found")
+	case errors.Is(err, processor.ErrUnauthorized):
+		apierrors.Forbidden(c, "FORBIDDEN", "You do not have access to this segment")
+	case errors.Is(err, processor.ErrInvalidCriteria):
+		apierrors.BadRequest(c, "INVALID_FILTER_CRITERIA", "Invalid filter criteria")
+	case errors.Is(err, processor.ErrSegmentInUse):
+		apierrors.Conflict(c, "SEGMENT_IN_USE", "Segment is in use by an email blast and cannot be deleted")
+	default:
+		apierrors.InternalError(c, err)
 	}
 }
 
@@ -53,7 +72,7 @@ func (h *Handler) HandleCreateSegment(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -75,7 +94,7 @@ func (h *Handler) HandleCreateSegment(c *gin.Context) {
 
 	var req CreateSegmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -94,7 +113,7 @@ func (h *Handler) HandleCreateSegment(c *gin.Context) {
 
 	segment, err := h.processor.CreateSegment(ctx, accountID, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -108,7 +127,7 @@ func (h *Handler) HandleListSegments(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -130,7 +149,7 @@ func (h *Handler) HandleListSegments(c *gin.Context) {
 
 	segments, err := h.processor.ListSegments(ctx, accountID, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -150,7 +169,7 @@ func (h *Handler) HandleGetSegment(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -181,7 +200,7 @@ func (h *Handler) HandleGetSegment(c *gin.Context) {
 
 	segment, err := h.processor.GetSegment(ctx, accountID, campaignID, segmentID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -203,7 +222,7 @@ func (h *Handler) HandleUpdateSegment(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -234,7 +253,7 @@ func (h *Handler) HandleUpdateSegment(c *gin.Context) {
 
 	var req UpdateSegmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -256,7 +275,7 @@ func (h *Handler) HandleUpdateSegment(c *gin.Context) {
 
 	segment, err := h.processor.UpdateSegment(ctx, accountID, campaignID, segmentID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -270,7 +289,7 @@ func (h *Handler) HandleDeleteSegment(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -301,7 +320,7 @@ func (h *Handler) HandleDeleteSegment(c *gin.Context) {
 
 	err = h.processor.DeleteSegment(ctx, accountID, campaignID, segmentID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -321,7 +340,7 @@ func (h *Handler) HandlePreviewSegment(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -343,7 +362,7 @@ func (h *Handler) HandlePreviewSegment(c *gin.Context) {
 
 	var req PreviewSegmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -366,7 +385,7 @@ func (h *Handler) HandlePreviewSegment(c *gin.Context) {
 
 	preview, err := h.processor.PreviewSegment(ctx, accountID, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -380,7 +399,7 @@ func (h *Handler) HandleRefreshSegmentCount(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -411,7 +430,7 @@ func (h *Handler) HandleRefreshSegmentCount(c *gin.Context) {
 
 	count, err := h.processor.RefreshSegmentCount(ctx, accountID, campaignID, segmentID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

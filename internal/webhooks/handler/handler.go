@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"errors"
+	"net/http"
+	"strconv"
+
 	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"base-server/internal/webhooks/processor"
-	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,6 +24,16 @@ func New(processor *processor.WebhookProcessor, logger *observability.Logger) *H
 	return &Handler{
 		processor: processor,
 		logger:    logger,
+	}
+}
+
+// handleError maps processor errors to appropriate API error responses
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrWebhooksNotAvailable):
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Webhooks are not available in your plan. Please upgrade to Team plan.")
+	default:
+		apierrors.InternalError(c, err)
 	}
 }
 
@@ -51,7 +63,7 @@ func (h *Handler) HandleCreateWebhook(c *gin.Context) {
 
 	var req CreateWebhookRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -82,7 +94,7 @@ func (h *Handler) HandleCreateWebhook(c *gin.Context) {
 		MaxRetries:   req.MaxRetries,
 	})
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -113,7 +125,7 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 
 		webhooks, err := h.processor.GetWebhooksByCampaign(ctx, campaignID)
 		if err != nil {
-			apierrors.RespondWithError(c, err)
+			h.handleError(c, err)
 			return
 		}
 
@@ -124,7 +136,7 @@ func (h *Handler) HandleListWebhooks(c *gin.Context) {
 	// Get all webhooks for account
 	webhooks, err := h.processor.GetWebhooksByAccount(ctx, parsedAccountID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -146,7 +158,7 @@ func (h *Handler) HandleGetWebhook(c *gin.Context) {
 
 	webhook, err := h.processor.GetWebhook(ctx, webhookID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -177,7 +189,7 @@ func (h *Handler) HandleUpdateWebhook(c *gin.Context) {
 
 	var req UpdateWebhookRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -189,7 +201,7 @@ func (h *Handler) HandleUpdateWebhook(c *gin.Context) {
 		MaxRetries:   req.MaxRetries,
 	})
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -211,7 +223,7 @@ func (h *Handler) HandleDeleteWebhook(c *gin.Context) {
 
 	err = h.processor.DeleteWebhook(ctx, webhookID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -249,7 +261,7 @@ func (h *Handler) HandleListWebhookDeliveries(c *gin.Context) {
 
 	deliveries, err := h.processor.GetWebhookDeliveries(ctx, webhookID, limit, offset)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -284,7 +296,7 @@ func (h *Handler) HandleTestWebhook(c *gin.Context) {
 
 	err = h.processor.TestWebhook(ctx, webhookID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

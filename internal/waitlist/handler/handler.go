@@ -1,18 +1,20 @@
 package handler
 
 import (
-	"base-server/internal/apierrors"
-	"base-server/internal/observability"
-	"base-server/internal/waitlist/processor"
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"base-server/internal/apierrors"
+	"base-server/internal/observability"
+	"base-server/internal/waitlist/processor"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -36,6 +38,42 @@ func New(
 		positionCalculator: positionCalculator,
 		logger:             logger,
 		baseURL:            baseURL,
+	}
+}
+
+// handleError maps processor errors to appropriate HTTP responses
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrUserNotFound):
+		apierrors.NotFound(c, "User not found")
+	case errors.Is(err, processor.ErrCampaignNotFound):
+		apierrors.NotFound(c, "Campaign not found")
+	case errors.Is(err, processor.ErrEmailAlreadyExists):
+		apierrors.Conflict(c, "EMAIL_EXISTS", "Email already exists for this campaign")
+	case errors.Is(err, processor.ErrInvalidReferralCode):
+		apierrors.BadRequest(c, "INVALID_REFERRAL_CODE", "Invalid referral code")
+	case errors.Is(err, processor.ErrInvalidStatus):
+		apierrors.BadRequest(c, "INVALID_STATUS", "Invalid user status")
+	case errors.Is(err, processor.ErrInvalidSource):
+		apierrors.BadRequest(c, "INVALID_SOURCE", "Invalid user source")
+	case errors.Is(err, processor.ErrUnauthorized):
+		apierrors.Forbidden(c, "UNAUTHORIZED", "Unauthorized access to campaign")
+	case errors.Is(err, processor.ErrInvalidVerificationToken):
+		apierrors.BadRequest(c, "INVALID_TOKEN", "Invalid verification token")
+	case errors.Is(err, processor.ErrEmailAlreadyVerified):
+		apierrors.Conflict(c, "ALREADY_VERIFIED", "Email already verified")
+	case errors.Is(err, processor.ErrMaxSignupsReached):
+		apierrors.Conflict(c, "MAX_SIGNUPS_REACHED", "Campaign has reached maximum signups")
+	case errors.Is(err, processor.ErrCaptchaRequired):
+		apierrors.BadRequest(c, "CAPTCHA_REQUIRED", "Captcha verification required")
+	case errors.Is(err, processor.ErrCaptchaFailed):
+		apierrors.BadRequest(c, "CAPTCHA_FAILED", "Captcha verification failed")
+	case errors.Is(err, processor.ErrCampaignNotActive):
+		apierrors.Conflict(c, "CAMPAIGN_NOT_ACTIVE", "Campaign is not accepting signups")
+	case errors.Is(err, processor.ErrJSONExportNotAvailable):
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "JSON export is not available in your plan")
+	default:
+		apierrors.InternalError(c, err)
 	}
 }
 
@@ -63,13 +101,13 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
 	var req SignupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -112,7 +150,7 @@ func (h *Handler) HandleSignupUser(c *gin.Context) {
 
 	response, err := h.processor.SignupUser(ctx, campaignID, processorReq, h.baseURL)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -129,20 +167,20 @@ func (h *Handler) HandleVerifyEmail(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
 	// Get token from query parameter
 	token := c.Query("token")
 	if token == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "verification token is required"})
+		apierrors.BadRequest(c, "MISSING_TOKEN", "Verification token is required")
 		return
 	}
 
 	err = h.processor.VerifyUserByToken(ctx, campaignID, token)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -167,14 +205,14 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -183,7 +221,7 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
@@ -285,7 +323,7 @@ func (h *Handler) HandleListUsers(c *gin.Context) {
 
 	response, err := h.processor.ListUsers(ctx, accountID, campaignID, req)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -299,14 +337,14 @@ func (h *Handler) HandleGetUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -315,7 +353,7 @@ func (h *Handler) HandleGetUser(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
@@ -324,13 +362,13 @@ func (h *Handler) HandleGetUser(c *gin.Context) {
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse user ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		apierrors.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
 		return
 	}
 
 	user, err := h.processor.GetUser(ctx, accountID, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -352,14 +390,14 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -368,7 +406,7 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
@@ -377,13 +415,13 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse user ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		apierrors.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
 		return
 	}
 
 	var req UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -396,7 +434,7 @@ func (h *Handler) HandleUpdateUser(c *gin.Context) {
 
 	user, err := h.processor.UpdateUser(ctx, accountID, campaignID, userID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -410,14 +448,14 @@ func (h *Handler) HandleDeleteUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -426,7 +464,7 @@ func (h *Handler) HandleDeleteUser(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
@@ -435,13 +473,13 @@ func (h *Handler) HandleDeleteUser(c *gin.Context) {
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse user ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		apierrors.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
 		return
 	}
 
 	err = h.processor.DeleteUser(ctx, accountID, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -465,14 +503,14 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -481,13 +519,13 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
 	var req SearchUsersRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -522,7 +560,7 @@ func (h *Handler) HandleSearchUsers(c *gin.Context) {
 
 	response, err := h.processor.SearchUsers(ctx, accountID, campaignID, processorReq)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -536,14 +574,14 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -552,7 +590,7 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
@@ -560,7 +598,7 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		h.logger.Error(ctx, "failed to get file from request", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		apierrors.BadRequest(c, "FILE_REQUIRED", "File is required")
 		return
 	}
 	defer file.Close()
@@ -578,12 +616,12 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	} else if format == "json" {
 		importedCount, err = h.importFromJSON(ctx, accountID, campaignID, file)
 	} else {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid format, must be csv or json"})
+		apierrors.BadRequest(c, "INVALID_FORMAT", "Invalid format, must be csv or json")
 		return
 	}
 
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -728,14 +766,14 @@ func (h *Handler) HandleExportUsers(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -744,13 +782,13 @@ func (h *Handler) HandleExportUsers(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
 	var req ExportUsersRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -761,7 +799,7 @@ func (h *Handler) HandleExportUsers(c *gin.Context) {
 	// Check if JSON export is requested and if account has the feature
 	if req.Format == "json" {
 		if err := h.processor.CheckJSONExportFeature(ctx, accountID); err != nil {
-			apierrors.RespondWithError(c, err)
+			h.handleError(c, err)
 			return
 		}
 	}
@@ -788,14 +826,14 @@ func (h *Handler) HandleVerifyUser(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -804,7 +842,7 @@ func (h *Handler) HandleVerifyUser(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
@@ -813,13 +851,13 @@ func (h *Handler) HandleVerifyUser(c *gin.Context) {
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse user ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		apierrors.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
 		return
 	}
 
 	err = h.processor.VerifyUser(ctx, accountID, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -835,14 +873,14 @@ func (h *Handler) HandleResendVerification(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -851,7 +889,7 @@ func (h *Handler) HandleResendVerification(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
@@ -860,13 +898,13 @@ func (h *Handler) HandleResendVerification(c *gin.Context) {
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse user ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		apierrors.BadRequest(c, "INVALID_USER_ID", "Invalid user ID")
 		return
 	}
 
 	_, err = h.processor.ResendVerificationToken(ctx, accountID, campaignID, userID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -884,14 +922,14 @@ func (h *Handler) HandleRecalculatePositions(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "Account ID not found in context")
 		return
 	}
 
 	accountID, err := uuid.Parse(accountIDStr.(string))
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
+		apierrors.BadRequest(c, "INVALID_ACCOUNT_ID", "Invalid account ID")
 		return
 	}
 
@@ -900,21 +938,21 @@ func (h *Handler) HandleRecalculatePositions(c *gin.Context) {
 	campaignID, err := uuid.Parse(campaignIDStr)
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
+		apierrors.BadRequest(c, "INVALID_CAMPAIGN_ID", "Invalid campaign ID")
 		return
 	}
 
 	// Verify campaign ownership
 	err = h.processor.VerifyCampaignOwnership(ctx, accountID, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
 	// Trigger position recalculation
 	err = h.positionCalculator.CalculatePositionsForCampaign(ctx, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

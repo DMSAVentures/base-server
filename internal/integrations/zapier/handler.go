@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -50,6 +51,16 @@ func NewHandler(store ZapierStore, tierService *tiers.TierService, logger *obser
 		store:       store,
 		tierService: tierService,
 		logger:      logger,
+	}
+}
+
+// handleError maps errors to appropriate API responses
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		apierrors.NotFound(c, "Subscription not found")
+	default:
+		apierrors.InternalError(c, err)
 	}
 }
 
@@ -165,20 +176,17 @@ func (h *Handler) HandleSubscribe(c *gin.Context) {
 	hasFeature, err := h.tierService.HasFeatureByAccountID(ctx, accountID, "webhooks_zapier")
 	if err != nil {
 		h.logger.Error(ctx, "failed to check Zapier feature", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 	if !hasFeature {
-		c.JSON(http.StatusForbidden, gin.H{
-			"error": "Zapier integration is not available in your plan. Please upgrade to Team plan.",
-			"code":  apierrors.CodeFeatureNotAvailable,
-		})
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Zapier integration is not available in your plan. Please upgrade to Team plan.")
 		return
 	}
 
 	var req SubscribeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -220,7 +228,7 @@ func (h *Handler) HandleSubscribe(c *gin.Context) {
 	})
 	if err != nil {
 		h.logger.Error(ctx, "failed to create subscription", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -257,7 +265,7 @@ func (h *Handler) HandleUnsubscribe(c *gin.Context) {
 	subscription, err := h.store.GetIntegrationSubscriptionByID(ctx, subscriptionID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to get subscription", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -270,7 +278,7 @@ func (h *Handler) HandleUnsubscribe(c *gin.Context) {
 	err = h.store.DeleteIntegrationSubscription(ctx, subscriptionID)
 	if err != nil {
 		h.logger.Error(ctx, "failed to delete subscription", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -324,7 +332,7 @@ func (h *Handler) HandleListCampaigns(c *gin.Context) {
 	})
 	if err != nil {
 		h.logger.Error(ctx, "failed to list campaigns for Zapier", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -413,7 +421,7 @@ func (h *Handler) HandleStatus(c *gin.Context) {
 	subscriptions, err := h.store.GetIntegrationSubscriptionsByAccount(ctx, accountID, &intType)
 	if err != nil {
 		h.logger.Error(ctx, "failed to get subscriptions", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -446,7 +454,7 @@ func (h *Handler) HandleSubscriptions(c *gin.Context) {
 	subscriptions, err := h.store.GetIntegrationSubscriptionsByAccount(ctx, accountID, &intType)
 	if err != nil {
 		h.logger.Error(ctx, "failed to get subscriptions", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -499,7 +507,7 @@ func (h *Handler) HandleDisconnect(c *gin.Context) {
 	subscriptions, err := h.store.GetIntegrationSubscriptionsByAccount(ctx, accountID, &intType)
 	if err != nil {
 		h.logger.Error(ctx, "failed to get subscriptions", err)
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

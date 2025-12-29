@@ -1,13 +1,15 @@
 package handler
 
 import (
+	"errors"
+	"net/http"
+	"net/url"
+	"os"
+
 	"base-server/internal/apierrors"
 	"base-server/internal/auth/processor"
 	"base-server/internal/observability"
 	"base-server/internal/tiers"
-	"net/http"
-	"net/url"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -37,9 +39,9 @@ func New(authProcessor processor.AuthProcessor, tierService *tiers.TierService, 
 
 // UserInfoResponse combines user info with tier information
 type UserInfoResponse struct {
-	FirstName  string         `json:"first_name"`
-	LastName   string         `json:"last_name"`
-	ExternalID uuid.UUID      `json:"external_id"`
+	FirstName  string          `json:"first_name"`
+	LastName   string          `json:"last_name"`
+	ExternalID uuid.UUID       `json:"external_id"`
 	Tier       *tiers.TierInfo `json:"tier,omitempty"`
 }
 
@@ -47,18 +49,17 @@ func (h *Handler) HandleEmailLogin(c *gin.Context) {
 	var emailLoginRequest EmailLoginRequest
 	ctx := c.Request.Context()
 	if err := c.ShouldBindJSON(&emailLoginRequest); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
 	token, err := h.authProcessor.Login(ctx, emailLoginRequest.Email, emailLoginRequest.Password)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": token})
-	return
 }
 
 func (h *Handler) HandleEmailSignup(c *gin.Context) {
@@ -66,45 +67,43 @@ func (h *Handler) HandleEmailSignup(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 	signedUpUser, err := h.authProcessor.Signup(ctx, req.FirstName, req.LastName, req.Email, req.Password)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, signedUpUser)
-	return
 }
 
 func (h *Handler) HandleJWTMiddleware(c *gin.Context) {
 	ctx := c.Request.Context()
 	token, err := c.Cookie("token")
 	if token == "" || err != nil {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("Authorization token is missing or invalid"))
-		c.Abort() // Stop further processing
+		apierrors.Unauthorized(c, "Authorization token is missing or invalid")
+		c.Abort()
 		return
 	}
 
 	claims, err := h.authProcessor.ValidateJWTToken(ctx, token)
 
 	if err != nil {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("Invalid or expired token"))
-		c.Abort() // Stop further processing
+		apierrors.Unauthorized(c, "Invalid or expired token")
+		c.Abort()
 		return
 	}
 	sub, err := claims.GetSubject()
 	if err != nil {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("Invalid token claims"))
-		c.Abort() // Stop further processing
+		apierrors.Unauthorized(c, "Invalid token claims")
+		c.Abort()
 		return
 	}
 	c.Set("User-ID", sub)
 	c.Set("Account-ID", claims.AccountID)
 
-	// Add auth context to observability for comprehensive logging
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "user_id", Value: sub},
 		observability.Field{Key: "account_id", Value: claims.AccountID},
@@ -112,41 +111,38 @@ func (h *Handler) HandleJWTMiddleware(c *gin.Context) {
 	)
 	c.Request = c.Request.WithContext(ctx)
 
-	// Continue to the next handler if the token is valid
 	c.Next()
 }
 
-func (h *Handler) GetUserInfo(context *gin.Context) {
-	ctx := context.Request.Context()
-	userID, ok := context.Get("User-ID")
+func (h *Handler) GetUserInfo(c *gin.Context) {
+	ctx := c.Request.Context()
+	userID, ok := c.Get("User-ID")
 	if !ok {
-		apierrors.RespondWithError(context, apierrors.Unauthorized("User ID not found in context"))
+		apierrors.Unauthorized(c, "User ID not found in context")
 		return
 	}
 
 	parsedUserID, err := uuid.Parse(userID.(string))
 	if err != nil {
-		apierrors.RespondWithError(context, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid user ID format"))
+		apierrors.BadRequest(c, "INVALID_INPUT", "Invalid user ID format")
 		return
 	}
 	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID.String()})
 
 	user, err := h.authProcessor.GetUserByExternalID(ctx, parsedUserID)
 	if err != nil {
-		apierrors.RespondWithError(context, err)
+		h.handleError(c, err)
 		return
 	}
 
-	// Build response with user info
 	response := UserInfoResponse{
 		FirstName:  user.FirstName,
 		LastName:   user.LastName,
 		ExternalID: user.ExternalID,
 	}
 
-	// Get account ID from context and fetch tier info if tier service is available
 	if h.tierService != nil {
-		accountIDStr, accountOk := context.Get("Account-ID")
+		accountIDStr, accountOk := c.Get("Account-ID")
 		if accountOk && accountIDStr != "" {
 			accountID, parseErr := uuid.Parse(accountIDStr.(string))
 			if parseErr == nil {
@@ -154,28 +150,25 @@ func (h *Handler) GetUserInfo(context *gin.Context) {
 				if tierErr == nil {
 					response.Tier = &tierInfo
 				} else {
-					// Log the error but don't fail the request
 					h.logger.Error(ctx, "failed to get tier info", tierErr)
 				}
 			}
 		}
 	}
 
-	context.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 	ctx := c.Request.Context()
-	// Extract the authorization code from the query parameters
 	code := c.Request.URL.Query().Get("code")
 	if code == "" {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Authorization code is missing"))
+		apierrors.BadRequest(c, "INVALID_INPUT", "Authorization code is missing")
 		return
 	}
-	// Exchange the authorization code for access JWTToken
 	JWTToken, err := h.authProcessor.SignInGoogleUserWithCode(ctx, code)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -187,7 +180,7 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 
 	parsedUrl, err := url.Parse(h.authProcessor.GetWebAppHost())
 	if err != nil {
-		apierrors.RespondWithError(c, apierrors.InternalError(err))
+		apierrors.InternalError(c, err)
 		return
 	}
 
@@ -198,5 +191,19 @@ func (h *Handler) HandleGoogleOauthCallback(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusFound, redirectUrl.String())
-	return
+}
+
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrEmailAlreadyExists):
+		apierrors.Conflict(c, "EMAIL_EXISTS", "Email already exists")
+	case errors.Is(err, processor.ErrEmailDoesNotExist):
+		apierrors.NotFound(c, "Email does not exist")
+	case errors.Is(err, processor.ErrIncorrectPassword):
+		apierrors.Unauthorized(c, "Invalid email or password")
+	case errors.Is(err, processor.ErrUserNotFound):
+		apierrors.NotFound(c, "User not found")
+	default:
+		apierrors.InternalError(c, err)
+	}
 }

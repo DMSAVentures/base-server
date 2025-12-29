@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"base-server/internal/apierrors"
 	"base-server/internal/observability"
 	"net/http"
 
@@ -17,7 +16,7 @@ func (h *Handler) HandleUpdatePaymentMethod(c *gin.Context) {
 
 	clientSecret, err := h.processor.SetupPaymentMethodUpdateIntent(ctx, parsedUserID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

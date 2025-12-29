@@ -93,7 +93,7 @@ func (h *Handler) HandleAnswerVoiceAgent(c *gin.Context) {
 
 	twimlResult, err := twiml.Voice([]twiml.Element{say, connect})
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		apierrors.InternalError(c, err)
 		return
 	} else {
 		h.logger.Info(c.Request.Context(), fmt.Sprintf("Voice Agent TwiML Response: %s", twimlResult))

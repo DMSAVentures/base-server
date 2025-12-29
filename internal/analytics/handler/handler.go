@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"errors"
+	"net/http"
+	"time"
+
 	"base-server/internal/analytics/processor"
 	"base-server/internal/apierrors"
 	"base-server/internal/observability"
-	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -23,6 +25,21 @@ func New(processor processor.AnalyticsProcessor, logger *observability.Logger) H
 	}
 }
 
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrCampaignNotFound):
+		apierrors.NotFound(c, "Campaign not found")
+	case errors.Is(err, processor.ErrUnauthorized):
+		apierrors.Forbidden(c, "FORBIDDEN", "You do not have access to this campaign")
+	case errors.Is(err, processor.ErrInvalidDateRange):
+		apierrors.BadRequest(c, "INVALID_DATE_RANGE", "Invalid date range")
+	case errors.Is(err, processor.ErrInvalidGranularity):
+		apierrors.BadRequest(c, "INVALID_GRANULARITY", "Invalid granularity")
+	default:
+		apierrors.InternalError(c, err)
+	}
+}
+
 // HandleGetAnalyticsOverview retrieves high-level analytics for a campaign
 func (h *Handler) HandleGetAnalyticsOverview(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -30,7 +47,7 @@ func (h *Handler) HandleGetAnalyticsOverview(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -53,7 +70,7 @@ func (h *Handler) HandleGetAnalyticsOverview(c *gin.Context) {
 	// Get analytics overview
 	overview, err := h.processor.GetAnalyticsOverview(ctx, accountID, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -67,7 +84,7 @@ func (h *Handler) HandleGetConversionAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -112,7 +129,7 @@ func (h *Handler) HandleGetConversionAnalytics(c *gin.Context) {
 	// Get conversion analytics
 	conversions, err := h.processor.GetConversionAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -126,7 +143,7 @@ func (h *Handler) HandleGetReferralAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -171,7 +188,7 @@ func (h *Handler) HandleGetReferralAnalytics(c *gin.Context) {
 	// Get referral analytics
 	referrals, err := h.processor.GetReferralAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -185,7 +202,7 @@ func (h *Handler) HandleGetSignupsOverTime(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -233,7 +250,7 @@ func (h *Handler) HandleGetSignupsOverTime(c *gin.Context) {
 	// Get signups over time
 	response, err := h.processor.GetSignupsOverTime(ctx, accountID, campaignID, dateFrom, dateTo, period)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -247,7 +264,7 @@ func (h *Handler) HandleGetSignupsBySource(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -295,7 +312,7 @@ func (h *Handler) HandleGetSignupsBySource(c *gin.Context) {
 	// Get signups by source
 	response, err := h.processor.GetSignupsBySource(ctx, accountID, campaignID, dateFrom, dateTo, period)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -309,7 +326,7 @@ func (h *Handler) HandleGetSourceAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -354,7 +371,7 @@ func (h *Handler) HandleGetSourceAnalytics(c *gin.Context) {
 	// Get source analytics
 	sources, err := h.processor.GetSourceAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -368,7 +385,7 @@ func (h *Handler) HandleGetFunnelAnalytics(c *gin.Context) {
 	// Get account ID from context
 	accountIDStr, exists := c.Get("Account-ID")
 	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("account ID not found in context"))
+		apierrors.Unauthorized(c, "account ID not found in context")
 		return
 	}
 
@@ -413,7 +430,7 @@ func (h *Handler) HandleGetFunnelAnalytics(c *gin.Context) {
 	// Get funnel analytics
 	funnel, err := h.processor.GetFunnelAnalytics(ctx, accountID, campaignID, dateFrom, dateTo)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 

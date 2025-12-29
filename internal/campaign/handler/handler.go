@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -137,29 +138,19 @@ type UpdateCampaignStatusRequest struct {
 func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Get account ID from context
-	accountIDStr, exists := c.Get("Account-ID")
-	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
+	accountID, ok := h.getAccountID(c)
+	if !ok {
 		return
 	}
 
-	accountID, err := uuid.Parse(accountIDStr.(string))
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
-		return
-	}
-
-	// Add account_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
 
 	var req CreateCampaignRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
-	// Add campaign identifiers to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "campaign_slug", Value: req.Slug},
 		observability.Field{Key: "campaign_type", Value: req.Type},
@@ -178,7 +169,7 @@ func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 
 	campaign, err := h.processor.CreateCampaign(ctx, accountID, params)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -189,23 +180,13 @@ func (h *Handler) HandleCreateCampaign(c *gin.Context) {
 func (h *Handler) HandleListCampaigns(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Get account ID from context
-	accountIDStr, exists := c.Get("Account-ID")
-	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
+	accountID, ok := h.getAccountID(c)
+	if !ok {
 		return
 	}
 
-	accountID, err := uuid.Parse(accountIDStr.(string))
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
-		return
-	}
-
-	// Add account_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
 
-	// Parse query parameters
 	page := 1
 	if pageStr := c.Query("page"); pageStr != "" {
 		if _, err := fmt.Sscanf(pageStr, "%d", &page); err != nil || page < 1 {
@@ -232,7 +213,7 @@ func (h *Handler) HandleListCampaigns(c *gin.Context) {
 
 	result, err := h.processor.ListCampaigns(ctx, accountID, status, campaignType, page, limit)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -251,36 +232,23 @@ func (h *Handler) HandleListCampaigns(c *gin.Context) {
 func (h *Handler) HandleGetCampaign(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Get account ID from context
-	accountIDStr, exists := c.Get("Account-ID")
-	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
+	accountID, ok := h.getAccountID(c)
+	if !ok {
 		return
 	}
 
-	accountID, err := uuid.Parse(accountIDStr.(string))
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
-		return
-	}
-
-	// Add account_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+	campaignID, ok := h.getCampaignID(c)
+	if !ok {
 		return
 	}
 
-	// Add campaign_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
 
 	campaign, err := h.processor.GetCampaign(ctx, accountID, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -291,21 +259,16 @@ func (h *Handler) HandleGetCampaign(c *gin.Context) {
 func (h *Handler) HandleGetPublicCampaign(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+	campaignID, ok := h.getCampaignID(c)
+	if !ok {
 		return
 	}
 
-	// Add campaign_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
 
 	campaign, err := h.processor.GetPublicCampaign(ctx, campaignID)
 	if err != nil {
-		// Processor already logged detailed error with full context
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -316,36 +279,23 @@ func (h *Handler) HandleGetPublicCampaign(c *gin.Context) {
 func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Get account ID from context
-	accountIDStr, exists := c.Get("Account-ID")
-	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
+	accountID, ok := h.getAccountID(c)
+	if !ok {
 		return
 	}
 
-	accountID, err := uuid.Parse(accountIDStr.(string))
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
-		return
-	}
-
-	// Add account_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+	campaignID, ok := h.getCampaignID(c)
+	if !ok {
 		return
 	}
 
-	// Add campaign_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
 
 	var req UpdateCampaignRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
@@ -362,7 +312,7 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 
 	campaign, err := h.processor.UpdateCampaign(ctx, accountID, campaignID, params)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -373,36 +323,23 @@ func (h *Handler) HandleUpdateCampaign(c *gin.Context) {
 func (h *Handler) HandleDeleteCampaign(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Get account ID from context
-	accountIDStr, exists := c.Get("Account-ID")
-	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
+	accountID, ok := h.getAccountID(c)
+	if !ok {
 		return
 	}
 
-	accountID, err := uuid.Parse(accountIDStr.(string))
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
-		return
-	}
-
-	// Add account_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+	campaignID, ok := h.getCampaignID(c)
+	if !ok {
 		return
 	}
 
-	// Add campaign_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
 
-	err = h.processor.DeleteCampaign(ctx, accountID, campaignID)
+	err := h.processor.DeleteCampaign(ctx, accountID, campaignID)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
@@ -413,49 +350,79 @@ func (h *Handler) HandleDeleteCampaign(c *gin.Context) {
 func (h *Handler) HandleUpdateCampaignStatus(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Get account ID from context
-	accountIDStr, exists := c.Get("Account-ID")
-	if !exists {
-		apierrors.RespondWithError(c, apierrors.Unauthorized("Account ID not found in context"))
+	accountID, ok := h.getAccountID(c)
+	if !ok {
 		return
 	}
 
-	accountID, err := uuid.Parse(accountIDStr.(string))
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid account ID format"))
-		return
-	}
-
-	// Add account_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		apierrors.RespondWithError(c, apierrors.BadRequest(apierrors.CodeInvalidInput, "Invalid campaign ID format"))
+	campaignID, ok := h.getCampaignID(c)
+	if !ok {
 		return
 	}
 
-	// Add campaign_id to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "campaign_id", Value: campaignID.String()})
 
 	var req UpdateCampaignStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.RespondWithValidationError(c, err)
+		apierrors.ValidationError(c, err)
 		return
 	}
 
-	// Add new status to observability context for comprehensive logging
 	ctx = observability.WithFields(ctx, observability.Field{Key: "new_status", Value: req.Status})
 
 	campaign, err := h.processor.UpdateCampaignStatus(ctx, accountID, campaignID, req.Status)
 	if err != nil {
-		apierrors.RespondWithError(c, err)
+		h.handleError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, campaign)
+}
+
+func (h *Handler) getAccountID(c *gin.Context) (uuid.UUID, bool) {
+	accountIDStr, exists := c.Get("Account-ID")
+	if !exists {
+		apierrors.Unauthorized(c, "Account ID not found in context")
+		return uuid.UUID{}, false
+	}
+
+	accountID, err := uuid.Parse(accountIDStr.(string))
+	if err != nil {
+		apierrors.BadRequest(c, "INVALID_INPUT", "Invalid account ID format")
+		return uuid.UUID{}, false
+	}
+	return accountID, true
+}
+
+func (h *Handler) getCampaignID(c *gin.Context) (uuid.UUID, bool) {
+	campaignIDStr := c.Param("campaign_id")
+	campaignID, err := uuid.Parse(campaignIDStr)
+	if err != nil {
+		apierrors.BadRequest(c, "INVALID_INPUT", "Invalid campaign ID format")
+		return uuid.UUID{}, false
+	}
+	return campaignID, true
+}
+
+func (h *Handler) handleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, processor.ErrCampaignNotFound):
+		apierrors.NotFound(c, "Campaign not found")
+	case errors.Is(err, processor.ErrSlugAlreadyExists):
+		apierrors.Conflict(c, "SLUG_EXISTS", "Campaign slug already exists")
+	case errors.Is(err, processor.ErrInvalidCampaignStatus):
+		apierrors.BadRequest(c, "INVALID_STATUS", "Invalid campaign status")
+	case errors.Is(err, processor.ErrInvalidCampaignType):
+		apierrors.BadRequest(c, "INVALID_TYPE", "Invalid campaign type")
+	case errors.Is(err, processor.ErrUnauthorized):
+		apierrors.Forbidden(c, "FORBIDDEN", "You do not have access to this campaign")
+	case errors.Is(err, processor.ErrCampaignLimitReached):
+		apierrors.Forbidden(c, "CAMPAIGN_LIMIT_REACHED", "You have reached your campaign limit. Please upgrade your plan to create more campaigns.")
+	default:
+		apierrors.InternalError(c, err)
+	}
 }
 
 // convertSettingsRequest converts HTTP request settings to processor params
