@@ -208,6 +208,35 @@ func TestHandler_HandleSubscribe(t *testing.T) {
 	}
 }
 
+func TestHandler_HandleSubscribe_FeatureNotAvailable(t *testing.T) {
+	t.Parallel()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	handler, _ := setupTestHandlerWithTierService(t, ctrl, false) // no Zapier feature
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	reqBody := SubscribeRequest{
+		HookURL: "https://hooks.zapier.com/hooks/catch/123/abc",
+		Event:   "user.created",
+	}
+	body, _ := json.Marshal(reqBody)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/zapier/subscribe", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	setContextValues(c, uuid.New(), uuid.New())
+
+	handler.HandleSubscribe(c)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	var response map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	require.NoError(t, err)
+	assert.Contains(t, response["error"], "not available")
+}
+
 func TestHandler_HandleUnsubscribe(t *testing.T) {
 	t.Parallel()
 
