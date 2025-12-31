@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// CreateEmailTemplateParams represents parameters for creating an email template
-type CreateEmailTemplateParams struct {
+// CreateCampaignEmailTemplateParams represents parameters for creating a campaign email template
+type CreateCampaignEmailTemplateParams struct {
 	CampaignID        uuid.UUID
 	Name              string
 	Type              string
@@ -23,16 +23,16 @@ type CreateEmailTemplateParams struct {
 	VariantWeight     *int
 }
 
-const sqlCreateEmailTemplate = `
-INSERT INTO email_templates (campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight)
+const sqlCreateCampaignEmailTemplate = `
+INSERT INTO campaign_email_templates (campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
 `
 
-// CreateEmailTemplate creates a new email template
-func (s *Store) CreateEmailTemplate(ctx context.Context, params CreateEmailTemplateParams) (EmailTemplate, error) {
-	var template EmailTemplate
-	err := s.db.GetContext(ctx, &template, sqlCreateEmailTemplate,
+// CreateCampaignEmailTemplate creates a new campaign email template
+func (s *Store) CreateCampaignEmailTemplate(ctx context.Context, params CreateCampaignEmailTemplateParams) (CampaignEmailTemplate, error) {
+	var template CampaignEmailTemplate
+	err := s.db.GetContext(ctx, &template, sqlCreateCampaignEmailTemplate,
 		params.CampaignID,
 		params.Name,
 		params.Type,
@@ -44,88 +44,88 @@ func (s *Store) CreateEmailTemplate(ctx context.Context, params CreateEmailTempl
 		params.VariantName,
 		params.VariantWeight)
 	if err != nil {
-		return EmailTemplate{}, fmt.Errorf("failed to create email template: %w", err)
+		return CampaignEmailTemplate{}, fmt.Errorf("failed to create campaign email template: %w", err)
 	}
 	return template, nil
 }
 
-const sqlGetEmailTemplateByID = `
+const sqlGetCampaignEmailTemplateByID = `
 SELECT id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
-FROM email_templates
+FROM campaign_email_templates
 WHERE id = $1 AND deleted_at IS NULL
 `
 
-// GetEmailTemplateByID retrieves an email template by ID
-func (s *Store) GetEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (EmailTemplate, error) {
-	var template EmailTemplate
-	err := s.db.GetContext(ctx, &template, sqlGetEmailTemplateByID, templateID)
+// GetCampaignEmailTemplateByID retrieves a campaign email template by ID
+func (s *Store) GetCampaignEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (CampaignEmailTemplate, error) {
+	var template CampaignEmailTemplate
+	err := s.db.GetContext(ctx, &template, sqlGetCampaignEmailTemplateByID, templateID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return EmailTemplate{}, ErrNotFound
+			return CampaignEmailTemplate{}, ErrNotFound
 		}
-		return EmailTemplate{}, fmt.Errorf("failed to get email template: %w", err)
+		return CampaignEmailTemplate{}, fmt.Errorf("failed to get campaign email template: %w", err)
 	}
 	return template, nil
 }
 
-const sqlGetEmailTemplatesByCampaign = `
+const sqlGetCampaignEmailTemplatesByCampaign = `
 SELECT id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
-FROM email_templates
+FROM campaign_email_templates
 WHERE campaign_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
-// GetEmailTemplatesByCampaign retrieves all email templates for a campaign
-func (s *Store) GetEmailTemplatesByCampaign(ctx context.Context, campaignID uuid.UUID) ([]EmailTemplate, error) {
-	var templates []EmailTemplate
-	err := s.db.SelectContext(ctx, &templates, sqlGetEmailTemplatesByCampaign, campaignID)
+// GetCampaignEmailTemplatesByCampaign retrieves all campaign email templates for a campaign
+func (s *Store) GetCampaignEmailTemplatesByCampaign(ctx context.Context, campaignID uuid.UUID) ([]CampaignEmailTemplate, error) {
+	var templates []CampaignEmailTemplate
+	err := s.db.SelectContext(ctx, &templates, sqlGetCampaignEmailTemplatesByCampaign, campaignID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get email templates: %w", err)
+		return nil, fmt.Errorf("failed to get campaign email templates: %w", err)
 	}
 	return templates, nil
 }
 
-const sqlGetEmailTemplatesByAccount = `
+const sqlGetCampaignEmailTemplatesByAccount = `
 SELECT et.id, et.campaign_id, et.name, et.type, et.subject, et.html_body, et.blocks_json, et.enabled, et.send_automatically, et.variant_name, et.variant_weight, et.created_at, et.updated_at, et.deleted_at
-FROM email_templates et
+FROM campaign_email_templates et
 JOIN campaigns c ON et.campaign_id = c.id
 WHERE c.account_id = $1 AND et.deleted_at IS NULL AND c.deleted_at IS NULL
 ORDER BY et.created_at DESC
 `
 
-// GetEmailTemplatesByAccount retrieves all email templates for an account across all campaigns
-func (s *Store) GetEmailTemplatesByAccount(ctx context.Context, accountID uuid.UUID) ([]EmailTemplate, error) {
-	var templates []EmailTemplate
-	err := s.db.SelectContext(ctx, &templates, sqlGetEmailTemplatesByAccount, accountID)
+// GetCampaignEmailTemplatesByAccount retrieves all campaign email templates for an account across all campaigns
+func (s *Store) GetCampaignEmailTemplatesByAccount(ctx context.Context, accountID uuid.UUID) ([]CampaignEmailTemplate, error) {
+	var templates []CampaignEmailTemplate
+	err := s.db.SelectContext(ctx, &templates, sqlGetCampaignEmailTemplatesByAccount, accountID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get email templates by account: %w", err)
+		return nil, fmt.Errorf("failed to get campaign email templates by account: %w", err)
 	}
 	return templates, nil
 }
 
-const sqlGetEmailTemplateByType = `
+const sqlGetCampaignEmailTemplateByType = `
 SELECT id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
-FROM email_templates
+FROM campaign_email_templates
 WHERE campaign_id = $1 AND type = $2 AND enabled = TRUE AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT 1
 `
 
-// GetEmailTemplateByType retrieves an email template by campaign and type
-func (s *Store) GetEmailTemplateByType(ctx context.Context, campaignID uuid.UUID, templateType string) (EmailTemplate, error) {
-	var template EmailTemplate
-	err := s.db.GetContext(ctx, &template, sqlGetEmailTemplateByType, campaignID, templateType)
+// GetCampaignEmailTemplateByType retrieves a campaign email template by campaign and type
+func (s *Store) GetCampaignEmailTemplateByType(ctx context.Context, campaignID uuid.UUID, templateType string) (CampaignEmailTemplate, error) {
+	var template CampaignEmailTemplate
+	err := s.db.GetContext(ctx, &template, sqlGetCampaignEmailTemplateByType, campaignID, templateType)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return EmailTemplate{}, ErrNotFound
+			return CampaignEmailTemplate{}, ErrNotFound
 		}
-		return EmailTemplate{}, fmt.Errorf("failed to get email template by type: %w", err)
+		return CampaignEmailTemplate{}, fmt.Errorf("failed to get campaign email template by type: %w", err)
 	}
 	return template, nil
 }
 
-const sqlUpdateEmailTemplate = `
-UPDATE email_templates
+const sqlUpdateCampaignEmailTemplate = `
+UPDATE campaign_email_templates
 SET name = COALESCE($2, name),
     subject = COALESCE($3, subject),
     html_body = COALESCE($4, html_body),
@@ -137,8 +137,8 @@ WHERE id = $1 AND deleted_at IS NULL
 RETURNING id, campaign_id, name, type, subject, html_body, blocks_json, enabled, send_automatically, variant_name, variant_weight, created_at, updated_at, deleted_at
 `
 
-// UpdateEmailTemplateParams represents parameters for updating an email template
-type UpdateEmailTemplateParams struct {
+// UpdateCampaignEmailTemplateParams represents parameters for updating a campaign email template
+type UpdateCampaignEmailTemplateParams struct {
 	Name              *string
 	Subject           *string
 	HTMLBody          *string
@@ -147,10 +147,10 @@ type UpdateEmailTemplateParams struct {
 	SendAutomatically *bool
 }
 
-// UpdateEmailTemplate updates an email template
-func (s *Store) UpdateEmailTemplate(ctx context.Context, templateID uuid.UUID, params UpdateEmailTemplateParams) (EmailTemplate, error) {
-	var template EmailTemplate
-	err := s.db.GetContext(ctx, &template, sqlUpdateEmailTemplate,
+// UpdateCampaignEmailTemplate updates a campaign email template
+func (s *Store) UpdateCampaignEmailTemplate(ctx context.Context, templateID uuid.UUID, params UpdateCampaignEmailTemplateParams) (CampaignEmailTemplate, error) {
+	var template CampaignEmailTemplate
+	err := s.db.GetContext(ctx, &template, sqlUpdateCampaignEmailTemplate,
 		templateID,
 		params.Name,
 		params.Subject,
@@ -160,24 +160,24 @@ func (s *Store) UpdateEmailTemplate(ctx context.Context, templateID uuid.UUID, p
 		params.SendAutomatically)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return EmailTemplate{}, ErrNotFound
+			return CampaignEmailTemplate{}, ErrNotFound
 		}
-		return EmailTemplate{}, fmt.Errorf("failed to update email template: %w", err)
+		return CampaignEmailTemplate{}, fmt.Errorf("failed to update campaign email template: %w", err)
 	}
 	return template, nil
 }
 
-const sqlDeleteEmailTemplate = `
-UPDATE email_templates
+const sqlDeleteCampaignEmailTemplate = `
+UPDATE campaign_email_templates
 SET deleted_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
 `
 
-// DeleteEmailTemplate soft deletes an email template
-func (s *Store) DeleteEmailTemplate(ctx context.Context, templateID uuid.UUID) error {
-	res, err := s.db.ExecContext(ctx, sqlDeleteEmailTemplate, templateID)
+// DeleteCampaignEmailTemplate soft deletes a campaign email template
+func (s *Store) DeleteCampaignEmailTemplate(ctx context.Context, templateID uuid.UUID) error {
+	res, err := s.db.ExecContext(ctx, sqlDeleteCampaignEmailTemplate, templateID)
 	if err != nil {
-		return fmt.Errorf("failed to delete email template: %w", err)
+		return fmt.Errorf("failed to delete campaign email template: %w", err)
 	}
 
 	rows, err := res.RowsAffected()
@@ -196,19 +196,21 @@ func (s *Store) DeleteEmailTemplate(ctx context.Context, templateID uuid.UUID) e
 
 // CreateEmailLogParams represents parameters for creating an email log
 type CreateEmailLogParams struct {
-	CampaignID        uuid.UUID
-	UserID            *uuid.UUID
-	TemplateID        *uuid.UUID
-	RecipientEmail    string
-	Subject           string
-	Type              string
-	ProviderMessageID *string
+	CampaignID         uuid.UUID
+	UserID             *uuid.UUID
+	CampaignTemplateID *uuid.UUID
+	BlastTemplateID    *uuid.UUID
+	BlastID            *uuid.UUID
+	RecipientEmail     string
+	Subject            string
+	Type               string
+	ProviderMessageID  *string
 }
 
 const sqlCreateEmailLog = `
-INSERT INTO email_logs (campaign_id, user_id, template_id, recipient_email, subject, type, provider_message_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, campaign_id, user_id, template_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
+INSERT INTO email_logs (campaign_id, user_id, campaign_template_id, blast_template_id, blast_id, recipient_email, subject, type, provider_message_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, campaign_id, user_id, campaign_template_id, blast_template_id, blast_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
 `
 
 // CreateEmailLog creates a new email log entry
@@ -217,7 +219,9 @@ func (s *Store) CreateEmailLog(ctx context.Context, params CreateEmailLogParams)
 	err := s.db.GetContext(ctx, &log, sqlCreateEmailLog,
 		params.CampaignID,
 		params.UserID,
-		params.TemplateID,
+		params.CampaignTemplateID,
+		params.BlastTemplateID,
+		params.BlastID,
 		params.RecipientEmail,
 		params.Subject,
 		params.Type,
@@ -229,7 +233,7 @@ func (s *Store) CreateEmailLog(ctx context.Context, params CreateEmailLogParams)
 }
 
 const sqlGetEmailLogByID = `
-SELECT id, campaign_id, user_id, template_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
+SELECT id, campaign_id, user_id, campaign_template_id, blast_template_id, blast_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
 FROM email_logs
 WHERE id = $1
 `
@@ -248,7 +252,7 @@ func (s *Store) GetEmailLogByID(ctx context.Context, logID uuid.UUID) (EmailLog,
 }
 
 const sqlGetEmailLogsByUser = `
-SELECT id, campaign_id, user_id, template_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
+SELECT id, campaign_id, user_id, campaign_template_id, blast_template_id, blast_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
 FROM email_logs
 WHERE user_id = $1
 ORDER BY created_at DESC
@@ -266,7 +270,7 @@ func (s *Store) GetEmailLogsByUser(ctx context.Context, userID uuid.UUID, limit,
 }
 
 const sqlGetEmailLogsByCampaign = `
-SELECT id, campaign_id, user_id, template_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
+SELECT id, campaign_id, user_id, campaign_template_id, blast_template_id, blast_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
 FROM email_logs
 WHERE campaign_id = $1
 ORDER BY created_at DESC
@@ -352,7 +356,7 @@ func (s *Store) IncrementEmailClickCount(ctx context.Context, logID uuid.UUID) e
 }
 
 const sqlGetEmailLogByProviderMessageID = `
-SELECT id, campaign_id, user_id, template_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
+SELECT id, campaign_id, user_id, campaign_template_id, blast_template_id, blast_id, recipient_email, subject, type, status, provider_message_id, sent_at, delivered_at, opened_at, clicked_at, bounced_at, failed_at, error_message, bounce_reason, open_count, click_count, created_at, updated_at
 FROM email_logs
 WHERE provider_message_id = $1
 `

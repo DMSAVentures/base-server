@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // CreateEmailBlastParams represents parameters for creating an email blast
 type CreateEmailBlastParams struct {
-	CampaignID            uuid.UUID
-	SegmentID             uuid.UUID
-	TemplateID            uuid.UUID
+	AccountID             uuid.UUID
+	BlastTemplateID       uuid.UUID
+	SegmentIDs            []uuid.UUID
 	Name                  string
 	Subject               string
 	ScheduledAt           *time.Time
@@ -24,18 +25,18 @@ type CreateEmailBlastParams struct {
 }
 
 const sqlCreateEmailBlast = `
-INSERT INTO email_blasts (campaign_id, segment_id, template_id, name, subject, scheduled_at, batch_size, send_throttle_per_second, created_by, status)
+INSERT INTO email_blasts (account_id, blast_template_id, segment_ids, name, subject, scheduled_at, batch_size, send_throttle_per_second, created_by, status)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $6 IS NOT NULL THEN 'scheduled' ELSE 'draft' END)
-RETURNING id, campaign_id, segment_id, template_id, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
+RETURNING id, account_id, blast_template_id, segment_ids, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
 `
 
 // CreateEmailBlast creates a new email blast
 func (s *Store) CreateEmailBlast(ctx context.Context, params CreateEmailBlastParams) (EmailBlast, error) {
 	var blast EmailBlast
 	err := s.db.GetContext(ctx, &blast, sqlCreateEmailBlast,
-		params.CampaignID,
-		params.SegmentID,
-		params.TemplateID,
+		params.AccountID,
+		params.BlastTemplateID,
+		pq.Array(params.SegmentIDs),
 		params.Name,
 		params.Subject,
 		params.ScheduledAt,
@@ -49,7 +50,7 @@ func (s *Store) CreateEmailBlast(ctx context.Context, params CreateEmailBlastPar
 }
 
 const sqlGetEmailBlastByID = `
-SELECT id, campaign_id, segment_id, template_id, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
+SELECT id, account_id, blast_template_id, segment_ids, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
 FROM email_blasts
 WHERE id = $1 AND deleted_at IS NULL
 `
@@ -67,34 +68,34 @@ func (s *Store) GetEmailBlastByID(ctx context.Context, blastID uuid.UUID) (Email
 	return blast, nil
 }
 
-const sqlGetEmailBlastsByCampaign = `
-SELECT id, campaign_id, segment_id, template_id, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
+const sqlGetEmailBlastsByAccount = `
+SELECT id, account_id, blast_template_id, segment_ids, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
 FROM email_blasts
-WHERE campaign_id = $1 AND deleted_at IS NULL
+WHERE account_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
 `
 
-// GetEmailBlastsByCampaign retrieves email blasts for a campaign with pagination
-func (s *Store) GetEmailBlastsByCampaign(ctx context.Context, campaignID uuid.UUID, limit, offset int) ([]EmailBlast, error) {
+// GetEmailBlastsByAccount retrieves email blasts for an account with pagination
+func (s *Store) GetEmailBlastsByAccount(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]EmailBlast, error) {
 	var blasts []EmailBlast
-	err := s.db.SelectContext(ctx, &blasts, sqlGetEmailBlastsByCampaign, campaignID, limit, offset)
+	err := s.db.SelectContext(ctx, &blasts, sqlGetEmailBlastsByAccount, accountID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get email blasts: %w", err)
 	}
 	return blasts, nil
 }
 
-const sqlCountEmailBlastsByCampaign = `
+const sqlCountEmailBlastsByAccount = `
 SELECT COUNT(*)
 FROM email_blasts
-WHERE campaign_id = $1 AND deleted_at IS NULL
+WHERE account_id = $1 AND deleted_at IS NULL
 `
 
-// CountEmailBlastsByCampaign counts email blasts for a campaign
-func (s *Store) CountEmailBlastsByCampaign(ctx context.Context, campaignID uuid.UUID) (int, error) {
+// CountEmailBlastsByAccount counts email blasts for an account
+func (s *Store) CountEmailBlastsByAccount(ctx context.Context, accountID uuid.UUID) (int, error) {
 	var count int
-	err := s.db.GetContext(ctx, &count, sqlCountEmailBlastsByCampaign, campaignID)
+	err := s.db.GetContext(ctx, &count, sqlCountEmailBlastsByAccount, accountID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count email blasts: %w", err)
 	}
@@ -117,7 +118,7 @@ SET name = COALESCE($2, name),
     batch_size = COALESCE($5, batch_size),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL AND status = 'draft'
-RETURNING id, campaign_id, segment_id, template_id, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
+RETURNING id, account_id, blast_template_id, segment_ids, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
 `
 
 // UpdateEmailBlast updates an email blast (only if in draft status)
@@ -171,7 +172,7 @@ SET status = $2,
     completed_at = CASE WHEN $2 IN ('completed', 'cancelled', 'failed') THEN CURRENT_TIMESTAMP ELSE completed_at END,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1 AND deleted_at IS NULL
-RETURNING id, campaign_id, segment_id, template_id, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
+RETURNING id, account_id, blast_template_id, segment_ids, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
 `
 
 // UpdateEmailBlastStatus updates the status of an email blast
@@ -273,7 +274,7 @@ func (s *Store) UpdateEmailBlastProgress(ctx context.Context, blastID uuid.UUID,
 }
 
 const sqlGetScheduledBlasts = `
-SELECT id, campaign_id, segment_id, template_id, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
+SELECT id, account_id, blast_template_id, segment_ids, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
 FROM email_blasts
 WHERE status = 'scheduled' AND scheduled_at <= $1 AND deleted_at IS NULL
 ORDER BY scheduled_at ASC
@@ -354,6 +355,56 @@ func (s *Store) CreateBlastRecipientsBulk(ctx context.Context, blastID uuid.UUID
 	}
 
 	return nil
+}
+
+// CreateBlastRecipientsFromMultipleSegments creates recipients from multiple segments with deduplication
+func (s *Store) CreateBlastRecipientsFromMultipleSegments(ctx context.Context, blastID uuid.UUID, segmentIDs []uuid.UUID, batchSize int) (int, error) {
+	if len(segmentIDs) == 0 {
+		return 0, nil
+	}
+
+	// Use a map to deduplicate users by email across segments
+	seenEmails := make(map[string]bool)
+	var allUsers []WaitlistUser
+
+	for _, segmentID := range segmentIDs {
+		// Get the segment to get its campaign and filter criteria
+		segment, err := s.GetSegmentByID(ctx, segmentID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get segment %s: %w", segmentID, err)
+		}
+
+		criteria, err := ParseFilterCriteria(segment.FilterCriteria)
+		if err != nil {
+			return 0, fmt.Errorf("failed to parse filter criteria for segment %s: %w", segmentID, err)
+		}
+
+		// Get users for this segment
+		users, err := s.GetUsersForBlast(ctx, segment.CampaignID, criteria)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get users for segment %s: %w", segmentID, err)
+		}
+
+		// Deduplicate by email
+		for _, user := range users {
+			if !seenEmails[user.Email] {
+				seenEmails[user.Email] = true
+				allUsers = append(allUsers, user)
+			}
+		}
+	}
+
+	if len(allUsers) == 0 {
+		return 0, nil
+	}
+
+	// Create recipients in bulk
+	err := s.CreateBlastRecipientsBulk(ctx, blastID, allUsers, batchSize)
+	if err != nil {
+		return 0, err
+	}
+
+	return len(allUsers), nil
 }
 
 const sqlGetBlastRecipientByID = `
@@ -587,7 +638,7 @@ func (s *Store) ScheduleBlast(ctx context.Context, blastID uuid.UUID, scheduledA
 	    scheduled_at = $2,
 	    updated_at = CURRENT_TIMESTAMP
 	WHERE id = $1 AND deleted_at IS NULL AND status = 'draft'
-	RETURNING id, campaign_id, segment_id, template_id, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
+	RETURNING id, account_id, blast_template_id, segment_ids, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
 	`
 
 	var blast EmailBlast
@@ -599,4 +650,74 @@ func (s *Store) ScheduleBlast(ctx context.Context, blastID uuid.UUID, scheduledA
 		return EmailBlast{}, fmt.Errorf("failed to schedule blast: %w", err)
 	}
 	return blast, nil
+}
+
+// PreviewBlastRecipients returns a count and preview of recipients for given segment IDs
+type BlastRecipientsPreview struct {
+	TotalCount       int                          `json:"total_count"`
+	DuplicatesCount  int                          `json:"duplicates_count"`
+	BySegment        []BlastRecipientsSegmentInfo `json:"by_segment"`
+}
+
+type BlastRecipientsSegmentInfo struct {
+	SegmentID   uuid.UUID `json:"segment_id"`
+	SegmentName string    `json:"segment_name"`
+	UserCount   int       `json:"user_count"`
+}
+
+// PreviewBlastRecipients returns a preview of recipients for the given segments with deduplication info
+func (s *Store) PreviewBlastRecipients(ctx context.Context, segmentIDs []uuid.UUID) (BlastRecipientsPreview, error) {
+	if len(segmentIDs) == 0 {
+		return BlastRecipientsPreview{}, nil
+	}
+
+	preview := BlastRecipientsPreview{
+		BySegment: make([]BlastRecipientsSegmentInfo, 0, len(segmentIDs)),
+	}
+
+	seenEmails := make(map[string]bool)
+	totalBeforeDedup := 0
+
+	for _, segmentID := range segmentIDs {
+		segment, err := s.GetSegmentByID(ctx, segmentID)
+		if err != nil {
+			return BlastRecipientsPreview{}, fmt.Errorf("failed to get segment %s: %w", segmentID, err)
+		}
+
+		criteria, err := ParseFilterCriteria(segment.FilterCriteria)
+		if err != nil {
+			return BlastRecipientsPreview{}, fmt.Errorf("failed to parse filter criteria for segment %s: %w", segmentID, err)
+		}
+
+		// Count users for this segment
+		count, err := s.CountUsersMatchingCriteria(ctx, segment.CampaignID, criteria)
+		if err != nil {
+			return BlastRecipientsPreview{}, fmt.Errorf("failed to count users for segment %s: %w", segmentID, err)
+		}
+
+		preview.BySegment = append(preview.BySegment, BlastRecipientsSegmentInfo{
+			SegmentID:   segmentID,
+			SegmentName: segment.Name,
+			UserCount:   count,
+		})
+
+		totalBeforeDedup += count
+
+		// Get users to count unique emails (for dedup calculation)
+		users, err := s.GetUsersForBlast(ctx, segment.CampaignID, criteria)
+		if err != nil {
+			return BlastRecipientsPreview{}, fmt.Errorf("failed to get users for segment %s: %w", segmentID, err)
+		}
+
+		for _, user := range users {
+			if !seenEmails[user.Email] {
+				seenEmails[user.Email] = true
+				preview.TotalCount++
+			}
+		}
+	}
+
+	preview.DuplicatesCount = totalBeforeDedup - preview.TotalCount
+
+	return preview, nil
 }

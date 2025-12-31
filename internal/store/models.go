@@ -57,6 +57,68 @@ func (j *JSONB) Scan(value interface{}) error {
 // StringArray is a custom type for PostgreSQL text[] arrays
 type StringArray []string
 
+// UUIDArray is a custom type for PostgreSQL UUID[] arrays
+type UUIDArray []uuid.UUID
+
+// Value implements the driver.Valuer interface for UUIDArray
+func (a UUIDArray) Value() (driver.Value, error) {
+	if a == nil {
+		return nil, nil
+	}
+	if len(a) == 0 {
+		return "{}", nil
+	}
+	// PostgreSQL array format: {uuid1,uuid2,uuid3}
+	strVals := make([]string, len(a))
+	for i, v := range a {
+		strVals[i] = v.String()
+	}
+	return "{" + strings.Join(strVals, ",") + "}", nil
+}
+
+// Scan implements the sql.Scanner interface for UUIDArray
+func (a *UUIDArray) Scan(value interface{}) error {
+	if value == nil {
+		*a = nil
+		return nil
+	}
+
+	var str string
+	switch v := value.(type) {
+	case []byte:
+		str = string(v)
+	case string:
+		str = v
+	default:
+		return fmt.Errorf("unsupported type for UUIDArray: %T", value)
+	}
+
+	// Handle empty array
+	if str == "" || str == "{}" {
+		*a = []uuid.UUID{}
+		return nil
+	}
+
+	// Remove curly braces and split
+	str = strings.Trim(str, "{}")
+	if str == "" {
+		*a = []uuid.UUID{}
+		return nil
+	}
+
+	// Split by comma and parse UUIDs
+	parts := strings.Split(str, ",")
+	*a = make([]uuid.UUID, len(parts))
+	for i, p := range parts {
+		parsed, err := uuid.Parse(p)
+		if err != nil {
+			return fmt.Errorf("failed to parse UUID at index %d: %w", i, err)
+		}
+		(*a)[i] = parsed
+	}
+	return nil
+}
+
 // Value implements the driver.Valuer interface for StringArray
 func (a StringArray) Value() (driver.Value, error) {
 	if a == nil {
@@ -515,8 +577,8 @@ type UserReward struct {
 	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
 }
 
-// EmailTemplate represents an email template
-type EmailTemplate struct {
+// CampaignEmailTemplate represents a campaign-scoped email template for automated emails
+type CampaignEmailTemplate struct {
 	ID         uuid.UUID `db:"id" json:"id"`
 	CampaignID uuid.UUID `db:"campaign_id" json:"campaign_id"`
 	Name       string    `db:"name" json:"name"`
@@ -537,13 +599,31 @@ type EmailTemplate struct {
 	DeletedAt *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
 }
 
+// BlastEmailTemplate represents an account-scoped email template for email blasts
+type BlastEmailTemplate struct {
+	ID        uuid.UUID `db:"id" json:"id"`
+	AccountID uuid.UUID `db:"account_id" json:"account_id"`
+	Name      string    `db:"name" json:"name"`
+	Subject   string    `db:"subject" json:"subject"`
+
+	HTMLBody   string `db:"html_body" json:"html_body"`
+	BlocksJSON *JSONB `db:"blocks_json" json:"blocks_json,omitempty"`
+
+	CreatedAt time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
+	DeletedAt *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
+}
+
 // EmailLog represents an email log entry
 type EmailLog struct {
 	ID         uuid.UUID  `db:"id" json:"id"`
 	CampaignID uuid.UUID  `db:"campaign_id" json:"campaign_id"`
 	UserID     *uuid.UUID `db:"user_id" json:"user_id,omitempty"`
-	TemplateID *uuid.UUID `db:"template_id" json:"template_id,omitempty"`
 	BlastID    *uuid.UUID `db:"blast_id" json:"blast_id,omitempty"`
+
+	// Template references (one or the other, not both)
+	CampaignTemplateID *uuid.UUID `db:"campaign_template_id" json:"campaign_template_id,omitempty"`
+	BlastTemplateID    *uuid.UUID `db:"blast_template_id" json:"blast_template_id,omitempty"`
 
 	RecipientEmail string `db:"recipient_email" json:"recipient_email"`
 	Subject        string `db:"subject" json:"subject"`
@@ -810,12 +890,12 @@ type Segment struct {
 	DeletedAt *time.Time `db:"deleted_at" json:"deleted_at,omitempty"`
 }
 
-// EmailBlast represents an email blast campaign sent to a segment
+// EmailBlast represents an account-scoped email blast sent to multiple segments
 type EmailBlast struct {
-	ID         uuid.UUID `db:"id" json:"id"`
-	CampaignID uuid.UUID `db:"campaign_id" json:"campaign_id"`
-	SegmentID  uuid.UUID `db:"segment_id" json:"segment_id"`
-	TemplateID uuid.UUID `db:"template_id" json:"template_id"`
+	ID              uuid.UUID `db:"id" json:"id"`
+	AccountID       uuid.UUID `db:"account_id" json:"account_id"`
+	BlastTemplateID uuid.UUID `db:"blast_template_id" json:"blast_template_id"`
+	SegmentIDs      UUIDArray `db:"segment_ids" json:"segment_ids"`
 
 	Name    string `db:"name" json:"name"`
 	Subject string `db:"subject" json:"subject"`
