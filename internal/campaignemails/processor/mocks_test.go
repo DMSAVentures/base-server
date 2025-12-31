@@ -18,32 +18,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockEmailTemplateStore is a mock of EmailTemplateStore interface.
-type MockEmailTemplateStore struct {
+// MockCampaignEmailTemplateStore is a mock of CampaignEmailTemplateStore interface.
+type MockCampaignEmailTemplateStore struct {
 	ctrl     *gomock.Controller
-	recorder *MockEmailTemplateStoreMockRecorder
+	recorder *MockCampaignEmailTemplateStoreMockRecorder
 	isgomock struct{}
 }
 
-// MockEmailTemplateStoreMockRecorder is the mock recorder for MockEmailTemplateStore.
-type MockEmailTemplateStoreMockRecorder struct {
-	mock *MockEmailTemplateStore
+// MockCampaignEmailTemplateStoreMockRecorder is the mock recorder for MockCampaignEmailTemplateStore.
+type MockCampaignEmailTemplateStoreMockRecorder struct {
+	mock *MockCampaignEmailTemplateStore
 }
 
-// NewMockEmailTemplateStore creates a new mock instance.
-func NewMockEmailTemplateStore(ctrl *gomock.Controller) *MockEmailTemplateStore {
-	mock := &MockEmailTemplateStore{ctrl: ctrl}
-	mock.recorder = &MockEmailTemplateStoreMockRecorder{mock}
+// NewMockCampaignEmailTemplateStore creates a new mock instance.
+func NewMockCampaignEmailTemplateStore(ctrl *gomock.Controller) *MockCampaignEmailTemplateStore {
+	mock := &MockCampaignEmailTemplateStore{ctrl: ctrl}
+	mock.recorder = &MockCampaignEmailTemplateStoreMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockEmailTemplateStore) EXPECT() *MockEmailTemplateStoreMockRecorder {
+func (m *MockCampaignEmailTemplateStore) EXPECT() *MockCampaignEmailTemplateStoreMockRecorder {
 	return m.recorder
 }
 
 // CreateCampaignEmailTemplate mocks base method.
-func (m *MockEmailTemplateStore) CreateCampaignEmailTemplate(ctx context.Context, params store.CreateCampaignEmailTemplateParams) (store.CampaignEmailTemplate, error) {
+func (m *MockCampaignEmailTemplateStore) CreateCampaignEmailTemplate(ctx context.Context, params store.CreateCampaignEmailTemplateParams) (store.CampaignEmailTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateCampaignEmailTemplate", ctx, params)
 	ret0, _ := ret[0].(store.CampaignEmailTemplate)
@@ -52,13 +52,13 @@ func (m *MockEmailTemplateStore) CreateCampaignEmailTemplate(ctx context.Context
 }
 
 // CreateCampaignEmailTemplate indicates an expected call of CreateCampaignEmailTemplate.
-func (mr *MockEmailTemplateStoreMockRecorder) CreateCampaignEmailTemplate(ctx, params any) *gomock.Call {
+func (mr *MockCampaignEmailTemplateStoreMockRecorder) CreateCampaignEmailTemplate(ctx, params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCampaignEmailTemplate", reflect.TypeOf((*MockEmailTemplateStore)(nil).CreateCampaignEmailTemplate), ctx, params)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCampaignEmailTemplate", reflect.TypeOf((*MockCampaignEmailTemplateStore)(nil).CreateCampaignEmailTemplate), ctx, params)
 }
 
 // DeleteCampaignEmailTemplate mocks base method.
-func (m *MockEmailTemplateStore) DeleteCampaignEmailTemplate(ctx context.Context, templateID uuid.UUID) error {
+func (m *MockCampaignEmailTemplateStore) DeleteCampaignEmailTemplate(ctx context.Context, templateID uuid.UUID) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteCampaignEmailTemplate", ctx, templateID)
 	ret0, _ := ret[0].(error)
@@ -66,13 +66,13 @@ func (m *MockEmailTemplateStore) DeleteCampaignEmailTemplate(ctx context.Context
 }
 
 // DeleteCampaignEmailTemplate indicates an expected call of DeleteCampaignEmailTemplate.
-func (mr *MockEmailTemplateStoreMockRecorder) DeleteCampaignEmailTemplate(ctx, templateID any) *gomock.Call {
+func (mr *MockCampaignEmailTemplateStoreMockRecorder) DeleteCampaignEmailTemplate(ctx, templateID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCampaignEmailTemplate", reflect.TypeOf((*MockEmailTemplateStore)(nil).DeleteCampaignEmailTemplate), ctx, templateID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteCampaignEmailTemplate", reflect.TypeOf((*MockCampaignEmailTemplateStore)(nil).DeleteCampaignEmailTemplate), ctx, templateID)
 }
 
 // GetCampaignByID mocks base method.
-func (m *MockEmailTemplateStore) GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error) {
+func (m *MockCampaignEmailTemplateStore) GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCampaignByID", ctx, campaignID)
 	ret0, _ := ret[0].(store.Campaign)
@@ -81,13 +81,13 @@ func (m *MockEmailTemplateStore) GetCampaignByID(ctx context.Context, campaignID
 }
 
 // GetCampaignByID indicates an expected call of GetCampaignByID.
-func (mr *MockEmailTemplateStoreMockRecorder) GetCampaignByID(ctx, campaignID any) *gomock.Call {
+func (mr *MockCampaignEmailTemplateStoreMockRecorder) GetCampaignByID(ctx, campaignID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCampaignByID", reflect.TypeOf((*MockEmailTemplateStore)(nil).GetCampaignByID), ctx, campaignID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCampaignByID", reflect.TypeOf((*MockCampaignEmailTemplateStore)(nil).GetCampaignByID), ctx, campaignID)
 }
 
 // GetCampaignEmailTemplateByID mocks base method.
-func (m *MockEmailTemplateStore) GetCampaignEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.CampaignEmailTemplate, error) {
+func (m *MockCampaignEmailTemplateStore) GetCampaignEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.CampaignEmailTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCampaignEmailTemplateByID", ctx, templateID)
 	ret0, _ := ret[0].(store.CampaignEmailTemplate)
@@ -96,13 +96,13 @@ func (m *MockEmailTemplateStore) GetCampaignEmailTemplateByID(ctx context.Contex
 }
 
 // GetCampaignEmailTemplateByID indicates an expected call of GetCampaignEmailTemplateByID.
-func (mr *MockEmailTemplateStoreMockRecorder) GetCampaignEmailTemplateByID(ctx, templateID any) *gomock.Call {
+func (mr *MockCampaignEmailTemplateStoreMockRecorder) GetCampaignEmailTemplateByID(ctx, templateID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCampaignEmailTemplateByID", reflect.TypeOf((*MockEmailTemplateStore)(nil).GetCampaignEmailTemplateByID), ctx, templateID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCampaignEmailTemplateByID", reflect.TypeOf((*MockCampaignEmailTemplateStore)(nil).GetCampaignEmailTemplateByID), ctx, templateID)
 }
 
 // GetCampaignEmailTemplatesByAccount mocks base method.
-func (m *MockEmailTemplateStore) GetCampaignEmailTemplatesByAccount(ctx context.Context, accountID uuid.UUID) ([]store.CampaignEmailTemplate, error) {
+func (m *MockCampaignEmailTemplateStore) GetCampaignEmailTemplatesByAccount(ctx context.Context, accountID uuid.UUID) ([]store.CampaignEmailTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCampaignEmailTemplatesByAccount", ctx, accountID)
 	ret0, _ := ret[0].([]store.CampaignEmailTemplate)
@@ -111,13 +111,13 @@ func (m *MockEmailTemplateStore) GetCampaignEmailTemplatesByAccount(ctx context.
 }
 
 // GetCampaignEmailTemplatesByAccount indicates an expected call of GetCampaignEmailTemplatesByAccount.
-func (mr *MockEmailTemplateStoreMockRecorder) GetCampaignEmailTemplatesByAccount(ctx, accountID any) *gomock.Call {
+func (mr *MockCampaignEmailTemplateStoreMockRecorder) GetCampaignEmailTemplatesByAccount(ctx, accountID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCampaignEmailTemplatesByAccount", reflect.TypeOf((*MockEmailTemplateStore)(nil).GetCampaignEmailTemplatesByAccount), ctx, accountID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCampaignEmailTemplatesByAccount", reflect.TypeOf((*MockCampaignEmailTemplateStore)(nil).GetCampaignEmailTemplatesByAccount), ctx, accountID)
 }
 
 // GetCampaignEmailTemplatesByCampaign mocks base method.
-func (m *MockEmailTemplateStore) GetCampaignEmailTemplatesByCampaign(ctx context.Context, campaignID uuid.UUID) ([]store.CampaignEmailTemplate, error) {
+func (m *MockCampaignEmailTemplateStore) GetCampaignEmailTemplatesByCampaign(ctx context.Context, campaignID uuid.UUID) ([]store.CampaignEmailTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetCampaignEmailTemplatesByCampaign", ctx, campaignID)
 	ret0, _ := ret[0].([]store.CampaignEmailTemplate)
@@ -126,13 +126,13 @@ func (m *MockEmailTemplateStore) GetCampaignEmailTemplatesByCampaign(ctx context
 }
 
 // GetCampaignEmailTemplatesByCampaign indicates an expected call of GetCampaignEmailTemplatesByCampaign.
-func (mr *MockEmailTemplateStoreMockRecorder) GetCampaignEmailTemplatesByCampaign(ctx, campaignID any) *gomock.Call {
+func (mr *MockCampaignEmailTemplateStoreMockRecorder) GetCampaignEmailTemplatesByCampaign(ctx, campaignID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCampaignEmailTemplatesByCampaign", reflect.TypeOf((*MockEmailTemplateStore)(nil).GetCampaignEmailTemplatesByCampaign), ctx, campaignID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCampaignEmailTemplatesByCampaign", reflect.TypeOf((*MockCampaignEmailTemplateStore)(nil).GetCampaignEmailTemplatesByCampaign), ctx, campaignID)
 }
 
 // UpdateCampaignEmailTemplate mocks base method.
-func (m *MockEmailTemplateStore) UpdateCampaignEmailTemplate(ctx context.Context, templateID uuid.UUID, params store.UpdateCampaignEmailTemplateParams) (store.CampaignEmailTemplate, error) {
+func (m *MockCampaignEmailTemplateStore) UpdateCampaignEmailTemplate(ctx context.Context, templateID uuid.UUID, params store.UpdateCampaignEmailTemplateParams) (store.CampaignEmailTemplate, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "UpdateCampaignEmailTemplate", ctx, templateID, params)
 	ret0, _ := ret[0].(store.CampaignEmailTemplate)
@@ -141,9 +141,9 @@ func (m *MockEmailTemplateStore) UpdateCampaignEmailTemplate(ctx context.Context
 }
 
 // UpdateCampaignEmailTemplate indicates an expected call of UpdateCampaignEmailTemplate.
-func (mr *MockEmailTemplateStoreMockRecorder) UpdateCampaignEmailTemplate(ctx, templateID, params any) *gomock.Call {
+func (mr *MockCampaignEmailTemplateStoreMockRecorder) UpdateCampaignEmailTemplate(ctx, templateID, params any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCampaignEmailTemplate", reflect.TypeOf((*MockEmailTemplateStore)(nil).UpdateCampaignEmailTemplate), ctx, templateID, params)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCampaignEmailTemplate", reflect.TypeOf((*MockCampaignEmailTemplateStore)(nil).UpdateCampaignEmailTemplate), ctx, templateID, params)
 }
 
 // MockEmailService is a mock of EmailService interface.

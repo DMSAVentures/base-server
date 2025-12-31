@@ -23,10 +23,12 @@ import (
 	"base-server/internal/clients/mail"
 	"base-server/internal/clients/turnstile"
 	"base-server/internal/email"
+	blastemailsHandler "base-server/internal/blastemails/handler"
+	blastemailsProcessor "base-server/internal/blastemails/processor"
+	campaignemailsHandler "base-server/internal/campaignemails/handler"
+	campaignemailsProcessor "base-server/internal/campaignemails/processor"
 	emailblastsHandler "base-server/internal/emailblasts/handler"
 	emailblastsProcessor "base-server/internal/emailblasts/processor"
-	emailTemplateHandler "base-server/internal/emailtemplates/handler"
-	emailTemplateProcessor "base-server/internal/emailtemplates/processor"
 	integrationConsumer "base-server/internal/integrations/consumer"
 	integrationService "base-server/internal/integrations/service"
 	zapierHandler "base-server/internal/integrations/zapier"
@@ -72,10 +74,11 @@ type Dependencies struct {
 	CampaignHandler      campaignHandler.Handler
 	WaitlistHandler      waitlistHandler.Handler
 	AnalyticsHandler     analyticsHandler.Handler
-	ReferralHandler      referralHandler.Handler
-	RewardHandler        rewardHandler.Handler
-	EmailTemplateHandler emailTemplateHandler.Handler
-	WebhookHandler       *webhookHandler.Handler
+	ReferralHandler            referralHandler.Handler
+	RewardHandler              rewardHandler.Handler
+	CampaignEmailTemplateHandler campaignemailsHandler.Handler
+	BlastEmailTemplateHandler    blastemailsHandler.Handler
+	WebhookHandler             *webhookHandler.Handler
 	ZapierHandler        *zapierHandler.Handler
 	APIKeysHandler       *apikeysHandler.Handler
 	SegmentsHandler      segmentsHandler.Handler
@@ -206,9 +209,13 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	rewardProc := rewardProcessor.New(&deps.Store, logger)
 	deps.RewardHandler = rewardHandler.New(rewardProc, logger)
 
-	// Initialize email template processor and handler
-	emailTemplateProc := emailTemplateProcessor.New(&deps.Store, emailService, logger)
-	deps.EmailTemplateHandler = emailTemplateHandler.New(emailTemplateProc, logger)
+	// Initialize campaign email template processor and handler
+	campaignEmailTemplateProc := campaignemailsProcessor.New(&deps.Store, emailService, logger)
+	deps.CampaignEmailTemplateHandler = campaignemailsHandler.New(campaignEmailTemplateProc, logger)
+
+	// Initialize blast email template processor and handler
+	blastEmailTemplateProc := blastemailsProcessor.New(&deps.Store, emailService, tierService, logger)
+	deps.BlastEmailTemplateHandler = blastemailsHandler.New(blastEmailTemplateProc, logger)
 
 	// Initialize segments processor and handler
 	segmentsProc := segmentsProcessor.New(&deps.Store, logger)

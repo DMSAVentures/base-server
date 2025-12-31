@@ -14,8 +14,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// EmailTemplateStore defines the database operations required by EmailTemplateProcessor
-type EmailTemplateStore interface {
+// CampaignEmailTemplateStore defines the database operations required by CampaignEmailTemplateProcessor
+type CampaignEmailTemplateStore interface {
 	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)
 	CreateCampaignEmailTemplate(ctx context.Context, params store.CreateCampaignEmailTemplateParams) (store.CampaignEmailTemplate, error)
 	GetCampaignEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.CampaignEmailTemplate, error)
@@ -25,36 +25,36 @@ type EmailTemplateStore interface {
 	DeleteCampaignEmailTemplate(ctx context.Context, templateID uuid.UUID) error
 }
 
-// EmailService defines the email operations required by EmailTemplateProcessor
+// EmailService defines the email operations required by CampaignEmailTemplateProcessor
 type EmailService interface {
 	SendEmail(ctx context.Context, to, subject, htmlContent string) error
 }
 
 var (
-	ErrTemplateNotFound        = errors.New("email template not found")
-	ErrCampaignNotFound        = errors.New("campaign not found")
-	ErrUnauthorized            = errors.New("unauthorized access to template")
-	ErrInvalidTemplateType     = errors.New("invalid template type")
-	ErrInvalidTemplateContent  = errors.New("invalid template content")
-	ErrTestEmailFailed         = errors.New("failed to send test email")
+	ErrCampaignEmailTemplateNotFound = errors.New("campaign email template not found")
+	ErrCampaignNotFound              = errors.New("campaign not found")
+	ErrUnauthorized                  = errors.New("unauthorized access to template")
+	ErrInvalidTemplateType           = errors.New("invalid template type")
+	ErrInvalidTemplateContent        = errors.New("invalid template content")
+	ErrTestEmailFailed               = errors.New("failed to send test email")
 )
 
-type EmailTemplateProcessor struct {
-	store        EmailTemplateStore
+type CampaignEmailTemplateProcessor struct {
+	store        CampaignEmailTemplateStore
 	emailService EmailService
 	logger       *observability.Logger
 }
 
-func New(store EmailTemplateStore, emailService EmailService, logger *observability.Logger) EmailTemplateProcessor {
-	return EmailTemplateProcessor{
+func New(store CampaignEmailTemplateStore, emailService EmailService, logger *observability.Logger) CampaignEmailTemplateProcessor {
+	return CampaignEmailTemplateProcessor{
 		store:        store,
 		emailService: emailService,
 		logger:       logger,
 	}
 }
 
-// CreateEmailTemplateRequest represents a request to create an email template
-type CreateEmailTemplateRequest struct {
+// CreateCampaignEmailTemplateRequest represents a request to create a campaign email template
+type CreateCampaignEmailTemplateRequest struct {
 	Name              string
 	Type              string
 	Subject           string
@@ -64,8 +64,8 @@ type CreateEmailTemplateRequest struct {
 	SendAutomatically *bool
 }
 
-// CreateEmailTemplate creates a new email template for a campaign
-func (p *EmailTemplateProcessor) CreateEmailTemplate(ctx context.Context, accountID, campaignID uuid.UUID, req CreateEmailTemplateRequest) (store.CampaignEmailTemplate, error) {
+// CreateCampaignEmailTemplate creates a new email template for a campaign
+func (p *CampaignEmailTemplateProcessor) CreateCampaignEmailTemplate(ctx context.Context, accountID, campaignID uuid.UUID, req CreateCampaignEmailTemplateRequest) (store.CampaignEmailTemplate, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
@@ -121,16 +121,16 @@ func (p *EmailTemplateProcessor) CreateEmailTemplate(ctx context.Context, accoun
 
 	emailTemplate, err := p.store.CreateCampaignEmailTemplate(ctx, params)
 	if err != nil {
-		p.logger.Error(ctx, "failed to create email template", err)
+		p.logger.Error(ctx, "failed to create campaign email template", err)
 		return store.CampaignEmailTemplate{}, err
 	}
 
-	p.logger.Info(ctx, "email template created successfully")
+	p.logger.Info(ctx, "campaign email template created successfully")
 	return emailTemplate, nil
 }
 
-// GetEmailTemplate retrieves an email template by ID
-func (p *EmailTemplateProcessor) GetEmailTemplate(ctx context.Context, accountID, campaignID, templateID uuid.UUID) (store.CampaignEmailTemplate, error) {
+// GetCampaignEmailTemplate retrieves a campaign email template by ID
+func (p *CampaignEmailTemplateProcessor) GetCampaignEmailTemplate(ctx context.Context, accountID, campaignID, templateID uuid.UUID) (store.CampaignEmailTemplate, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
@@ -154,9 +154,9 @@ func (p *EmailTemplateProcessor) GetEmailTemplate(ctx context.Context, accountID
 	emailTemplate, err := p.store.GetCampaignEmailTemplateByID(ctx, templateID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return store.CampaignEmailTemplate{}, ErrTemplateNotFound
+			return store.CampaignEmailTemplate{}, ErrCampaignEmailTemplateNotFound
 		}
-		p.logger.Error(ctx, "failed to get email template", err)
+		p.logger.Error(ctx, "failed to get campaign email template", err)
 		return store.CampaignEmailTemplate{}, err
 	}
 
@@ -168,8 +168,8 @@ func (p *EmailTemplateProcessor) GetEmailTemplate(ctx context.Context, accountID
 	return emailTemplate, nil
 }
 
-// ListEmailTemplates retrieves all email templates for a campaign
-func (p *EmailTemplateProcessor) ListEmailTemplates(ctx context.Context, accountID, campaignID uuid.UUID, templateType *string) ([]store.CampaignEmailTemplate, error) {
+// ListCampaignEmailTemplates retrieves all email templates for a campaign
+func (p *CampaignEmailTemplateProcessor) ListCampaignEmailTemplates(ctx context.Context, accountID, campaignID uuid.UUID, templateType *string) ([]store.CampaignEmailTemplate, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
@@ -196,7 +196,7 @@ func (p *EmailTemplateProcessor) ListEmailTemplates(ctx context.Context, account
 
 	templates, err := p.store.GetCampaignEmailTemplatesByCampaign(ctx, campaignID)
 	if err != nil {
-		p.logger.Error(ctx, "failed to list email templates", err)
+		p.logger.Error(ctx, "failed to list campaign email templates", err)
 		return nil, err
 	}
 
@@ -219,15 +219,15 @@ func (p *EmailTemplateProcessor) ListEmailTemplates(ctx context.Context, account
 	return templates, nil
 }
 
-// ListAllEmailTemplates retrieves all email templates for an account across all campaigns
-func (p *EmailTemplateProcessor) ListAllEmailTemplates(ctx context.Context, accountID uuid.UUID) ([]store.CampaignEmailTemplate, error) {
+// ListAllCampaignEmailTemplates retrieves all email templates for an account across all campaigns
+func (p *CampaignEmailTemplateProcessor) ListAllCampaignEmailTemplates(ctx context.Context, accountID uuid.UUID) ([]store.CampaignEmailTemplate, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
 	)
 
 	templates, err := p.store.GetCampaignEmailTemplatesByAccount(ctx, accountID)
 	if err != nil {
-		p.logger.Error(ctx, "failed to list all email templates", err)
+		p.logger.Error(ctx, "failed to list all campaign email templates", err)
 		return nil, err
 	}
 
@@ -239,8 +239,8 @@ func (p *EmailTemplateProcessor) ListAllEmailTemplates(ctx context.Context, acco
 	return templates, nil
 }
 
-// UpdateEmailTemplateRequest represents a request to update an email template
-type UpdateEmailTemplateRequest struct {
+// UpdateCampaignEmailTemplateRequest represents a request to update a campaign email template
+type UpdateCampaignEmailTemplateRequest struct {
 	Name              *string
 	Subject           *string
 	HTMLBody          *string
@@ -249,8 +249,8 @@ type UpdateEmailTemplateRequest struct {
 	SendAutomatically *bool
 }
 
-// UpdateEmailTemplate updates an email template
-func (p *EmailTemplateProcessor) UpdateEmailTemplate(ctx context.Context, accountID, campaignID, templateID uuid.UUID, req UpdateEmailTemplateRequest) (store.CampaignEmailTemplate, error) {
+// UpdateCampaignEmailTemplate updates a campaign email template
+func (p *CampaignEmailTemplateProcessor) UpdateCampaignEmailTemplate(ctx context.Context, accountID, campaignID, templateID uuid.UUID, req UpdateCampaignEmailTemplateRequest) (store.CampaignEmailTemplate, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
@@ -275,9 +275,9 @@ func (p *EmailTemplateProcessor) UpdateEmailTemplate(ctx context.Context, accoun
 	existingTemplate, err := p.store.GetCampaignEmailTemplateByID(ctx, templateID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return store.CampaignEmailTemplate{}, ErrTemplateNotFound
+			return store.CampaignEmailTemplate{}, ErrCampaignEmailTemplateNotFound
 		}
-		p.logger.Error(ctx, "failed to get email template", err)
+		p.logger.Error(ctx, "failed to get campaign email template", err)
 		return store.CampaignEmailTemplate{}, err
 	}
 
@@ -305,18 +305,18 @@ func (p *EmailTemplateProcessor) UpdateEmailTemplate(ctx context.Context, accoun
 	emailTemplate, err := p.store.UpdateCampaignEmailTemplate(ctx, templateID, params)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return store.CampaignEmailTemplate{}, ErrTemplateNotFound
+			return store.CampaignEmailTemplate{}, ErrCampaignEmailTemplateNotFound
 		}
-		p.logger.Error(ctx, "failed to update email template", err)
+		p.logger.Error(ctx, "failed to update campaign email template", err)
 		return store.CampaignEmailTemplate{}, err
 	}
 
-	p.logger.Info(ctx, "email template updated successfully")
+	p.logger.Info(ctx, "campaign email template updated successfully")
 	return emailTemplate, nil
 }
 
-// DeleteEmailTemplate soft deletes an email template
-func (p *EmailTemplateProcessor) DeleteEmailTemplate(ctx context.Context, accountID, campaignID, templateID uuid.UUID) error {
+// DeleteCampaignEmailTemplate soft deletes a campaign email template
+func (p *CampaignEmailTemplateProcessor) DeleteCampaignEmailTemplate(ctx context.Context, accountID, campaignID, templateID uuid.UUID) error {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
@@ -341,9 +341,9 @@ func (p *EmailTemplateProcessor) DeleteEmailTemplate(ctx context.Context, accoun
 	existingTemplate, err := p.store.GetCampaignEmailTemplateByID(ctx, templateID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return ErrTemplateNotFound
+			return ErrCampaignEmailTemplateNotFound
 		}
-		p.logger.Error(ctx, "failed to get email template", err)
+		p.logger.Error(ctx, "failed to get campaign email template", err)
 		return err
 	}
 
@@ -354,13 +354,13 @@ func (p *EmailTemplateProcessor) DeleteEmailTemplate(ctx context.Context, accoun
 	err = p.store.DeleteCampaignEmailTemplate(ctx, templateID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
-			return ErrTemplateNotFound
+			return ErrCampaignEmailTemplateNotFound
 		}
-		p.logger.Error(ctx, "failed to delete email template", err)
+		p.logger.Error(ctx, "failed to delete campaign email template", err)
 		return err
 	}
 
-	p.logger.Info(ctx, "email template deleted successfully")
+	p.logger.Info(ctx, "campaign email template deleted successfully")
 	return nil
 }
 
@@ -370,8 +370,8 @@ type SendTestEmailRequest struct {
 	TestData       map[string]interface{}
 }
 
-// SendTestEmail sends a test email using a template
-func (p *EmailTemplateProcessor) SendTestEmail(ctx context.Context, accountID, campaignID, templateID uuid.UUID, req SendTestEmailRequest) error {
+// SendTestEmail sends a test email using a campaign email template
+func (p *CampaignEmailTemplateProcessor) SendTestEmail(ctx context.Context, accountID, campaignID, templateID uuid.UUID, req SendTestEmailRequest) error {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
@@ -380,7 +380,7 @@ func (p *EmailTemplateProcessor) SendTestEmail(ctx context.Context, accountID, c
 	)
 
 	// Get the template
-	emailTemplate, err := p.GetEmailTemplate(ctx, accountID, campaignID, templateID)
+	emailTemplate, err := p.GetCampaignEmailTemplate(ctx, accountID, campaignID, templateID)
 	if err != nil {
 		return err
 	}

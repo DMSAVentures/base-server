@@ -7,9 +7,10 @@ import (
 	analyticsHandler "base-server/internal/analytics/handler"
 	apikeysHandler "base-server/internal/apikeys/handler"
 	authHandler "base-server/internal/auth/handler"
+	blastemailsHandler "base-server/internal/blastemails/handler"
+	campaignemailsHandler "base-server/internal/campaignemails/handler"
 	campaignHandler "base-server/internal/campaign/handler"
 	emailblastsHandler "base-server/internal/emailblasts/handler"
-	emailTemplateHandler "base-server/internal/emailtemplates/handler"
 	zapierHandler "base-server/internal/integrations/zapier"
 	billingHandler "base-server/internal/money/billing/handler"
 	referralHandler "base-server/internal/referral/handler"
@@ -28,10 +29,11 @@ type API struct {
 	campaignHandler      campaignHandler.Handler
 	waitlistHandler      waitlistHandler.Handler
 	analyticsHandler     analyticsHandler.Handler
-	referralHandler      referralHandler.Handler
-	rewardHandler        rewardHandler.Handler
-	emailTemplateHandler emailTemplateHandler.Handler
-	billingHandler       billingHandler.Handler
+	referralHandler                referralHandler.Handler
+	rewardHandler                  rewardHandler.Handler
+	campaignEmailTemplateHandler   campaignemailsHandler.Handler
+	blastEmailTemplateHandler      blastemailsHandler.Handler
+	billingHandler                 billingHandler.Handler
 	aiHandler            aiHandler.Handler
 	voicecallHandler     voiceCallHandler.Handler
 	webhookHandler       *webhookHandler.Handler
@@ -42,24 +44,25 @@ type API struct {
 }
 
 func New(router *gin.RouterGroup, authHandler authHandler.Handler, campaignHandler campaignHandler.Handler,
-	waitlistHandler waitlistHandler.Handler, analyticsHandler analyticsHandler.Handler, referralHandler referralHandler.Handler, rewardHandler rewardHandler.Handler, emailTemplateHandler emailTemplateHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler, zapierHandler *zapierHandler.Handler, apikeysHandler *apikeysHandler.Handler, segmentsHandler segmentsHandler.Handler, emailblastsHandler emailblastsHandler.Handler) API {
+	waitlistHandler waitlistHandler.Handler, analyticsHandler analyticsHandler.Handler, referralHandler referralHandler.Handler, rewardHandler rewardHandler.Handler, campaignEmailTemplateHandler campaignemailsHandler.Handler, blastEmailTemplateHandler blastemailsHandler.Handler, handler billingHandler.Handler, aiHandler aiHandler.Handler, voicecallHandler voiceCallHandler.Handler, webhookHandler *webhookHandler.Handler, zapierHandler *zapierHandler.Handler, apikeysHandler *apikeysHandler.Handler, segmentsHandler segmentsHandler.Handler, emailblastsHandler emailblastsHandler.Handler) API {
 	return API{
-		router:               router,
-		authHandler:          authHandler,
-		campaignHandler:      campaignHandler,
-		waitlistHandler:      waitlistHandler,
-		analyticsHandler:     analyticsHandler,
-		referralHandler:      referralHandler,
-		rewardHandler:        rewardHandler,
-		emailTemplateHandler: emailTemplateHandler,
-		billingHandler:       handler,
-		aiHandler:            aiHandler,
-		voicecallHandler:     voicecallHandler,
-		webhookHandler:       webhookHandler,
-		zapierHandler:        zapierHandler,
-		apikeysHandler:       apikeysHandler,
-		segmentsHandler:      segmentsHandler,
-		emailblastsHandler:   emailblastsHandler,
+		router:                       router,
+		authHandler:                  authHandler,
+		campaignHandler:              campaignHandler,
+		waitlistHandler:              waitlistHandler,
+		analyticsHandler:             analyticsHandler,
+		referralHandler:              referralHandler,
+		rewardHandler:                rewardHandler,
+		campaignEmailTemplateHandler: campaignEmailTemplateHandler,
+		blastEmailTemplateHandler:    blastEmailTemplateHandler,
+		billingHandler:               handler,
+		aiHandler:                    aiHandler,
+		voicecallHandler:             voicecallHandler,
+		webhookHandler:               webhookHandler,
+		zapierHandler:                zapierHandler,
+		apikeysHandler:               apikeysHandler,
+		segmentsHandler:              segmentsHandler,
+		emailblastsHandler:           emailblastsHandler,
 	}
 }
 
@@ -115,8 +118,19 @@ func (a *API) RegisterRoutes() {
 	// Campaign API routes (v1)
 	v1Group := apiGroup.Group("/v1", a.authHandler.HandleJWTMiddleware)
 	{
-		// Email Templates routes (account-level)
-		v1Group.GET("/email-templates", a.emailTemplateHandler.HandleListAllEmailTemplates)
+		// Campaign Email Templates routes (account-level list)
+		v1Group.GET("/campaign-email-templates", a.campaignEmailTemplateHandler.HandleListAllCampaignEmailTemplates)
+
+		// Blast Email Templates routes (account level)
+		blastTemplatesGroup := v1Group.Group("/blast-email-templates")
+		{
+			blastTemplatesGroup.POST("", a.blastEmailTemplateHandler.HandleCreateBlastEmailTemplate)
+			blastTemplatesGroup.GET("", a.blastEmailTemplateHandler.HandleListBlastEmailTemplates)
+			blastTemplatesGroup.GET("/:id", a.blastEmailTemplateHandler.HandleGetBlastEmailTemplate)
+			blastTemplatesGroup.PUT("/:id", a.blastEmailTemplateHandler.HandleUpdateBlastEmailTemplate)
+			blastTemplatesGroup.DELETE("/:id", a.blastEmailTemplateHandler.HandleDeleteBlastEmailTemplate)
+			blastTemplatesGroup.POST("/:id/send-test", a.blastEmailTemplateHandler.HandleSendTestEmail)
+		}
 
 		campaignsGroup := v1Group.Group("/campaigns")
 		{
@@ -164,15 +178,15 @@ func (a *API) RegisterRoutes() {
 				rewardsGroup.DELETE("/:reward_id", a.rewardHandler.HandleDeleteReward)
 			}
 
-			// Email Templates routes
+			// Campaign Email Templates routes
 			emailTemplatesGroup := campaignsGroup.Group("/:campaign_id/email-templates")
 			{
-				emailTemplatesGroup.POST("", a.emailTemplateHandler.HandleCreateEmailTemplate)
-				emailTemplatesGroup.GET("", a.emailTemplateHandler.HandleListEmailTemplates)
-				emailTemplatesGroup.GET("/:template_id", a.emailTemplateHandler.HandleGetEmailTemplate)
-				emailTemplatesGroup.PUT("/:template_id", a.emailTemplateHandler.HandleUpdateEmailTemplate)
-				emailTemplatesGroup.DELETE("/:template_id", a.emailTemplateHandler.HandleDeleteEmailTemplate)
-				emailTemplatesGroup.POST("/:template_id/send-test", a.emailTemplateHandler.HandleSendTestEmail)
+				emailTemplatesGroup.POST("", a.campaignEmailTemplateHandler.HandleCreateCampaignEmailTemplate)
+				emailTemplatesGroup.GET("", a.campaignEmailTemplateHandler.HandleListCampaignEmailTemplates)
+				emailTemplatesGroup.GET("/:template_id", a.campaignEmailTemplateHandler.HandleGetCampaignEmailTemplate)
+				emailTemplatesGroup.PUT("/:template_id", a.campaignEmailTemplateHandler.HandleUpdateCampaignEmailTemplate)
+				emailTemplatesGroup.DELETE("/:template_id", a.campaignEmailTemplateHandler.HandleDeleteCampaignEmailTemplate)
+				emailTemplatesGroup.POST("/:template_id/send-test", a.campaignEmailTemplateHandler.HandleSendTestEmail)
 			}
 
 			// Analytics routes

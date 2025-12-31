@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"base-server/internal/apierrors"
-	"base-server/internal/emailtemplates/processor"
+	"base-server/internal/campaignemails/processor"
 	"base-server/internal/observability"
 
 	"github.com/gin-gonic/gin"
@@ -13,11 +13,11 @@ import (
 )
 
 type Handler struct {
-	processor processor.EmailTemplateProcessor
+	processor processor.CampaignEmailTemplateProcessor
 	logger    *observability.Logger
 }
 
-func New(processor processor.EmailTemplateProcessor, logger *observability.Logger) Handler {
+func New(processor processor.CampaignEmailTemplateProcessor, logger *observability.Logger) Handler {
 	return Handler{
 		processor: processor,
 		logger:    logger,
@@ -26,8 +26,8 @@ func New(processor processor.EmailTemplateProcessor, logger *observability.Logge
 
 func (h *Handler) handleError(c *gin.Context, err error) {
 	switch {
-	case errors.Is(err, processor.ErrTemplateNotFound):
-		apierrors.NotFound(c, "Email template not found")
+	case errors.Is(err, processor.ErrCampaignEmailTemplateNotFound):
+		apierrors.NotFound(c, "Campaign email template not found")
 	case errors.Is(err, processor.ErrCampaignNotFound):
 		apierrors.NotFound(c, "Campaign not found")
 	case errors.Is(err, processor.ErrUnauthorized):
@@ -43,8 +43,8 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 	}
 }
 
-// CreateEmailTemplateRequest represents the HTTP request for creating an email template
-type CreateEmailTemplateRequest struct {
+// CreateCampaignEmailTemplateRequest represents the HTTP request for creating a campaign email template
+type CreateCampaignEmailTemplateRequest struct {
 	Name              string      `json:"name" binding:"required,max=255"`
 	Type              string      `json:"type" binding:"required,oneof=verification welcome position_update reward_earned milestone custom"`
 	Subject           string      `json:"subject" binding:"required,max=255"`
@@ -54,8 +54,8 @@ type CreateEmailTemplateRequest struct {
 	SendAutomatically *bool       `json:"send_automatically"`
 }
 
-// HandleCreateEmailTemplate handles POST /api/v1/campaigns/:campaign_id/email-templates
-func (h *Handler) HandleCreateEmailTemplate(c *gin.Context) {
+// HandleCreateCampaignEmailTemplate handles POST /api/v1/campaigns/:campaign_id/email-templates
+func (h *Handler) HandleCreateCampaignEmailTemplate(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Get account ID from context
@@ -81,13 +81,13 @@ func (h *Handler) HandleCreateEmailTemplate(c *gin.Context) {
 		return
 	}
 
-	var req CreateEmailTemplateRequest
+	var req CreateCampaignEmailTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		apierrors.ValidationError(c, err)
 		return
 	}
 
-	processorReq := processor.CreateEmailTemplateRequest{
+	processorReq := processor.CreateCampaignEmailTemplateRequest{
 		Name:              req.Name,
 		Type:              req.Type,
 		Subject:           req.Subject,
@@ -97,7 +97,7 @@ func (h *Handler) HandleCreateEmailTemplate(c *gin.Context) {
 		SendAutomatically: req.SendAutomatically,
 	}
 
-	template, err := h.processor.CreateEmailTemplate(ctx, accountID, campaignID, processorReq)
+	template, err := h.processor.CreateCampaignEmailTemplate(ctx, accountID, campaignID, processorReq)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -106,8 +106,8 @@ func (h *Handler) HandleCreateEmailTemplate(c *gin.Context) {
 	c.JSON(http.StatusCreated, template)
 }
 
-// HandleListEmailTemplates handles GET /api/v1/campaigns/:campaign_id/email-templates
-func (h *Handler) HandleListEmailTemplates(c *gin.Context) {
+// HandleListCampaignEmailTemplates handles GET /api/v1/campaigns/:campaign_id/email-templates
+func (h *Handler) HandleListCampaignEmailTemplates(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Get account ID from context
@@ -139,7 +139,7 @@ func (h *Handler) HandleListEmailTemplates(c *gin.Context) {
 		templateType = &typeStr
 	}
 
-	templates, err := h.processor.ListEmailTemplates(ctx, accountID, campaignID, templateType)
+	templates, err := h.processor.ListCampaignEmailTemplates(ctx, accountID, campaignID, templateType)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -148,8 +148,8 @@ func (h *Handler) HandleListEmailTemplates(c *gin.Context) {
 	c.JSON(http.StatusOK, templates)
 }
 
-// HandleListAllEmailTemplates handles GET /api/v1/email-templates
-func (h *Handler) HandleListAllEmailTemplates(c *gin.Context) {
+// HandleListAllCampaignEmailTemplates handles GET /api/v1/email-templates
+func (h *Handler) HandleListAllCampaignEmailTemplates(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Get account ID from context
@@ -166,7 +166,7 @@ func (h *Handler) HandleListAllEmailTemplates(c *gin.Context) {
 		return
 	}
 
-	templates, err := h.processor.ListAllEmailTemplates(ctx, accountID)
+	templates, err := h.processor.ListAllCampaignEmailTemplates(ctx, accountID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -175,8 +175,8 @@ func (h *Handler) HandleListAllEmailTemplates(c *gin.Context) {
 	c.JSON(http.StatusOK, templates)
 }
 
-// HandleGetEmailTemplate handles GET /api/v1/campaigns/:campaign_id/email-templates/:template_id
-func (h *Handler) HandleGetEmailTemplate(c *gin.Context) {
+// HandleGetCampaignEmailTemplate handles GET /api/v1/campaigns/:campaign_id/email-templates/:template_id
+func (h *Handler) HandleGetCampaignEmailTemplate(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Get account ID from context
@@ -211,7 +211,7 @@ func (h *Handler) HandleGetEmailTemplate(c *gin.Context) {
 		return
 	}
 
-	template, err := h.processor.GetEmailTemplate(ctx, accountID, campaignID, templateID)
+	template, err := h.processor.GetCampaignEmailTemplate(ctx, accountID, campaignID, templateID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -220,8 +220,8 @@ func (h *Handler) HandleGetEmailTemplate(c *gin.Context) {
 	c.JSON(http.StatusOK, template)
 }
 
-// UpdateEmailTemplateRequest represents the HTTP request for updating an email template
-type UpdateEmailTemplateRequest struct {
+// UpdateCampaignEmailTemplateRequest represents the HTTP request for updating a campaign email template
+type UpdateCampaignEmailTemplateRequest struct {
 	Name              *string     `json:"name,omitempty" binding:"omitempty,max=255"`
 	Subject           *string     `json:"subject,omitempty" binding:"omitempty,max=255"`
 	HTMLBody          *string     `json:"html_body,omitempty"`
@@ -230,8 +230,8 @@ type UpdateEmailTemplateRequest struct {
 	SendAutomatically *bool       `json:"send_automatically,omitempty"`
 }
 
-// HandleUpdateEmailTemplate handles PUT /api/v1/campaigns/:campaign_id/email-templates/:template_id
-func (h *Handler) HandleUpdateEmailTemplate(c *gin.Context) {
+// HandleUpdateCampaignEmailTemplate handles PUT /api/v1/campaigns/:campaign_id/email-templates/:template_id
+func (h *Handler) HandleUpdateCampaignEmailTemplate(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Get account ID from context
@@ -266,13 +266,13 @@ func (h *Handler) HandleUpdateEmailTemplate(c *gin.Context) {
 		return
 	}
 
-	var req UpdateEmailTemplateRequest
+	var req UpdateCampaignEmailTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		apierrors.ValidationError(c, err)
 		return
 	}
 
-	processorReq := processor.UpdateEmailTemplateRequest{
+	processorReq := processor.UpdateCampaignEmailTemplateRequest{
 		Name:              req.Name,
 		Subject:           req.Subject,
 		HTMLBody:          req.HTMLBody,
@@ -281,7 +281,7 @@ func (h *Handler) HandleUpdateEmailTemplate(c *gin.Context) {
 		SendAutomatically: req.SendAutomatically,
 	}
 
-	template, err := h.processor.UpdateEmailTemplate(ctx, accountID, campaignID, templateID, processorReq)
+	template, err := h.processor.UpdateCampaignEmailTemplate(ctx, accountID, campaignID, templateID, processorReq)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -290,8 +290,8 @@ func (h *Handler) HandleUpdateEmailTemplate(c *gin.Context) {
 	c.JSON(http.StatusOK, template)
 }
 
-// HandleDeleteEmailTemplate handles DELETE /api/v1/campaigns/:campaign_id/email-templates/:template_id
-func (h *Handler) HandleDeleteEmailTemplate(c *gin.Context) {
+// HandleDeleteCampaignEmailTemplate handles DELETE /api/v1/campaigns/:campaign_id/email-templates/:template_id
+func (h *Handler) HandleDeleteCampaignEmailTemplate(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Get account ID from context
@@ -326,7 +326,7 @@ func (h *Handler) HandleDeleteEmailTemplate(c *gin.Context) {
 		return
 	}
 
-	err = h.processor.DeleteEmailTemplate(ctx, accountID, campaignID, templateID)
+	err = h.processor.DeleteCampaignEmailTemplate(ctx, accountID, campaignID, templateID)
 	if err != nil {
 		h.handleError(c, err)
 		return

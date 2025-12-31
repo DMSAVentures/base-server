@@ -29,12 +29,15 @@ base-server/
 │   │   └── openai/        # OpenAI API client
 │   ├── config/            # Configuration management
 │   ├── email/             # Email service abstraction
-│   ├── emailblasts/       # Email blast management
+│   ├── blastemails/       # Blast email template management (account-level)
+│   │   ├── handler/       # HTTP handlers for blast email templates
+│   │   └── processor/     # Business logic for blast email templates
+│   ├── campaignemails/    # Campaign email template management
+│   │   ├── handler/       # HTTP handlers for campaign email templates
+│   │   └── processor/     # Business logic for campaign email templates
+│   ├── emailblasts/       # Email blast execution management
 │   │   ├── handler/       # HTTP handlers for email blasts
 │   │   └── processor/     # Business logic for email blasts
-│   ├── emailtemplates/    # Email template management
-│   │   ├── handler/       # HTTP handlers for email templates
-│   │   └── processor/     # Business logic for email templates
 │   ├── integrations/      # Third-party integrations (Zapier, etc.)
 │   │   └── zapier/        # Zapier integration
 │   ├── money/             # Billing and payment domain
