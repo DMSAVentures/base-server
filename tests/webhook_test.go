@@ -12,186 +12,288 @@ import (
 
 func TestAPI_Webhook_Create(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
 
-	// Create a campaign for testing webhook with campaign_id
-	campaignReq := map[string]interface{}{
-		"name":            "Webhook Test Campaign",
-		"slug":            generateTestCampaignSlug(),
-		"type":            "waitlist",
-		"form_config":     map[string]interface{}{},
-		"referral_config": map[string]interface{}{},
-		"email_config":    map[string]interface{}{},
-		"branding_config": map[string]interface{}{},
-	}
-	campaignResp, campaignBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", campaignReq, token)
-	if campaignResp.StatusCode != http.StatusCreated {
-		t.Fatalf("Failed to create test campaign: %s", string(campaignBody))
-	}
-	var campaignData map[string]interface{}
-	parseJSONResponse(t, campaignBody, &campaignData)
-	testCampaignID := campaignData["id"].(string)
+	// Test feature gating with free tier user
+	t.Run("feature gating for free tier", func(t *testing.T) {
+		token := createAuthenticatedUser(t)
 
-	tests := []struct {
-		name           string
-		request        map[string]interface{}
-		expectedStatus int
-		validateFunc   func(t *testing.T, body []byte)
-	}{
-		{
-			name: "create webhook successfully",
-			request: map[string]interface{}{
-				"url":    "https://example.com/webhook",
-				"events": []string{"user.created", "user.verified"},
-			},
-			expectedStatus: http.StatusCreated,
-			validateFunc: func(t *testing.T, body []byte) {
-				var response map[string]interface{}
-				parseJSONResponse(t, body, &response)
+		// Create a campaign for testing webhook with campaign_id
+		campaignReq := map[string]interface{}{
+			"name":            "Webhook Test Campaign",
+			"slug":            generateTestCampaignSlug(),
+			"type":            "waitlist",
+			"form_config":     map[string]interface{}{},
+			"referral_config": map[string]interface{}{},
+			"email_config":    map[string]interface{}{},
+			"branding_config": map[string]interface{}{},
+		}
+		campaignResp, campaignBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", campaignReq, token)
+		if campaignResp.StatusCode != http.StatusCreated {
+			t.Fatalf("Failed to create test campaign: %s", string(campaignBody))
+		}
+		var campaignData map[string]interface{}
+		parseJSONResponse(t, campaignBody, &campaignData)
+		testCampaignID := campaignData["id"].(string)
 
-				webhook, ok := response["webhook"].(map[string]interface{})
-				if !ok {
-					t.Fatal("Expected 'webhook' object in response")
-				}
+		tests := []struct {
+			name           string
+			request        map[string]interface{}
+			expectedStatus int
+			validateFunc   func(t *testing.T, body []byte)
+		}{
+			{
+				name: "create webhook blocked for free tier users",
+				request: map[string]interface{}{
+					"url":    "https://example.com/webhook",
+					"events": []string{"user.created", "user.verified"},
+				},
+				expectedStatus: http.StatusForbidden,
+				validateFunc: func(t *testing.T, body []byte) {
+					var response map[string]interface{}
+					parseJSONResponse(t, body, &response)
 
-				if webhook["id"] == nil {
-					t.Error("Expected webhook ID in response")
-				}
-				if webhook["url"] != "https://example.com/webhook" {
-					t.Error("Expected URL to match request")
-				}
+					if response["code"] != "FEATURE_NOT_AVAILABLE" {
+						t.Errorf("Expected error code FEATURE_NOT_AVAILABLE, got %v", response["code"])
+					}
+				},
+			},
+			{
+				name: "create webhook with campaign ID blocked for free tier",
+				request: map[string]interface{}{
+					"url":         "https://example.com/webhook",
+					"events":      []string{"user.created"},
+					"campaign_id": testCampaignID,
+				},
+				expectedStatus: http.StatusForbidden,
+				validateFunc: func(t *testing.T, body []byte) {
+					var response map[string]interface{}
+					parseJSONResponse(t, body, &response)
 
-				events, ok := webhook["events"].([]interface{})
-				if !ok || len(events) != 2 {
-					t.Error("Expected 2 events in response")
-				}
+					if response["code"] != "FEATURE_NOT_AVAILABLE" {
+						t.Errorf("Expected error code FEATURE_NOT_AVAILABLE, got %v", response["code"])
+					}
+				},
+			},
+			{
+				name: "create webhook with retry configuration blocked for free tier",
+				request: map[string]interface{}{
+					"url":           "https://example.com/webhook",
+					"events":        []string{"user.created"},
+					"retry_enabled": true,
+					"max_retries":   5,
+				},
+				expectedStatus: http.StatusForbidden,
+				validateFunc: func(t *testing.T, body []byte) {
+					var response map[string]interface{}
+					parseJSONResponse(t, body, &response)
 
-				secret, ok := response["secret"].(string)
-				if !ok || secret == "" {
-					t.Error("Expected webhook secret in response")
-				}
+					if response["code"] != "FEATURE_NOT_AVAILABLE" {
+						t.Errorf("Expected error code FEATURE_NOT_AVAILABLE, got %v", response["code"])
+					}
+				},
 			},
-		},
-		{
-			name: "create webhook with campaign ID",
-			request: map[string]interface{}{
-				"url":         "https://example.com/webhook",
-				"events":      []string{"user.created"},
-				"campaign_id": testCampaignID,
-			},
-			expectedStatus: http.StatusCreated,
-			validateFunc: func(t *testing.T, body []byte) {
-				var response map[string]interface{}
-				parseJSONResponse(t, body, &response)
+		}
 
-				webhook, ok := response["webhook"].(map[string]interface{})
-				if !ok {
-					t.Fatal("Expected 'webhook' object in response")
-				}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				resp, body := makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", tt.request, token)
+				assertStatusCode(t, resp, tt.expectedStatus)
 
-				if webhook["campaign_id"] == nil {
-					t.Error("Expected campaign_id in response")
+				if tt.validateFunc != nil {
+					tt.validateFunc(t, body)
 				}
-			},
-		},
-		{
-			name: "create webhook with retry configuration",
-			request: map[string]interface{}{
-				"url":           "https://example.com/webhook",
-				"events":        []string{"user.created"},
-				"retry_enabled": true,
-				"max_retries":   5,
-			},
-			expectedStatus: http.StatusCreated,
-			validateFunc: func(t *testing.T, body []byte) {
-				var response map[string]interface{}
-				parseJSONResponse(t, body, &response)
+			})
+		}
+	})
 
-				webhook, ok := response["webhook"].(map[string]interface{})
-				if !ok {
-					t.Fatal("Expected 'webhook' object in response")
-				}
+	// Test successful creation with team tier user
+	t.Run("successful creation with team tier", func(t *testing.T) {
+		token := createAuthenticatedTestUserWithTeamTier(t)
 
-				if webhook["retry_enabled"] != true {
-					t.Error("Expected retry_enabled to be true")
-				}
-			},
-		},
-		{
-			name: "create fails without URL",
-			request: map[string]interface{}{
-				"events": []string{"user.created"},
-			},
-			expectedStatus: http.StatusBadRequest,
-			validateFunc: func(t *testing.T, body []byte) {
-				var errResp map[string]interface{}
-				parseJSONResponse(t, body, &errResp)
-				if errResp["error"] == nil {
-					t.Error("Expected error message in response")
-				}
-			},
-		},
-		{
-			name: "create fails without events",
-			request: map[string]interface{}{
-				"url": "https://example.com/webhook",
-			},
-			expectedStatus: http.StatusBadRequest,
-			validateFunc: func(t *testing.T, body []byte) {
-				var errResp map[string]interface{}
-				parseJSONResponse(t, body, &errResp)
-				if errResp["error"] == nil {
-					t.Error("Expected error message in response")
-				}
-			},
-		},
-		{
-			name: "create fails with empty events array",
-			request: map[string]interface{}{
-				"url":    "https://example.com/webhook",
-				"events": []string{},
-			},
-			expectedStatus: http.StatusBadRequest,
-			validateFunc: func(t *testing.T, body []byte) {
-				var errResp map[string]interface{}
-				parseJSONResponse(t, body, &errResp)
-				if errResp["error"] == nil {
-					t.Error("Expected error message in response")
-				}
-			},
-		},
-		{
-			name: "create fails with invalid URL",
-			request: map[string]interface{}{
-				"url":    "not-a-valid-url",
-				"events": []string{"user.created"},
-			},
-			expectedStatus: http.StatusBadRequest,
-			validateFunc: func(t *testing.T, body []byte) {
-				var errResp map[string]interface{}
-				parseJSONResponse(t, body, &errResp)
-				if errResp["error"] == nil {
-					t.Error("Expected error message in response")
-				}
-			},
-		},
-	}
+		// Create a campaign for testing webhook with campaign_id
+		campaignReq := map[string]interface{}{
+			"name":            "Webhook Test Campaign Team",
+			"slug":            generateTestCampaignSlug(),
+			"type":            "waitlist",
+			"form_config":     map[string]interface{}{},
+			"referral_config": map[string]interface{}{},
+			"email_config":    map[string]interface{}{},
+			"branding_config": map[string]interface{}{},
+		}
+		campaignResp, campaignBody := makeAuthenticatedRequest(t, http.MethodPost, "/api/v1/campaigns", campaignReq, token)
+		if campaignResp.StatusCode != http.StatusCreated {
+			t.Fatalf("Failed to create test campaign: %s", string(campaignBody))
+		}
+		var campaignData map[string]interface{}
+		parseJSONResponse(t, campaignBody, &campaignData)
+		testCampaignID := campaignData["id"].(string)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			resp, body := makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", tt.request, token)
-			assertStatusCode(t, resp, tt.expectedStatus)
+		tests := []struct {
+			name           string
+			request        map[string]interface{}
+			expectedStatus int
+			validateFunc   func(t *testing.T, body []byte)
+		}{
+			{
+				name: "create webhook successfully",
+				request: map[string]interface{}{
+					"url":    "https://example.com/webhook",
+					"events": []string{"user.created", "user.verified"},
+				},
+				expectedStatus: http.StatusCreated,
+				validateFunc: func(t *testing.T, body []byte) {
+					var response map[string]interface{}
+					parseJSONResponse(t, body, &response)
 
-			if tt.validateFunc != nil {
-				tt.validateFunc(t, body)
-			}
-		})
-	}
+					webhook := response["webhook"].(map[string]interface{})
+					if webhook["id"] == nil {
+						t.Error("Expected webhook ID in response")
+					}
+					if webhook["url"] != "https://example.com/webhook" {
+						t.Error("Expected webhook URL to match")
+					}
+					if response["secret"] == nil || response["secret"] == "" {
+						t.Error("Expected secret in response")
+					}
+				},
+			},
+			{
+				name: "create webhook with campaign ID",
+				request: map[string]interface{}{
+					"url":         "https://example.com/webhook-campaign",
+					"events":      []string{"user.created"},
+					"campaign_id": testCampaignID,
+				},
+				expectedStatus: http.StatusCreated,
+				validateFunc: func(t *testing.T, body []byte) {
+					var response map[string]interface{}
+					parseJSONResponse(t, body, &response)
+
+					webhook := response["webhook"].(map[string]interface{})
+					if webhook["campaign_id"] != testCampaignID {
+						t.Errorf("Expected campaign_id %s, got %v", testCampaignID, webhook["campaign_id"])
+					}
+				},
+			},
+			{
+				name: "create webhook with retry configuration",
+				request: map[string]interface{}{
+					"url":           "https://example.com/webhook-retry",
+					"events":        []string{"user.created"},
+					"retry_enabled": true,
+					"max_retries":   5,
+				},
+				expectedStatus: http.StatusCreated,
+				validateFunc: func(t *testing.T, body []byte) {
+					var response map[string]interface{}
+					parseJSONResponse(t, body, &response)
+
+					webhook := response["webhook"].(map[string]interface{})
+					if webhook["retry_enabled"] != true {
+						t.Error("Expected retry_enabled to be true")
+					}
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				resp, body := makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", tt.request, token)
+				assertStatusCode(t, resp, tt.expectedStatus)
+
+				if tt.validateFunc != nil {
+					tt.validateFunc(t, body)
+				}
+			})
+		}
+	})
+
+	// Test validation errors (these happen before feature check)
+	t.Run("validation errors", func(t *testing.T) {
+		token := createAuthenticatedUser(t)
+
+		tests := []struct {
+			name           string
+			request        map[string]interface{}
+			expectedStatus int
+			validateFunc   func(t *testing.T, body []byte)
+		}{
+			{
+				name: "create fails without URL",
+				request: map[string]interface{}{
+					"events": []string{"user.created"},
+				},
+				expectedStatus: http.StatusBadRequest,
+				validateFunc: func(t *testing.T, body []byte) {
+					var errResp map[string]interface{}
+					parseJSONResponse(t, body, &errResp)
+					if errResp["error"] == nil {
+						t.Error("Expected error message in response")
+					}
+				},
+			},
+			{
+				name: "create fails without events",
+				request: map[string]interface{}{
+					"url": "https://example.com/webhook",
+				},
+				expectedStatus: http.StatusBadRequest,
+				validateFunc: func(t *testing.T, body []byte) {
+					var errResp map[string]interface{}
+					parseJSONResponse(t, body, &errResp)
+					if errResp["error"] == nil {
+						t.Error("Expected error message in response")
+					}
+				},
+			},
+			{
+				name: "create fails with empty events array",
+				request: map[string]interface{}{
+					"url":    "https://example.com/webhook",
+					"events": []string{},
+				},
+				expectedStatus: http.StatusBadRequest,
+				validateFunc: func(t *testing.T, body []byte) {
+					var errResp map[string]interface{}
+					parseJSONResponse(t, body, &errResp)
+					if errResp["error"] == nil {
+						t.Error("Expected error message in response")
+					}
+				},
+			},
+			{
+				name: "create fails with invalid URL",
+				request: map[string]interface{}{
+					"url":    "not-a-valid-url",
+					"events": []string{"user.created"},
+				},
+				expectedStatus: http.StatusBadRequest,
+				validateFunc: func(t *testing.T, body []byte) {
+					var errResp map[string]interface{}
+					parseJSONResponse(t, body, &errResp)
+					if errResp["error"] == nil {
+						t.Error("Expected error message in response")
+					}
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				resp, body := makeAuthenticatedRequest(t, http.MethodPost, "/api/protected/webhooks", tt.request, token)
+				assertStatusCode(t, resp, tt.expectedStatus)
+
+				if tt.validateFunc != nil {
+					tt.validateFunc(t, body)
+				}
+			})
+		}
+	})
 }
 
 func TestAPI_Webhook_List(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	token := createAuthenticatedTestUserWithTeamTier(t)
 
 	// Create a few test webhooks
 	for i := 0; i < 3; i++ {
@@ -269,7 +371,7 @@ func TestAPI_Webhook_List(t *testing.T) {
 
 func TestAPI_Webhook_GetByID(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	token := createAuthenticatedTestUserWithTeamTier(t)
 
 	// Create a test webhook
 	createReq := map[string]interface{}{
@@ -354,7 +456,7 @@ func TestAPI_Webhook_GetByID(t *testing.T) {
 
 func TestAPI_Webhook_Update(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	token := createAuthenticatedTestUserWithTeamTier(t)
 
 	// Create a test webhook
 	createReq := map[string]interface{}{
@@ -476,7 +578,7 @@ func TestAPI_Webhook_Update(t *testing.T) {
 
 func TestAPI_Webhook_Delete(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	token := createAuthenticatedTestUserWithTeamTier(t)
 
 	tests := []struct {
 		name           string
@@ -545,7 +647,7 @@ func TestAPI_Webhook_Delete(t *testing.T) {
 
 func TestAPI_Webhook_GetDeliveries(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	token := createAuthenticatedTestUserWithTeamTier(t)
 
 	// Create a test webhook
 	createReq := map[string]interface{}{
@@ -631,7 +733,7 @@ func TestAPI_Webhook_GetDeliveries(t *testing.T) {
 
 func TestAPI_Webhook_TestWebhook(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	token := createAuthenticatedTestUserWithTeamTier(t)
 
 	// Start a mock webhook server to receive webhook deliveries
 	deliveryReceived := make(chan bool, 2)

@@ -79,6 +79,14 @@ func (s *Server) Setup() {
 		s.deps.EmailblastsHandler,
 	)
 	api.RegisterRoutes()
+
+	// Handle 404 for unmatched routes
+	s.router.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "The requested resource was not found",
+			"code":  "NOT_FOUND",
+		})
+	})
 }
 
 // Start begins listening for HTTP requests and starts background workers

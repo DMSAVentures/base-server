@@ -678,7 +678,7 @@ func TestAPI_Campaign_GetPublicCampaign(t *testing.T) {
 				data := resp.JSON()
 				assert.NotNil(t, data["error"], "Expected 'error' field in response")
 				assert.NotNil(t, data["code"], "Expected 'code' field in response")
-				assert.Equal(t, "CAMPAIGN_NOT_FOUND", data["code"], "Expected error code 'CAMPAIGN_NOT_FOUND'")
+				assert.Equal(t, "NOT_FOUND", data["code"], "Expected error code 'NOT_FOUND'")
 
 				errorMsg := data["error"].(string)
 				assert.False(t, containsSensitiveInfo(errorMsg), "Error message contains sensitive internal information")

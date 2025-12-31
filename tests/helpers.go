@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,10 +24,115 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// TierConfig defines the configuration for a subscription tier
+type TierConfig struct {
+	Name            string
+	PriceStripeID   string
+	ProductStripeID string
+	Features        map[string]bool // true = enabled, false = disabled
+	Limits          map[string]*int // nil = unlimited
+}
+
+var (
+	// Tier mutex and price IDs for thread-safe initialization
+	tierMutex       sync.Mutex
+	freeTierPriceID uuid.UUID
+	proTierPriceID  uuid.UUID
+	teamTierPriceID uuid.UUID
+)
+
 var (
 	baseURL string
 	logger  *observability.Logger
 )
+
+// getTierConfigs returns the configuration for all tiers
+func getTierConfigs() map[string]TierConfig {
+	// Free tier limits
+	freeCampaigns := 1
+	freeLeads := 200
+	freeTeamMembers := 1
+
+	// Pro tier limits
+	proCampaigns := 5
+	proLeads := 5000
+	proTeamMembers := 1
+
+	return map[string]TierConfig{
+		"free": {
+			Name:            "free",
+			PriceStripeID:   "price_test_free",
+			ProductStripeID: "prod_test_free",
+			Features: map[string]bool{
+				"email_verification":   false,
+				"referral_system":      false,
+				"visual_form_builder":  true,
+				"visual_email_builder": false,
+				"all_widget_types":     false,
+				"remove_branding":      false,
+				"anti_spam_protection": false,
+				"enhanced_lead_data":   false,
+				"tracking_pixels":      false,
+				"webhooks_zapier":      false,
+				"email_blasts":         false,
+				"json_export":          false,
+			},
+			Limits: map[string]*int{
+				"campaigns":    &freeCampaigns,
+				"leads":        &freeLeads,
+				"team_members": &freeTeamMembers,
+			},
+		},
+		"pro": {
+			Name:            "lc_pro_monthly",
+			PriceStripeID:   "price_test_pro",
+			ProductStripeID: "prod_test_pro",
+			Features: map[string]bool{
+				"email_verification":   true,
+				"referral_system":      true,
+				"visual_form_builder":  true,
+				"visual_email_builder": true,
+				"all_widget_types":     true,
+				"remove_branding":      true,
+				"anti_spam_protection": true,
+				"enhanced_lead_data":   true,
+				"tracking_pixels":      true,
+				"webhooks_zapier":      false, // Not in Pro
+				"email_blasts":         true,
+				"json_export":          true,
+			},
+			Limits: map[string]*int{
+				"campaigns":    &proCampaigns,
+				"leads":        &proLeads,
+				"team_members": &proTeamMembers,
+			},
+		},
+		"team": {
+			Name:            "lc_team_monthly",
+			PriceStripeID:   "price_test_team",
+			ProductStripeID: "prod_test_team",
+			Features: map[string]bool{
+				"email_verification":   true,
+				"referral_system":      true,
+				"visual_form_builder":  true,
+				"visual_email_builder": true,
+				"all_widget_types":     true,
+				"remove_branding":      true,
+				"anti_spam_protection": true,
+				"enhanced_lead_data":   true,
+				"tracking_pixels":      true,
+				"webhooks_zapier":      true, // Team tier has webhooks
+				"email_blasts":         true,
+				"json_export":          true,
+			},
+			Limits: map[string]*int{
+				"campaigns":    nil, // Unlimited
+				"leads":        nil, // Unlimited
+				"team_members": nil, // Unlimited
+			},
+		},
+	}
+}
 
 func init() {
 	logger = observability.NewLogger()
@@ -265,6 +371,124 @@ func createAuthenticatedTestUser(t *testing.T) string {
 	var loginRespData map[string]interface{}
 	parseJSONResponse(t, loginBody, &loginRespData)
 	return loginRespData["token"].(string)
+}
+
+// createAuthenticatedTestUserWithTier creates a test user with a specific tier subscription
+// tierName can be "free", "pro", or "team"
+func createAuthenticatedTestUserWithTier(t *testing.T, tierName string) string {
+	email := generateTestEmail()
+	password := "testpassword123"
+
+	// Create user directly in database and get IDs
+	userID, _ := createTestUserDirectly(t, "Test", "User", email, password)
+
+	// Create subscription for the specified tier
+	createTierSubscription(t, userID, tierName)
+
+	// Login via API to get token
+	loginReq := map[string]interface{}{
+		"email":    email,
+		"password": password,
+	}
+	loginResp, loginBody := makeRequest(t, http.MethodPost, "/api/auth/login/email", loginReq, nil)
+	if loginResp.StatusCode != http.StatusOK {
+		t.Fatalf("Failed to login test user: %s", string(loginBody))
+	}
+
+	var loginRespData map[string]interface{}
+	parseJSONResponse(t, loginBody, &loginRespData)
+	return loginRespData["token"].(string)
+}
+
+// createAuthenticatedTestUserWithFreeTier creates a test user with a free tier subscription
+func createAuthenticatedTestUserWithFreeTier(t *testing.T) string {
+	return createAuthenticatedTestUserWithTier(t, "free")
+}
+
+// createAuthenticatedTestUserWithProTier creates a test user with a pro tier subscription
+func createAuthenticatedTestUserWithProTier(t *testing.T) string {
+	return createAuthenticatedTestUserWithTier(t, "pro")
+}
+
+// createAuthenticatedTestUserWithTeamTier creates a test user with a team tier subscription
+// that has access to features like webhooks, email blasts, and JSON export
+func createAuthenticatedTestUserWithTeamTier(t *testing.T) string {
+	return createAuthenticatedTestUserWithTier(t, "team")
+}
+
+// ensureTierExists finds an existing tier's price from the database (thread-safe)
+// The tiers are seeded via migrations, so we just need to look them up
+func ensureTierExists(t *testing.T, tierName string) uuid.UUID {
+	configs := getTierConfigs()
+	config, ok := configs[tierName]
+	if !ok {
+		t.Fatalf("Unknown tier: %s", tierName)
+	}
+
+	tierMutex.Lock()
+	defer tierMutex.Unlock()
+
+	var priceIDPtr *uuid.UUID
+	switch tierName {
+	case "free":
+		priceIDPtr = &freeTierPriceID
+	case "pro":
+		priceIDPtr = &proTierPriceID
+	case "team":
+		priceIDPtr = &teamTierPriceID
+	default:
+		t.Fatalf("Unknown tier: %s", tierName)
+	}
+
+	// If already looked up, return the cached price ID
+	if *priceIDPtr != uuid.Nil {
+		return *priceIDPtr
+	}
+
+	// Look up the existing price from the database (seeded via migrations)
+	testStore := setupTestStore(t)
+	ctx := context.Background()
+	db := testStore.GetDB()
+
+	var priceID uuid.UUID
+	err := db.GetContext(ctx, &priceID, `
+		SELECT id FROM prices WHERE description = $1 AND deleted_at IS NULL LIMIT 1
+	`, config.Name)
+	if err != nil {
+		t.Fatalf("Failed to find price for tier %s (description=%s): %v. Make sure migrations have been run.", tierName, config.Name, err)
+	}
+
+	// Cache and return the price ID
+	*priceIDPtr = priceID
+	return priceID
+}
+
+// createTierSubscription creates a subscription for a user with the specified tier
+func createTierSubscription(t *testing.T, userID string, tierName string) {
+	priceID := ensureTierExists(t, tierName)
+
+	testStore := setupTestStore(t)
+	ctx := context.Background()
+	db := testStore.GetDB()
+
+	parsedUserID, _ := uuid.Parse(userID)
+	// Set end_date and next_billing_date to 30 days from now (required by Subscription struct)
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO subscriptions (user_id, price_id, stripe_id, status, start_date, end_date, next_billing_date)
+		VALUES ($1, $2, $3, 'active', NOW(), NOW() + INTERVAL '30 days', NOW() + INTERVAL '30 days')
+	`, parsedUserID, priceID, "sub_test_"+uuid.New().String()[:8])
+	if err != nil {
+		t.Fatalf("Failed to create subscription: %v", err)
+	}
+}
+
+// Legacy aliases for backward compatibility
+func ensureTeamTierExists(t *testing.T) uuid.UUID {
+	return ensureTierExists(t, "team")
+}
+
+func createTeamTierSubscription(t *testing.T, userID string) {
+	createTierSubscription(t, userID, "team")
 }
 
 // extractCookie extracts a cookie value from the response by name

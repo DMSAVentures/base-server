@@ -17,6 +17,7 @@ import (
 
 var (
 	ErrWebhooksNotAvailable = errors.New("webhooks are not available in your plan")
+	ErrWebhookNotFound      = errors.New("webhook not found")
 )
 
 // WebhookStore defines the database operations required by WebhookProcessor
@@ -162,6 +163,9 @@ func (p *WebhookProcessor) UpdateWebhook(ctx context.Context, webhookID uuid.UUI
 		MaxRetries:   params.MaxRetries,
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return store.Webhook{}, ErrWebhookNotFound
+		}
 		p.logger.Error(ctx, "failed to update webhook", err)
 		return store.Webhook{}, fmt.Errorf("failed to update webhook: %w", err)
 	}
@@ -175,6 +179,9 @@ func (p *WebhookProcessor) UpdateWebhook(ctx context.Context, webhookID uuid.UUI
 func (p *WebhookProcessor) GetWebhook(ctx context.Context, webhookID uuid.UUID) (store.Webhook, error) {
 	webhook, err := p.store.GetWebhookByID(ctx, webhookID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return store.Webhook{}, ErrWebhookNotFound
+		}
 		p.logger.Error(ctx, "failed to get webhook", err)
 		return store.Webhook{}, fmt.Errorf("failed to get webhook: %w", err)
 	}
@@ -215,6 +222,9 @@ func (p *WebhookProcessor) DeleteWebhook(ctx context.Context, webhookID uuid.UUI
 
 	err := p.store.DeleteWebhook(ctx, webhookID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return ErrWebhookNotFound
+		}
 		p.logger.Error(ctx, "failed to delete webhook", err)
 		return fmt.Errorf("failed to delete webhook: %w", err)
 	}

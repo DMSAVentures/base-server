@@ -32,6 +32,8 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, processor.ErrWebhooksNotAvailable):
 		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Webhooks are not available in your plan. Please upgrade to Team plan.")
+	case errors.Is(err, processor.ErrWebhookNotFound):
+		apierrors.NotFound(c, "Webhook not found")
 	default:
 		apierrors.InternalError(c, err)
 	}

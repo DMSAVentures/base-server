@@ -276,19 +276,19 @@ func TestAPI_WaitlistUser_SignupFailsForNonActiveCampaign(t *testing.T) {
 		{
 			name:           "signup fails for draft campaign",
 			status:         "draft", // Default status, no update needed
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusConflict,
 			expectedCode:   "CAMPAIGN_NOT_ACTIVE",
 		},
 		{
 			name:           "signup fails for paused campaign",
 			status:         "paused",
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusConflict,
 			expectedCode:   "CAMPAIGN_NOT_ACTIVE",
 		},
 		{
 			name:           "signup fails for completed campaign",
 			status:         "completed",
-			expectedStatus: http.StatusBadRequest,
+			expectedStatus: http.StatusConflict,
 			expectedCode:   "CAMPAIGN_NOT_ACTIVE",
 		},
 	}
