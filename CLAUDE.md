@@ -9,25 +9,66 @@ base-server/
 │   ├── ai-capabilities/    # AI and LLM integrations
 │   │   ├── handler/       # HTTP handlers for AI endpoints
 │   │   └── processor/     # Business logic for AI operations
+│   ├── analytics/         # Analytics endpoints
+│   │   ├── handler/       # HTTP handlers for analytics
+│   │   └── processor/     # Business logic for analytics
 │   ├── api/               # API setup and route registration
+│   ├── apierrors/         # Centralized API error handling
+│   ├── apikeys/           # API key management
+│   │   └── handler/       # HTTP handlers for API keys
 │   ├── auth/              # Authentication & authorization
 │   │   ├── handler/       # HTTP handlers for auth endpoints
 │   │   └── processor/     # Business logic for auth operations
+│   ├── bootstrap/         # Application bootstrap and initialization
+│   ├── campaign/          # Campaign management
+│   │   ├── handler/       # HTTP handlers for campaigns
+│   │   └── processor/     # Business logic for campaigns
 │   ├── clients/           # External service clients
 │   │   ├── googleoauth/   # Google OAuth client
 │   │   ├── mail/          # Email service client (Resend)
 │   │   └── openai/        # OpenAI API client
+│   ├── config/            # Configuration management
 │   ├── email/             # Email service abstraction
+│   ├── emailblasts/       # Email blast management
+│   │   ├── handler/       # HTTP handlers for email blasts
+│   │   └── processor/     # Business logic for email blasts
+│   ├── emailtemplates/    # Email template management
+│   │   ├── handler/       # HTTP handlers for email templates
+│   │   └── processor/     # Business logic for email templates
+│   ├── integrations/      # Third-party integrations (Zapier, etc.)
+│   │   └── zapier/        # Zapier integration
 │   ├── money/             # Billing and payment domain
 │   │   ├── billing/       # Billing operations
 │   │   │   ├── handler/   # HTTP handlers for billing
 │   │   │   └── processor/ # Business logic for billing
 │   │   ├── products/      # Product management service
 │   │   └── subscriptions/ # Subscription management service
-│   ├── apierrors/         # Centralized API error handling
-│   ├── observability/     # Logging and monitoring
-│   └── store/             # Database layer and models
+│   ├── observability/     # Logging, metrics, and tracing
+│   ├── referral/          # Referral system
+│   │   ├── handler/       # HTTP handlers for referrals
+│   │   └── processor/     # Business logic for referrals
+│   ├── rewards/           # Reward system
+│   │   ├── handler/       # HTTP handlers for rewards
+│   │   └── processor/     # Business logic for rewards
+│   ├── segments/          # User segmentation
+│   │   ├── handler/       # HTTP handlers for segments
+│   │   └── processor/     # Business logic for segments
+│   ├── server/            # HTTP server setup
+│   ├── spam/              # Spam detection
+│   ├── store/             # Database layer and models
+│   ├── tiers/             # Subscription tier management
+│   ├── voice/             # Voice capabilities
+│   ├── voicecall/         # Voice call management
+│   ├── waitlist/          # Waitlist user management
+│   │   ├── handler/       # HTTP handlers for waitlist
+│   │   └── processor/     # Business logic for waitlist
+│   ├── webhooks/          # Webhook management
+│   │   ├── handler/       # HTTP handlers for webhooks
+│   │   └── processor/     # Business logic for webhooks
+│   └── workers/           # Background workers
 ├── migrations/            # SQL migration files (Flyway format)
+├── tests/                 # Integration tests
+├── docs/                  # Documentation
 ├── main.go               # Application entry point
 └── go.mod                # Go module definition
 ```
@@ -132,19 +173,38 @@ func (p *Processor) GetUserByExternalID(ctx context.Context, userID uuid.UUID) (
     if err != nil {
         // Log detailed error with full context (user_id, operation, etc.)
         p.logger.Error(ctx, "failed to get user by external id", err)
-        return User{}, err
+        if errors.Is(err, store.ErrNotFound) {
+            return User{}, ErrUserNotFound
+        }
+        return User{}, ErrFailedGetUser
     }
     return user, nil
 }
 ```
 
 ### Handler Layer Error Handling
-Handlers use `apierrors` for all error responses:
+Handlers use a private `handleError` method to map processor errors to API responses:
 
-**For processor/business logic errors:**
+**Define a handleError method per handler:**
 ```go
 import "base-server/internal/apierrors"
 
+func (h *Handler) handleError(c *gin.Context, err error) {
+    switch {
+    case errors.Is(err, processor.ErrUserNotFound):
+        apierrors.NotFound(c, "User not found")
+    case errors.Is(err, processor.ErrEmailAlreadyExists):
+        apierrors.Conflict(c, "EMAIL_EXISTS", "Email already exists")
+    case errors.Is(err, processor.ErrUnauthorized):
+        apierrors.Forbidden(c, "FORBIDDEN", "You do not have access")
+    default:
+        apierrors.InternalError(c, err)
+    }
+}
+```
+
+**For processor/business logic errors:**
+```go
 func (h *Handler) HandleGetUser(c *gin.Context) {
     ctx := c.Request.Context()
     userID := parseUserID(c) // your parsing logic
@@ -152,8 +212,8 @@ func (h *Handler) HandleGetUser(c *gin.Context) {
     user, err := h.processor.GetUserByExternalID(ctx, userID)
     if err != nil {
         // Processor already logged detailed error with full context
-        // apierrors maps the error and logs correlation info (request_id, status_code, error_code)
-        apierrors.RespondWithError(c, err)
+        // handleError maps the error to appropriate API response
+        h.handleError(c, err)
         return
     }
 
@@ -167,13 +227,13 @@ func (h *Handler) HandleCreateUser(c *gin.Context) {
     var req CreateUserRequest
     if err := c.ShouldBindJSON(&req); err != nil {
         // Handles validation errors with structured field-level details
-        apierrors.RespondWithValidationError(c, err)
+        apierrors.ValidationError(c, err)
         return
     }
 
     user, err := h.processor.CreateUser(c.Request.Context(), req)
     if err != nil {
-        apierrors.RespondWithError(c, err)
+        h.handleError(c, err)
         return
     }
 
@@ -210,25 +270,53 @@ All API errors return this consistent JSON structure:
 Error codes use `UPPER_SNAKE_CASE` format (e.g., `USER_NOT_FOUND`, `EMAIL_EXISTS`, `INVALID_INPUT`).
 
 ### Adding New Error Mappings
-When adding new processor errors, update `internal/apierrors/mapper.go`:
+When adding new processor errors:
+
+1. **Define the error in the processor package:**
 ```go
-func MapError(err error) *APIError {
+// internal/yourfeature/processor/processor.go
+var (
+    ErrYourNewError = errors.New("your new error")
+)
+```
+
+2. **Update the handler's handleError method:**
+```go
+// internal/yourfeature/handler/handler.go
+func (h *Handler) handleError(c *gin.Context, err error) {
     switch {
-    case errors.Is(err, yourProcessor.ErrYourNewError):
-        return NotFound(CodeYourError, "User-friendly message")
-    // ... other mappings
+    case errors.Is(err, processor.ErrYourNewError):
+        apierrors.NotFound(c, "Resource not found")
+    // ... other error mappings
     default:
-        return InternalError(err) // Sanitizes unknown errors
+        apierrors.InternalError(c, err)
     }
 }
 ```
 
-Define the error code constant in `internal/apierrors/errors.go`:
+### Available apierrors Functions
 ```go
-const (
-    // ... existing codes
-    CodeYourError = "YOUR_ERROR"
-)
+// 400 Bad Request
+apierrors.BadRequest(c, "ERROR_CODE", "User-friendly message")
+apierrors.ValidationError(c, err) // For binding/validation errors
+
+// 401 Unauthorized
+apierrors.Unauthorized(c, "User-friendly message")
+
+// 403 Forbidden
+apierrors.Forbidden(c, "ERROR_CODE", "User-friendly message")
+
+// 404 Not Found
+apierrors.NotFound(c, "User-friendly message")
+
+// 409 Conflict
+apierrors.Conflict(c, "ERROR_CODE", "User-friendly message")
+
+// 500 Internal Server Error (logs error, returns sanitized message)
+apierrors.InternalError(c, err)
+
+// 503 Service Unavailable (logs error, returns custom message)
+apierrors.ServiceUnavailable(c, "ERROR_CODE", "User-friendly message", internalErr)
 ```
 
 ## HTTP Handling
@@ -236,37 +324,83 @@ const (
 ### Handler Structure
 ```go
 import (
+    "errors"
+    "net/http"
+
     "base-server/internal/apierrors"
     "base-server/internal/observability"
+    "base-server/internal/yourfeature/processor"
+
     "github.com/gin-gonic/gin"
+    "github.com/google/uuid"
 )
 
 type Handler struct {
-    processor SomeProcessor
+    processor processor.SomeProcessor
     logger    *observability.Logger
+}
+
+func New(processor processor.SomeProcessor, logger *observability.Logger) Handler {
+    return Handler{
+        processor: processor,
+        logger:    logger,
+    }
 }
 
 func (h *Handler) HandleSomeAction(c *gin.Context) {
     ctx := c.Request.Context()
 
+    // Get account ID from context (set by auth middleware)
+    accountID, ok := h.getAccountID(c)
+    if !ok {
+        return
+    }
+    ctx = observability.WithFields(ctx, observability.Field{Key: "account_id", Value: accountID.String()})
+
     // Input validation - use apierrors for validation errors
     var req RequestStruct
     if err := c.ShouldBindJSON(&req); err != nil {
-        apierrors.RespondWithValidationError(c, err)
+        apierrors.ValidationError(c, err)
         return
     }
 
     // Business logic - processor logs detailed errors
     result, err := h.processor.ProcessAction(ctx, req)
     if err != nil {
-        // Use apierrors for all business logic errors
-        // Processor already logged detailed error with full context
-        apierrors.RespondWithError(c, err)
+        // handleError maps processor errors to API responses
+        h.handleError(c, err)
         return
     }
 
     // Success response
     c.JSON(http.StatusOK, result)
+}
+
+// handleError maps processor errors to appropriate API error responses
+func (h *Handler) handleError(c *gin.Context, err error) {
+    switch {
+    case errors.Is(err, processor.ErrNotFound):
+        apierrors.NotFound(c, "Resource not found")
+    case errors.Is(err, processor.ErrConflict):
+        apierrors.Conflict(c, "CONFLICT", "Resource already exists")
+    default:
+        apierrors.InternalError(c, err)
+    }
+}
+
+// Helper to extract and validate account ID from context
+func (h *Handler) getAccountID(c *gin.Context) (uuid.UUID, bool) {
+    accountIDStr, exists := c.Get("Account-ID")
+    if !exists {
+        apierrors.Unauthorized(c, "Account ID not found in context")
+        return uuid.UUID{}, false
+    }
+    accountID, err := uuid.Parse(accountIDStr.(string))
+    if err != nil {
+        apierrors.BadRequest(c, "INVALID_INPUT", "Invalid account ID format")
+        return uuid.UUID{}, false
+    }
+    return accountID, true
 }
 ```
 
@@ -306,7 +440,8 @@ type Store struct {
     logger *observability.Logger
 }
 
-func (s Store) GetUserByExternalID(ctx context.Context, externalID uuid.UUID) (User, error) {
+// Use pointer receivers for all Store methods
+func (s *Store) GetUserByExternalID(ctx context.Context, externalID uuid.UUID) (User, error) {
     var user User
     query := `SELECT * FROM users WHERE id = $1 AND deleted_at IS NULL`
     err := s.db.GetContext(ctx, &user, query, externalID)
@@ -314,7 +449,7 @@ func (s Store) GetUserByExternalID(ctx context.Context, externalID uuid.UUID) (U
         if errors.Is(err, sql.ErrNoRows) {
             return User{}, ErrNotFound
         }
-        return User{}, err
+        return User{}, fmt.Errorf("failed to get user by external id: %w", err)
     }
     return user, nil
 }
@@ -324,16 +459,21 @@ func (s Store) GetUserByExternalID(ctx context.Context, externalID uuid.UUID) (U
 **IMPORTANT:** All UPDATE and DELETE operations MUST check rows affected and return `ErrNotFound` if no rows were modified.
 
 ```go
-func (s *Store) UpdateSomething(ctx context.Context, id uuid.UUID, value string) error {
-    result, err := s.db.ExecContext(ctx, sqlUpdateSomething, value, id)
+// Define SQL queries as package-level constants
+const sqlDeleteSomething = `
+UPDATE something
+SET deleted_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
+`
+
+func (s *Store) DeleteSomething(ctx context.Context, accountID, id uuid.UUID) error {
+    result, err := s.db.ExecContext(ctx, sqlDeleteSomething, id, accountID)
     if err != nil {
-        s.logger.Error(ctx, "failed to update something", err)
-        return fmt.Errorf("failed to update something: %w", err)
+        return fmt.Errorf("failed to delete something: %w", err)
     }
 
     rowsAffected, err := result.RowsAffected()
     if err != nil {
-        s.logger.Error(ctx, "failed to get rows affected", err)
         return fmt.Errorf("failed to get rows affected: %w", err)
     }
 
@@ -343,25 +483,27 @@ func (s *Store) UpdateSomething(ctx context.Context, id uuid.UUID, value string)
 
     return nil
 }
+```
 
-func (s *Store) DeleteSomething(ctx context.Context, id uuid.UUID) error {
-    result, err := s.db.ExecContext(ctx, sqlDeleteSomething, id)
+**For updates that return the updated entity:**
+```go
+const sqlUpdateSomething = `
+UPDATE something
+SET name = COALESCE($3, name), updated_at = CURRENT_TIMESTAMP
+WHERE id = $1 AND account_id = $2 AND deleted_at IS NULL
+RETURNING id, account_id, name, created_at, updated_at, deleted_at
+`
+
+func (s *Store) UpdateSomething(ctx context.Context, accountID, id uuid.UUID, name *string) (Something, error) {
+    var result Something
+    err := s.db.GetContext(ctx, &result, sqlUpdateSomething, id, accountID, name)
     if err != nil {
-        s.logger.Error(ctx, "failed to delete something", err)
-        return fmt.Errorf("failed to delete something: %w", err)
+        if errors.Is(err, sql.ErrNoRows) {
+            return Something{}, ErrNotFound
+        }
+        return Something{}, fmt.Errorf("failed to update something: %w", err)
     }
-
-    rowsAffected, err := result.RowsAffected()
-    if err != nil {
-        s.logger.Error(ctx, "failed to get rows affected", err)
-        return fmt.Errorf("failed to get rows affected: %w", err)
-    }
-
-    if rowsAffected == 0 {
-        return ErrNotFound
-    }
-
-    return nil
+    return result, nil
 }
 ```
 
@@ -412,12 +554,13 @@ func NewClient(apiKey string, logger *observability.Logger) *Client {
 ```
 
 ### Service Integration
-- **Stripe**: Payment processing and subscriptions
-- **Resend**: Email sending
-- **Google OAuth**: Authentication
-- **OpenAI/Gemini**: AI capabilities
-- **Twilio**: Voice and messaging
-- **Kafka**: Event streaming for webhook delivery (AWS MSK or local)
+- **Stripe**: Payment processing and subscriptions (`github.com/stripe/stripe-go/v79`)
+- **Resend**: Email sending (`github.com/resendlabs/resend-go`)
+- **Google OAuth**: Authentication (`internal/clients/googleoauth`)
+- **OpenAI**: AI text/image capabilities (`github.com/openai/openai-go`)
+- **Google Gemini**: AI capabilities (`google.golang.org/genai`)
+- **Twilio**: Voice and messaging (`github.com/twilio/twilio-go`)
+- **Kafka**: Event streaming for webhook delivery (`github.com/segmentio/kafka-go`)
 
 ## Configuration
 
