@@ -16,7 +16,6 @@ import (
 type SchedulerStore interface {
 	GetScheduledBlasts(ctx context.Context, beforeTime time.Time) ([]store.EmailBlast, error)
 	UpdateEmailBlastStatus(ctx context.Context, blastID uuid.UUID, status string, errorMessage *string) (store.EmailBlast, error)
-	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)
 }
 
 // BlastScheduler periodically checks for scheduled blasts and triggers them
@@ -99,7 +98,7 @@ func (s *BlastScheduler) checkScheduledBlasts(ctx context.Context) {
 	for _, blast := range blasts {
 		blastCtx := observability.WithFields(ctx,
 			observability.Field{Key: "blast_id", Value: blast.ID},
-			observability.Field{Key: "campaign_id", Value: blast.CampaignID},
+			observability.Field{Key: "account_id", Value: blast.AccountID},
 		)
 
 		// Update status to processing
@@ -109,17 +108,8 @@ func (s *BlastScheduler) checkScheduledBlasts(ctx context.Context) {
 			continue
 		}
 
-		// Get campaign to find account ID
-		campaign, err := s.store.GetCampaignByID(blastCtx, blast.CampaignID)
-		if err != nil {
-			s.logger.Error(blastCtx, "Failed to get campaign for blast", err)
-			errMsg := fmt.Sprintf("failed to get campaign: %v", err)
-			_, _ = s.store.UpdateEmailBlastStatus(blastCtx, blast.ID, string(store.EmailBlastStatusFailed), &errMsg)
-			continue
-		}
-
 		// Dispatch blast.started event
-		err = s.eventDispatcher.DispatchBlastStarted(blastCtx, campaign.AccountID, blast.CampaignID, blast.ID)
+		err = s.eventDispatcher.DispatchBlastStarted(blastCtx, blast.AccountID, blast.ID)
 		if err != nil {
 			s.logger.Error(blastCtx, "Failed to dispatch blast started event", err)
 			errMsg := fmt.Sprintf("failed to dispatch blast started event: %v", err)

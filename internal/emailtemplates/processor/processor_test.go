@@ -12,7 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestCreateEmailTemplate(t *testing.T) {
+func TestCreateCampaignEmailTemplate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -34,7 +34,7 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		expectedTemplate := store.EmailTemplate{
+		expectedTemplate := store.CampaignEmailTemplate{
 			ID:                templateID,
 			CampaignID:        campaignID,
 			Name:              "Welcome Email",
@@ -52,7 +52,7 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			CreateEmailTemplate(gomock.Any(), store.CreateEmailTemplateParams{
+			CreateCampaignEmailTemplate(gomock.Any(), store.CreateCampaignEmailTemplateParams{
 				CampaignID:        campaignID,
 				Name:              "Welcome Email",
 				Type:              "welcome",
@@ -91,7 +91,7 @@ func TestCreateEmailTemplate(t *testing.T) {
 		enabled := false
 		sendAutomatically := false
 
-		expectedTemplate := store.EmailTemplate{
+		expectedTemplate := store.CampaignEmailTemplate{
 			ID:                templateID,
 			CampaignID:        campaignID,
 			Name:              "Disabled Template",
@@ -109,7 +109,7 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			CreateEmailTemplate(gomock.Any(), store.CreateEmailTemplateParams{
+			CreateCampaignEmailTemplate(gomock.Any(), store.CreateCampaignEmailTemplateParams{
 				CampaignID:        campaignID,
 				Name:              "Disabled Template",
 				Type:              "custom",
@@ -234,8 +234,8 @@ func TestCreateEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			CreateEmailTemplate(gomock.Any(), gomock.Any()).
-			Return(store.EmailTemplate{}, storeErr)
+			CreateCampaignEmailTemplate(gomock.Any(), gomock.Any()).
+			Return(store.CampaignEmailTemplate{}, storeErr)
 
 		req := CreateEmailTemplateRequest{
 			Name:     "Template",
@@ -274,7 +274,7 @@ func TestGetEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		expectedTemplate := store.EmailTemplate{
+		expectedTemplate := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       "Welcome Email",
@@ -288,7 +288,7 @@ func TestGetEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(expectedTemplate, nil)
 
 		result, err := processor.GetEmailTemplate(ctx, accountID, campaignID, templateID)
@@ -346,8 +346,8 @@ func TestGetEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
-			Return(store.EmailTemplate{}, store.ErrNotFound)
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
+			Return(store.CampaignEmailTemplate{}, store.ErrNotFound)
 
 		_, err := processor.GetEmailTemplate(ctx, accountID, campaignID, templateID)
 
@@ -365,7 +365,7 @@ func TestGetEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		template := store.EmailTemplate{
+		template := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: differentCampaignID,
 			Name:       "Welcome Email",
@@ -376,7 +376,7 @@ func TestGetEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(template, nil)
 
 		_, err := processor.GetEmailTemplate(ctx, accountID, campaignID, templateID)
@@ -408,7 +408,7 @@ func TestListEmailTemplates(t *testing.T) {
 			Status:    "active",
 		}
 
-		templates := []store.EmailTemplate{
+		templates := []store.CampaignEmailTemplate{
 			{
 				ID:         uuid.New(),
 				CampaignID: campaignID,
@@ -428,7 +428,7 @@ func TestListEmailTemplates(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplatesByCampaign(gomock.Any(), campaignID).
+			GetCampaignEmailTemplatesByCampaign(gomock.Any(), campaignID).
 			Return(templates, nil)
 
 		result, err := processor.ListEmailTemplates(ctx, accountID, campaignID, nil)
@@ -449,7 +449,7 @@ func TestListEmailTemplates(t *testing.T) {
 			Status:    "active",
 		}
 
-		templates := []store.EmailTemplate{
+		templates := []store.CampaignEmailTemplate{
 			{
 				ID:         uuid.New(),
 				CampaignID: campaignID,
@@ -469,7 +469,7 @@ func TestListEmailTemplates(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplatesByCampaign(gomock.Any(), campaignID).
+			GetCampaignEmailTemplatesByCampaign(gomock.Any(), campaignID).
 			Return(templates, nil)
 
 		templateType := "welcome"
@@ -499,7 +499,7 @@ func TestListEmailTemplates(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplatesByCampaign(gomock.Any(), campaignID).
+			GetCampaignEmailTemplatesByCampaign(gomock.Any(), campaignID).
 			Return(nil, nil)
 
 		result, err := processor.ListEmailTemplates(ctx, accountID, campaignID, nil)
@@ -568,7 +568,7 @@ func TestListEmailTemplates(t *testing.T) {
 	})
 }
 
-func TestUpdateEmailTemplate(t *testing.T) {
+func TestUpdateCampaignEmailTemplate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -590,7 +590,7 @@ func TestUpdateEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		existingTemplate := store.EmailTemplate{
+		existingTemplate := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       "Old Name",
@@ -601,7 +601,7 @@ func TestUpdateEmailTemplate(t *testing.T) {
 		newName := "New Name"
 		newSubject := "New Subject"
 
-		updatedTemplate := store.EmailTemplate{
+		updatedTemplate := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       newName,
@@ -614,11 +614,11 @@ func TestUpdateEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(existingTemplate, nil)
 
 		mockStore.EXPECT().
-			UpdateEmailTemplate(gomock.Any(), templateID, store.UpdateEmailTemplateParams{
+			UpdateCampaignEmailTemplate(gomock.Any(), templateID, store.UpdateCampaignEmailTemplateParams{
 				Name:    &newName,
 				Subject: &newSubject,
 			}).
@@ -650,7 +650,7 @@ func TestUpdateEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		existingTemplate := store.EmailTemplate{
+		existingTemplate := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       "Template",
@@ -662,7 +662,7 @@ func TestUpdateEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(existingTemplate, nil)
 
 		invalidHTML := "{{.Invalid"
@@ -726,8 +726,8 @@ func TestUpdateEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
-			Return(store.EmailTemplate{}, store.ErrNotFound)
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
+			Return(store.CampaignEmailTemplate{}, store.ErrNotFound)
 
 		req := UpdateEmailTemplateRequest{}
 
@@ -747,7 +747,7 @@ func TestUpdateEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		template := store.EmailTemplate{
+		template := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: differentCampaignID,
 			Name:       "Template",
@@ -758,7 +758,7 @@ func TestUpdateEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(template, nil)
 
 		req := UpdateEmailTemplateRequest{}
@@ -778,7 +778,7 @@ func TestUpdateEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		existingTemplate := store.EmailTemplate{
+		existingTemplate := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       "Template",
@@ -790,12 +790,12 @@ func TestUpdateEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(existingTemplate, nil)
 
 		mockStore.EXPECT().
-			UpdateEmailTemplate(gomock.Any(), templateID, gomock.Any()).
-			Return(store.EmailTemplate{}, store.ErrNotFound)
+			UpdateCampaignEmailTemplate(gomock.Any(), templateID, gomock.Any()).
+			Return(store.CampaignEmailTemplate{}, store.ErrNotFound)
 
 		newName := "New Name"
 		req := UpdateEmailTemplateRequest{
@@ -810,7 +810,7 @@ func TestUpdateEmailTemplate(t *testing.T) {
 	})
 }
 
-func TestDeleteEmailTemplate(t *testing.T) {
+func TestDeleteCampaignEmailTemplate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -832,7 +832,7 @@ func TestDeleteEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		existingTemplate := store.EmailTemplate{
+		existingTemplate := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       "Template",
@@ -844,11 +844,11 @@ func TestDeleteEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(existingTemplate, nil)
 
 		mockStore.EXPECT().
-			DeleteEmailTemplate(gomock.Any(), templateID).
+			DeleteCampaignEmailTemplate(gomock.Any(), templateID).
 			Return(nil)
 
 		err := processor.DeleteEmailTemplate(ctx, accountID, campaignID, templateID)
@@ -903,8 +903,8 @@ func TestDeleteEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
-			Return(store.EmailTemplate{}, store.ErrNotFound)
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
+			Return(store.CampaignEmailTemplate{}, store.ErrNotFound)
 
 		err := processor.DeleteEmailTemplate(ctx, accountID, campaignID, templateID)
 
@@ -922,7 +922,7 @@ func TestDeleteEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		template := store.EmailTemplate{
+		template := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: differentCampaignID,
 			Name:       "Template",
@@ -933,7 +933,7 @@ func TestDeleteEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(template, nil)
 
 		err := processor.DeleteEmailTemplate(ctx, accountID, campaignID, templateID)
@@ -951,7 +951,7 @@ func TestDeleteEmailTemplate(t *testing.T) {
 			Status:    "active",
 		}
 
-		existingTemplate := store.EmailTemplate{
+		existingTemplate := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       "Template",
@@ -963,11 +963,11 @@ func TestDeleteEmailTemplate(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(existingTemplate, nil)
 
 		mockStore.EXPECT().
-			DeleteEmailTemplate(gomock.Any(), templateID).
+			DeleteCampaignEmailTemplate(gomock.Any(), templateID).
 			Return(store.ErrNotFound)
 
 		err := processor.DeleteEmailTemplate(ctx, accountID, campaignID, templateID)
@@ -1000,7 +1000,7 @@ func TestSendTestEmail(t *testing.T) {
 			Status:    "active",
 		}
 
-		template := store.EmailTemplate{
+		template := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       "Welcome Email",
@@ -1014,7 +1014,7 @@ func TestSendTestEmail(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(template, nil)
 
 		mockEmailService.EXPECT().
@@ -1074,7 +1074,7 @@ func TestSendTestEmail(t *testing.T) {
 		}
 
 		// Use an invalid template syntax that fails during parsing
-		template := store.EmailTemplate{
+		template := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       "Welcome Email",
@@ -1088,7 +1088,7 @@ func TestSendTestEmail(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(template, nil)
 
 		req := SendTestEmailRequest{
@@ -1118,7 +1118,7 @@ func TestSendTestEmail(t *testing.T) {
 			Status:    "active",
 		}
 
-		template := store.EmailTemplate{
+		template := store.CampaignEmailTemplate{
 			ID:         templateID,
 			CampaignID: campaignID,
 			Name:       "Welcome Email",
@@ -1132,7 +1132,7 @@ func TestSendTestEmail(t *testing.T) {
 			Return(campaign, nil)
 
 		mockStore.EXPECT().
-			GetEmailTemplateByID(gomock.Any(), templateID).
+			GetCampaignEmailTemplateByID(gomock.Any(), templateID).
 			Return(template, nil)
 
 		mockEmailService.EXPECT().

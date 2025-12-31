@@ -26,7 +26,7 @@ type CreateEmailBlastParams struct {
 
 const sqlCreateEmailBlast = `
 INSERT INTO email_blasts (account_id, blast_template_id, segment_ids, name, subject, scheduled_at, batch_size, send_throttle_per_second, created_by, status)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $6 IS NOT NULL THEN 'scheduled' ELSE 'draft' END)
+VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, CASE WHEN $6::timestamptz IS NOT NULL THEN 'scheduled'::email_blast_status ELSE 'draft'::email_blast_status END)
 RETURNING id, account_id, blast_template_id, segment_ids, name, subject, scheduled_at, started_at, completed_at, status, total_recipients, sent_count, delivered_count, opened_count, clicked_count, bounced_count, failed_count, batch_size, current_batch, last_batch_at, error_message, send_throttle_per_second, created_by, created_at, updated_at, deleted_at
 `
 
@@ -166,7 +166,7 @@ func (s *Store) DeleteEmailBlast(ctx context.Context, blastID uuid.UUID) error {
 
 const sqlUpdateEmailBlastStatus = `
 UPDATE email_blasts
-SET status = $2,
+SET status = $2::email_blast_status,
     error_message = $3,
     started_at = CASE WHEN $2 IN ('processing', 'sending') AND started_at IS NULL THEN CURRENT_TIMESTAMP ELSE started_at END,
     completed_at = CASE WHEN $2 IN ('completed', 'cancelled', 'failed') THEN CURRENT_TIMESTAMP ELSE completed_at END,
@@ -634,7 +634,7 @@ func (s *Store) UpdateEmailBlastProgressWithSent(ctx context.Context, blastID uu
 func (s *Store) ScheduleBlast(ctx context.Context, blastID uuid.UUID, scheduledAt time.Time) (EmailBlast, error) {
 	const query = `
 	UPDATE email_blasts
-	SET status = 'scheduled',
+	SET status = 'scheduled'::email_blast_status,
 	    scheduled_at = $2,
 	    updated_at = CURRENT_TIMESTAMP
 	WHERE id = $1 AND deleted_at IS NULL AND status = 'draft'

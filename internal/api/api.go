@@ -205,23 +205,23 @@ func (a *API) RegisterRoutes() {
 				segmentsGroup.DELETE("/:segment_id", a.segmentsHandler.HandleDeleteSegment)
 				segmentsGroup.POST("/:segment_id/refresh", a.segmentsHandler.HandleRefreshSegmentCount)
 			}
+		}
 
-			// Email Blasts routes
-			blastsGroup := campaignsGroup.Group("/:campaign_id/blasts")
-			{
-				blastsGroup.POST("", a.emailblastsHandler.HandleCreateEmailBlast)
-				blastsGroup.GET("", a.emailblastsHandler.HandleListEmailBlasts)
-				blastsGroup.GET("/:blast_id", a.emailblastsHandler.HandleGetEmailBlast)
-				blastsGroup.PUT("/:blast_id", a.emailblastsHandler.HandleUpdateEmailBlast)
-				blastsGroup.DELETE("/:blast_id", a.emailblastsHandler.HandleDeleteEmailBlast)
-				blastsGroup.POST("/:blast_id/send", a.emailblastsHandler.HandleSendBlastNow)
-				blastsGroup.POST("/:blast_id/schedule", a.emailblastsHandler.HandleScheduleBlast)
-				blastsGroup.POST("/:blast_id/pause", a.emailblastsHandler.HandlePauseBlast)
-				blastsGroup.POST("/:blast_id/resume", a.emailblastsHandler.HandleResumeBlast)
-				blastsGroup.POST("/:blast_id/cancel", a.emailblastsHandler.HandleCancelBlast)
-				blastsGroup.GET("/:blast_id/analytics", a.emailblastsHandler.HandleGetBlastAnalytics)
-				blastsGroup.GET("/:blast_id/recipients", a.emailblastsHandler.HandleListBlastRecipients)
-			}
+		// Email Blasts routes (account-scoped, not campaign-nested)
+		blastsGroup := v1Group.Group("/blasts")
+		{
+			blastsGroup.POST("", a.emailblastsHandler.HandleCreateEmailBlast)
+			blastsGroup.GET("", a.emailblastsHandler.HandleListEmailBlasts)
+			blastsGroup.GET("/:blast_id", a.emailblastsHandler.HandleGetEmailBlast)
+			blastsGroup.PUT("/:blast_id", a.emailblastsHandler.HandleUpdateEmailBlast)
+			blastsGroup.DELETE("/:blast_id", a.emailblastsHandler.HandleDeleteEmailBlast)
+			blastsGroup.POST("/:blast_id/send", a.emailblastsHandler.HandleSendBlastNow)
+			blastsGroup.POST("/:blast_id/schedule", a.emailblastsHandler.HandleScheduleBlast)
+			blastsGroup.POST("/:blast_id/pause", a.emailblastsHandler.HandlePauseBlast)
+			blastsGroup.POST("/:blast_id/resume", a.emailblastsHandler.HandleResumeBlast)
+			blastsGroup.POST("/:blast_id/cancel", a.emailblastsHandler.HandleCancelBlast)
+			blastsGroup.GET("/:blast_id/analytics", a.emailblastsHandler.HandleGetBlastAnalytics)
+			blastsGroup.GET("/:blast_id/recipients", a.emailblastsHandler.HandleListBlastRecipients)
 		}
 	}
 

@@ -65,15 +65,15 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 // CreateEmailBlastRequest represents the HTTP request for creating an email blast
 type CreateEmailBlastRequest struct {
 	Name                  string     `json:"name" binding:"required,max=255"`
-	SegmentID             string     `json:"segment_id" binding:"required,uuid"`
-	TemplateID            string     `json:"template_id" binding:"required,uuid"`
+	SegmentIDs            []string   `json:"segment_ids" binding:"required,min=1,dive,uuid"`
+	BlastTemplateID       string     `json:"blast_template_id" binding:"required,uuid"`
 	Subject               string     `json:"subject" binding:"required,max=255"`
 	ScheduledAt           *time.Time `json:"scheduled_at,omitempty"`
 	BatchSize             *int       `json:"batch_size,omitempty"`
 	SendThrottlePerSecond *int       `json:"send_throttle_per_second,omitempty"`
 }
 
-// HandleCreateEmailBlast handles POST /api/v1/campaigns/:campaign_id/blasts
+// HandleCreateEmailBlast handles POST /api/v1/blasts
 func (h *Handler) HandleCreateEmailBlast(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -99,23 +99,19 @@ func (h *Handler) HandleCreateEmailBlast(c *gin.Context) {
 		}
 	}
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
-		return
-	}
-
 	var req CreateEmailBlastRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		apierrors.ValidationError(c, err)
 		return
 	}
 
-	segmentID, _ := uuid.Parse(req.SegmentID)
-	templateID, _ := uuid.Parse(req.TemplateID)
+	// Parse segment IDs
+	segmentIDs := make([]uuid.UUID, len(req.SegmentIDs))
+	for i, s := range req.SegmentIDs {
+		segmentIDs[i], _ = uuid.Parse(s)
+	}
+
+	blastTemplateID, _ := uuid.Parse(req.BlastTemplateID)
 
 	batchSize := 100
 	if req.BatchSize != nil {
@@ -124,15 +120,15 @@ func (h *Handler) HandleCreateEmailBlast(c *gin.Context) {
 
 	processorReq := processor.CreateEmailBlastRequest{
 		Name:                  req.Name,
-		SegmentID:             segmentID,
-		TemplateID:            templateID,
+		SegmentIDs:            segmentIDs,
+		BlastTemplateID:       blastTemplateID,
 		Subject:               req.Subject,
 		ScheduledAt:           req.ScheduledAt,
 		BatchSize:             batchSize,
 		SendThrottlePerSecond: req.SendThrottlePerSecond,
 	}
 
-	blast, err := h.processor.CreateEmailBlast(ctx, accountID, campaignID, userID, processorReq)
+	blast, err := h.processor.CreateEmailBlast(ctx, accountID, userID, processorReq)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -141,7 +137,7 @@ func (h *Handler) HandleCreateEmailBlast(c *gin.Context) {
 	c.JSON(http.StatusCreated, blast)
 }
 
-// HandleListEmailBlasts handles GET /api/v1/campaigns/:campaign_id/blasts
+// HandleListEmailBlasts handles GET /api/v1/blasts
 func (h *Handler) HandleListEmailBlasts(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -159,15 +155,6 @@ func (h *Handler) HandleListEmailBlasts(c *gin.Context) {
 		return
 	}
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
-		return
-	}
-
 	page := parseIntQuery(c, "page", 1)
 	limit := parseIntQuery(c, "limit", 25)
 
@@ -176,7 +163,7 @@ func (h *Handler) HandleListEmailBlasts(c *gin.Context) {
 		Limit: limit,
 	}
 
-	response, err := h.processor.ListEmailBlasts(ctx, accountID, campaignID, processorReq)
+	response, err := h.processor.ListEmailBlasts(ctx, accountID, processorReq)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -185,7 +172,7 @@ func (h *Handler) HandleListEmailBlasts(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// HandleGetEmailBlast handles GET /api/v1/campaigns/:campaign_id/blasts/:blast_id
+// HandleGetEmailBlast handles GET /api/v1/blasts/:blast_id
 func (h *Handler) HandleGetEmailBlast(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -203,15 +190,6 @@ func (h *Handler) HandleGetEmailBlast(c *gin.Context) {
 		return
 	}
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
-		return
-	}
-
 	// Get blast ID from path
 	blastIDStr := c.Param("blast_id")
 	blastID, err := uuid.Parse(blastIDStr)
@@ -221,7 +199,7 @@ func (h *Handler) HandleGetEmailBlast(c *gin.Context) {
 		return
 	}
 
-	blast, err := h.processor.GetEmailBlast(ctx, accountID, campaignID, blastID)
+	blast, err := h.processor.GetEmailBlast(ctx, accountID, blastID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -237,7 +215,7 @@ type UpdateEmailBlastRequest struct {
 	BatchSize *int    `json:"batch_size,omitempty"`
 }
 
-// HandleUpdateEmailBlast handles PUT /api/v1/campaigns/:campaign_id/blasts/:blast_id
+// HandleUpdateEmailBlast handles PUT /api/v1/blasts/:blast_id
 func (h *Handler) HandleUpdateEmailBlast(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -252,15 +230,6 @@ func (h *Handler) HandleUpdateEmailBlast(c *gin.Context) {
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
-		return
-	}
-
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
 		return
 	}
 
@@ -285,7 +254,7 @@ func (h *Handler) HandleUpdateEmailBlast(c *gin.Context) {
 		BatchSize: req.BatchSize,
 	}
 
-	blast, err := h.processor.UpdateEmailBlast(ctx, accountID, campaignID, blastID, processorReq)
+	blast, err := h.processor.UpdateEmailBlast(ctx, accountID, blastID, processorReq)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -294,7 +263,7 @@ func (h *Handler) HandleUpdateEmailBlast(c *gin.Context) {
 	c.JSON(http.StatusOK, blast)
 }
 
-// HandleDeleteEmailBlast handles DELETE /api/v1/campaigns/:campaign_id/blasts/:blast_id
+// HandleDeleteEmailBlast handles DELETE /api/v1/blasts/:blast_id
 func (h *Handler) HandleDeleteEmailBlast(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -312,15 +281,6 @@ func (h *Handler) HandleDeleteEmailBlast(c *gin.Context) {
 		return
 	}
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
-		return
-	}
-
 	// Get blast ID from path
 	blastIDStr := c.Param("blast_id")
 	blastID, err := uuid.Parse(blastIDStr)
@@ -330,7 +290,7 @@ func (h *Handler) HandleDeleteEmailBlast(c *gin.Context) {
 		return
 	}
 
-	err = h.processor.DeleteEmailBlast(ctx, accountID, campaignID, blastID)
+	err = h.processor.DeleteEmailBlast(ctx, accountID, blastID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -344,7 +304,7 @@ type ScheduleBlastRequest struct {
 	ScheduledAt time.Time `json:"scheduled_at" binding:"required"`
 }
 
-// HandleScheduleBlast handles POST /api/v1/campaigns/:campaign_id/blasts/:blast_id/schedule
+// HandleScheduleBlast handles POST /api/v1/blasts/:blast_id/schedule
 func (h *Handler) HandleScheduleBlast(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -359,15 +319,6 @@ func (h *Handler) HandleScheduleBlast(c *gin.Context) {
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
-		return
-	}
-
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
 		return
 	}
 
@@ -386,7 +337,7 @@ func (h *Handler) HandleScheduleBlast(c *gin.Context) {
 		return
 	}
 
-	blast, err := h.processor.ScheduleBlast(ctx, accountID, campaignID, blastID, req.ScheduledAt)
+	blast, err := h.processor.ScheduleBlast(ctx, accountID, blastID, req.ScheduledAt)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -395,7 +346,7 @@ func (h *Handler) HandleScheduleBlast(c *gin.Context) {
 	c.JSON(http.StatusOK, blast)
 }
 
-// HandleSendBlastNow handles POST /api/v1/campaigns/:campaign_id/blasts/:blast_id/send
+// HandleSendBlastNow handles POST /api/v1/blasts/:blast_id/send
 func (h *Handler) HandleSendBlastNow(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -413,15 +364,6 @@ func (h *Handler) HandleSendBlastNow(c *gin.Context) {
 		return
 	}
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
-		return
-	}
-
 	// Get blast ID from path
 	blastIDStr := c.Param("blast_id")
 	blastID, err := uuid.Parse(blastIDStr)
@@ -431,7 +373,7 @@ func (h *Handler) HandleSendBlastNow(c *gin.Context) {
 		return
 	}
 
-	blast, err := h.processor.SendBlastNow(ctx, accountID, campaignID, blastID)
+	blast, err := h.processor.SendBlastNow(ctx, accountID, blastID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -440,7 +382,7 @@ func (h *Handler) HandleSendBlastNow(c *gin.Context) {
 	c.JSON(http.StatusOK, blast)
 }
 
-// HandlePauseBlast handles POST /api/v1/campaigns/:campaign_id/blasts/:blast_id/pause
+// HandlePauseBlast handles POST /api/v1/blasts/:blast_id/pause
 func (h *Handler) HandlePauseBlast(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -458,15 +400,6 @@ func (h *Handler) HandlePauseBlast(c *gin.Context) {
 		return
 	}
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
-		return
-	}
-
 	// Get blast ID from path
 	blastIDStr := c.Param("blast_id")
 	blastID, err := uuid.Parse(blastIDStr)
@@ -476,7 +409,7 @@ func (h *Handler) HandlePauseBlast(c *gin.Context) {
 		return
 	}
 
-	blast, err := h.processor.PauseBlast(ctx, accountID, campaignID, blastID)
+	blast, err := h.processor.PauseBlast(ctx, accountID, blastID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -485,7 +418,7 @@ func (h *Handler) HandlePauseBlast(c *gin.Context) {
 	c.JSON(http.StatusOK, blast)
 }
 
-// HandleResumeBlast handles POST /api/v1/campaigns/:campaign_id/blasts/:blast_id/resume
+// HandleResumeBlast handles POST /api/v1/blasts/:blast_id/resume
 func (h *Handler) HandleResumeBlast(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -503,15 +436,6 @@ func (h *Handler) HandleResumeBlast(c *gin.Context) {
 		return
 	}
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
-		return
-	}
-
 	// Get blast ID from path
 	blastIDStr := c.Param("blast_id")
 	blastID, err := uuid.Parse(blastIDStr)
@@ -521,7 +445,7 @@ func (h *Handler) HandleResumeBlast(c *gin.Context) {
 		return
 	}
 
-	blast, err := h.processor.ResumeBlast(ctx, accountID, campaignID, blastID)
+	blast, err := h.processor.ResumeBlast(ctx, accountID, blastID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -530,7 +454,7 @@ func (h *Handler) HandleResumeBlast(c *gin.Context) {
 	c.JSON(http.StatusOK, blast)
 }
 
-// HandleCancelBlast handles POST /api/v1/campaigns/:campaign_id/blasts/:blast_id/cancel
+// HandleCancelBlast handles POST /api/v1/blasts/:blast_id/cancel
 func (h *Handler) HandleCancelBlast(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -548,15 +472,6 @@ func (h *Handler) HandleCancelBlast(c *gin.Context) {
 		return
 	}
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
-		return
-	}
-
 	// Get blast ID from path
 	blastIDStr := c.Param("blast_id")
 	blastID, err := uuid.Parse(blastIDStr)
@@ -566,7 +481,7 @@ func (h *Handler) HandleCancelBlast(c *gin.Context) {
 		return
 	}
 
-	blast, err := h.processor.CancelBlast(ctx, accountID, campaignID, blastID)
+	blast, err := h.processor.CancelBlast(ctx, accountID, blastID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -575,7 +490,7 @@ func (h *Handler) HandleCancelBlast(c *gin.Context) {
 	c.JSON(http.StatusOK, blast)
 }
 
-// HandleGetBlastAnalytics handles GET /api/v1/campaigns/:campaign_id/blasts/:blast_id/analytics
+// HandleGetBlastAnalytics handles GET /api/v1/blasts/:blast_id/analytics
 func (h *Handler) HandleGetBlastAnalytics(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -593,15 +508,6 @@ func (h *Handler) HandleGetBlastAnalytics(c *gin.Context) {
 		return
 	}
 
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
-		return
-	}
-
 	// Get blast ID from path
 	blastIDStr := c.Param("blast_id")
 	blastID, err := uuid.Parse(blastIDStr)
@@ -611,7 +517,7 @@ func (h *Handler) HandleGetBlastAnalytics(c *gin.Context) {
 		return
 	}
 
-	analytics, err := h.processor.GetBlastAnalytics(ctx, accountID, campaignID, blastID)
+	analytics, err := h.processor.GetBlastAnalytics(ctx, accountID, blastID)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -620,7 +526,7 @@ func (h *Handler) HandleGetBlastAnalytics(c *gin.Context) {
 	c.JSON(http.StatusOK, analytics)
 }
 
-// HandleListBlastRecipients handles GET /api/v1/campaigns/:campaign_id/blasts/:blast_id/recipients
+// HandleListBlastRecipients handles GET /api/v1/blasts/:blast_id/recipients
 func (h *Handler) HandleListBlastRecipients(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -635,15 +541,6 @@ func (h *Handler) HandleListBlastRecipients(c *gin.Context) {
 	if err != nil {
 		h.logger.Error(ctx, "failed to parse account ID", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid account id"})
-		return
-	}
-
-	// Get campaign ID from path
-	campaignIDStr := c.Param("campaign_id")
-	campaignID, err := uuid.Parse(campaignIDStr)
-	if err != nil {
-		h.logger.Error(ctx, "failed to parse campaign ID", err)
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign id"})
 		return
 	}
 
@@ -664,7 +561,7 @@ func (h *Handler) HandleListBlastRecipients(c *gin.Context) {
 		Limit: limit,
 	}
 
-	response, err := h.processor.ListBlastRecipients(ctx, accountID, campaignID, blastID, processorReq)
+	response, err := h.processor.ListBlastRecipients(ctx, accountID, blastID, processorReq)
 	if err != nil {
 		h.handleError(c, err)
 		return

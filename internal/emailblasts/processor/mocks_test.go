@@ -58,48 +58,34 @@ func (mr *MockEmailBlastStoreMockRecorder) CountBlastRecipientsByBlast(ctx, blas
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountBlastRecipientsByBlast", reflect.TypeOf((*MockEmailBlastStore)(nil).CountBlastRecipientsByBlast), ctx, blastID)
 }
 
-// CountEmailBlastsByCampaign mocks base method.
-func (m *MockEmailBlastStore) CountEmailBlastsByCampaign(ctx context.Context, campaignID uuid.UUID) (int, error) {
+// CountEmailBlastsByAccount mocks base method.
+func (m *MockEmailBlastStore) CountEmailBlastsByAccount(ctx context.Context, accountID uuid.UUID) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CountEmailBlastsByCampaign", ctx, campaignID)
+	ret := m.ctrl.Call(m, "CountEmailBlastsByAccount", ctx, accountID)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CountEmailBlastsByCampaign indicates an expected call of CountEmailBlastsByCampaign.
-func (mr *MockEmailBlastStoreMockRecorder) CountEmailBlastsByCampaign(ctx, campaignID any) *gomock.Call {
+// CountEmailBlastsByAccount indicates an expected call of CountEmailBlastsByAccount.
+func (mr *MockEmailBlastStoreMockRecorder) CountEmailBlastsByAccount(ctx, accountID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountEmailBlastsByCampaign", reflect.TypeOf((*MockEmailBlastStore)(nil).CountEmailBlastsByCampaign), ctx, campaignID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountEmailBlastsByAccount", reflect.TypeOf((*MockEmailBlastStore)(nil).CountEmailBlastsByAccount), ctx, accountID)
 }
 
-// CountUsersMatchingCriteria mocks base method.
-func (m *MockEmailBlastStore) CountUsersMatchingCriteria(ctx context.Context, campaignID uuid.UUID, criteria store.SegmentFilterCriteria) (int, error) {
+// CreateBlastRecipientsFromMultipleSegments mocks base method.
+func (m *MockEmailBlastStore) CreateBlastRecipientsFromMultipleSegments(ctx context.Context, blastID uuid.UUID, segmentIDs []uuid.UUID, batchSize int) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CountUsersMatchingCriteria", ctx, campaignID, criteria)
+	ret := m.ctrl.Call(m, "CreateBlastRecipientsFromMultipleSegments", ctx, blastID, segmentIDs, batchSize)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CountUsersMatchingCriteria indicates an expected call of CountUsersMatchingCriteria.
-func (mr *MockEmailBlastStoreMockRecorder) CountUsersMatchingCriteria(ctx, campaignID, criteria any) *gomock.Call {
+// CreateBlastRecipientsFromMultipleSegments indicates an expected call of CreateBlastRecipientsFromMultipleSegments.
+func (mr *MockEmailBlastStoreMockRecorder) CreateBlastRecipientsFromMultipleSegments(ctx, blastID, segmentIDs, batchSize any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountUsersMatchingCriteria", reflect.TypeOf((*MockEmailBlastStore)(nil).CountUsersMatchingCriteria), ctx, campaignID, criteria)
-}
-
-// CreateBlastRecipientsBulk mocks base method.
-func (m *MockEmailBlastStore) CreateBlastRecipientsBulk(ctx context.Context, blastID uuid.UUID, users []store.WaitlistUser, batchSize int) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateBlastRecipientsBulk", ctx, blastID, users, batchSize)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// CreateBlastRecipientsBulk indicates an expected call of CreateBlastRecipientsBulk.
-func (mr *MockEmailBlastStoreMockRecorder) CreateBlastRecipientsBulk(ctx, blastID, users, batchSize any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBlastRecipientsBulk", reflect.TypeOf((*MockEmailBlastStore)(nil).CreateBlastRecipientsBulk), ctx, blastID, users, batchSize)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateBlastRecipientsFromMultipleSegments", reflect.TypeOf((*MockEmailBlastStore)(nil).CreateBlastRecipientsFromMultipleSegments), ctx, blastID, segmentIDs, batchSize)
 }
 
 // CreateEmailBlast mocks base method.
@@ -129,6 +115,21 @@ func (m *MockEmailBlastStore) DeleteEmailBlast(ctx context.Context, blastID uuid
 func (mr *MockEmailBlastStoreMockRecorder) DeleteEmailBlast(ctx, blastID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteEmailBlast", reflect.TypeOf((*MockEmailBlastStore)(nil).DeleteEmailBlast), ctx, blastID)
+}
+
+// GetBlastEmailTemplateByID mocks base method.
+func (m *MockEmailBlastStore) GetBlastEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.BlastEmailTemplate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlastEmailTemplateByID", ctx, templateID)
+	ret0, _ := ret[0].(store.BlastEmailTemplate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBlastEmailTemplateByID indicates an expected call of GetBlastEmailTemplateByID.
+func (mr *MockEmailBlastStoreMockRecorder) GetBlastEmailTemplateByID(ctx, templateID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlastEmailTemplateByID", reflect.TypeOf((*MockEmailBlastStore)(nil).GetBlastEmailTemplateByID), ctx, templateID)
 }
 
 // GetBlastRecipientStats mocks base method.
@@ -191,34 +192,19 @@ func (mr *MockEmailBlastStoreMockRecorder) GetEmailBlastByID(ctx, blastID any) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEmailBlastByID", reflect.TypeOf((*MockEmailBlastStore)(nil).GetEmailBlastByID), ctx, blastID)
 }
 
-// GetEmailBlastsByCampaign mocks base method.
-func (m *MockEmailBlastStore) GetEmailBlastsByCampaign(ctx context.Context, campaignID uuid.UUID, limit, offset int) ([]store.EmailBlast, error) {
+// GetEmailBlastsByAccount mocks base method.
+func (m *MockEmailBlastStore) GetEmailBlastsByAccount(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]store.EmailBlast, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEmailBlastsByCampaign", ctx, campaignID, limit, offset)
+	ret := m.ctrl.Call(m, "GetEmailBlastsByAccount", ctx, accountID, limit, offset)
 	ret0, _ := ret[0].([]store.EmailBlast)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetEmailBlastsByCampaign indicates an expected call of GetEmailBlastsByCampaign.
-func (mr *MockEmailBlastStoreMockRecorder) GetEmailBlastsByCampaign(ctx, campaignID, limit, offset any) *gomock.Call {
+// GetEmailBlastsByAccount indicates an expected call of GetEmailBlastsByAccount.
+func (mr *MockEmailBlastStoreMockRecorder) GetEmailBlastsByAccount(ctx, accountID, limit, offset any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEmailBlastsByCampaign", reflect.TypeOf((*MockEmailBlastStore)(nil).GetEmailBlastsByCampaign), ctx, campaignID, limit, offset)
-}
-
-// GetEmailTemplateByID mocks base method.
-func (m *MockEmailBlastStore) GetEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.EmailTemplate, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetEmailTemplateByID", ctx, templateID)
-	ret0, _ := ret[0].(store.EmailTemplate)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetEmailTemplateByID indicates an expected call of GetEmailTemplateByID.
-func (mr *MockEmailBlastStoreMockRecorder) GetEmailTemplateByID(ctx, templateID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEmailTemplateByID", reflect.TypeOf((*MockEmailBlastStore)(nil).GetEmailTemplateByID), ctx, templateID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEmailBlastsByAccount", reflect.TypeOf((*MockEmailBlastStore)(nil).GetEmailBlastsByAccount), ctx, accountID, limit, offset)
 }
 
 // GetSegmentByID mocks base method.
@@ -236,19 +222,19 @@ func (mr *MockEmailBlastStoreMockRecorder) GetSegmentByID(ctx, segmentID any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetSegmentByID", reflect.TypeOf((*MockEmailBlastStore)(nil).GetSegmentByID), ctx, segmentID)
 }
 
-// GetUsersForBlast mocks base method.
-func (m *MockEmailBlastStore) GetUsersForBlast(ctx context.Context, campaignID uuid.UUID, criteria store.SegmentFilterCriteria) ([]store.WaitlistUser, error) {
+// PreviewBlastRecipients mocks base method.
+func (m *MockEmailBlastStore) PreviewBlastRecipients(ctx context.Context, segmentIDs []uuid.UUID) (store.BlastRecipientsPreview, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetUsersForBlast", ctx, campaignID, criteria)
-	ret0, _ := ret[0].([]store.WaitlistUser)
+	ret := m.ctrl.Call(m, "PreviewBlastRecipients", ctx, segmentIDs)
+	ret0, _ := ret[0].(store.BlastRecipientsPreview)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetUsersForBlast indicates an expected call of GetUsersForBlast.
-func (mr *MockEmailBlastStoreMockRecorder) GetUsersForBlast(ctx, campaignID, criteria any) *gomock.Call {
+// PreviewBlastRecipients indicates an expected call of PreviewBlastRecipients.
+func (mr *MockEmailBlastStoreMockRecorder) PreviewBlastRecipients(ctx, segmentIDs any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsersForBlast", reflect.TypeOf((*MockEmailBlastStore)(nil).GetUsersForBlast), ctx, campaignID, criteria)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PreviewBlastRecipients", reflect.TypeOf((*MockEmailBlastStore)(nil).PreviewBlastRecipients), ctx, segmentIDs)
 }
 
 // ScheduleBlast mocks base method.
@@ -308,4 +294,95 @@ func (m *MockEmailBlastStore) UpdateEmailBlastTotalRecipients(ctx context.Contex
 func (mr *MockEmailBlastStoreMockRecorder) UpdateEmailBlastTotalRecipients(ctx, blastID, totalRecipients any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateEmailBlastTotalRecipients", reflect.TypeOf((*MockEmailBlastStore)(nil).UpdateEmailBlastTotalRecipients), ctx, blastID, totalRecipients)
+}
+
+// MockTierChecker is a mock of TierChecker interface.
+type MockTierChecker struct {
+	ctrl     *gomock.Controller
+	recorder *MockTierCheckerMockRecorder
+	isgomock struct{}
+}
+
+// MockTierCheckerMockRecorder is the mock recorder for MockTierChecker.
+type MockTierCheckerMockRecorder struct {
+	mock *MockTierChecker
+}
+
+// NewMockTierChecker creates a new mock instance.
+func NewMockTierChecker(ctrl *gomock.Controller) *MockTierChecker {
+	mock := &MockTierChecker{ctrl: ctrl}
+	mock.recorder = &MockTierCheckerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockTierChecker) EXPECT() *MockTierCheckerMockRecorder {
+	return m.recorder
+}
+
+// HasFeatureByAccountID mocks base method.
+func (m *MockTierChecker) HasFeatureByAccountID(ctx context.Context, accountID uuid.UUID, featureName string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasFeatureByAccountID", ctx, accountID, featureName)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasFeatureByAccountID indicates an expected call of HasFeatureByAccountID.
+func (mr *MockTierCheckerMockRecorder) HasFeatureByAccountID(ctx, accountID, featureName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasFeatureByAccountID", reflect.TypeOf((*MockTierChecker)(nil).HasFeatureByAccountID), ctx, accountID, featureName)
+}
+
+// MockEventDispatcher is a mock of EventDispatcher interface.
+type MockEventDispatcher struct {
+	ctrl     *gomock.Controller
+	recorder *MockEventDispatcherMockRecorder
+	isgomock struct{}
+}
+
+// MockEventDispatcherMockRecorder is the mock recorder for MockEventDispatcher.
+type MockEventDispatcherMockRecorder struct {
+	mock *MockEventDispatcher
+}
+
+// NewMockEventDispatcher creates a new mock instance.
+func NewMockEventDispatcher(ctrl *gomock.Controller) *MockEventDispatcher {
+	mock := &MockEventDispatcher{ctrl: ctrl}
+	mock.recorder = &MockEventDispatcherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockEventDispatcher) EXPECT() *MockEventDispatcherMockRecorder {
+	return m.recorder
+}
+
+// DispatchBlastBatchSend mocks base method.
+func (m *MockEventDispatcher) DispatchBlastBatchSend(ctx context.Context, accountID, blastID uuid.UUID, batchNumber int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DispatchBlastBatchSend", ctx, accountID, blastID, batchNumber)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DispatchBlastBatchSend indicates an expected call of DispatchBlastBatchSend.
+func (mr *MockEventDispatcherMockRecorder) DispatchBlastBatchSend(ctx, accountID, blastID, batchNumber any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DispatchBlastBatchSend", reflect.TypeOf((*MockEventDispatcher)(nil).DispatchBlastBatchSend), ctx, accountID, blastID, batchNumber)
+}
+
+// DispatchBlastStarted mocks base method.
+func (m *MockEventDispatcher) DispatchBlastStarted(ctx context.Context, accountID, blastID uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DispatchBlastStarted", ctx, accountID, blastID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DispatchBlastStarted indicates an expected call of DispatchBlastStarted.
+func (mr *MockEventDispatcherMockRecorder) DispatchBlastStarted(ctx, accountID, blastID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DispatchBlastStarted", reflect.TypeOf((*MockEventDispatcher)(nil).DispatchBlastStarted), ctx, accountID, blastID)
 }

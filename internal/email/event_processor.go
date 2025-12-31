@@ -277,7 +277,7 @@ func (p *EmailEventProcessor) handleUserVerified(ctx context.Context, event work
 // If no custom template exists or it's disabled, it falls back to the default hardcoded template.
 func (p *EmailEventProcessor) sendEmailWithCustomTemplate(ctx context.Context, campaignID uuid.UUID, templateType, recipientEmail string, data TemplateData) error {
 	// Try to get custom template from database
-	template, err := p.store.GetEmailTemplateByType(ctx, campaignID, templateType)
+	template, err := p.store.GetCampaignEmailTemplateByType(ctx, campaignID, templateType)
 	if err == nil && template.Enabled {
 		// Custom template found and enabled - use it
 		p.logger.Info(ctx, fmt.Sprintf("Using custom %s template for campaign", templateType))

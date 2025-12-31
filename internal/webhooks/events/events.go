@@ -181,13 +181,12 @@ func (d *EventDispatcher) DispatchEmailDelivered(ctx context.Context, accountID,
 }
 
 // DispatchBlastStarted dispatches a blast.started event to begin processing an email blast
-func (d *EventDispatcher) DispatchBlastStarted(ctx context.Context, accountID, campaignID, blastID uuid.UUID) error {
+func (d *EventDispatcher) DispatchBlastStarted(ctx context.Context, accountID, blastID uuid.UUID) error {
 	data := map[string]interface{}{
-		"campaign_id": campaignID.String(),
-		"blast_id":    blastID.String(),
+		"blast_id": blastID.String(),
 	}
 
-	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventBlastStarted, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, nil, EventBlastStarted, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch blast.started event", err)
 		return err
@@ -196,14 +195,13 @@ func (d *EventDispatcher) DispatchBlastStarted(ctx context.Context, accountID, c
 }
 
 // DispatchBlastBatchSend dispatches a blast.batch event to process a batch of recipients
-func (d *EventDispatcher) DispatchBlastBatchSend(ctx context.Context, accountID, campaignID, blastID uuid.UUID, batchNumber int) error {
+func (d *EventDispatcher) DispatchBlastBatchSend(ctx context.Context, accountID, blastID uuid.UUID, batchNumber int) error {
 	data := map[string]interface{}{
-		"campaign_id":  campaignID.String(),
 		"blast_id":     blastID.String(),
 		"batch_number": batchNumber,
 	}
 
-	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventBlastBatchSend, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, nil, EventBlastBatchSend, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch blast.batch event", err)
 		return err
@@ -212,13 +210,12 @@ func (d *EventDispatcher) DispatchBlastBatchSend(ctx context.Context, accountID,
 }
 
 // DispatchBlastCompleted dispatches a blast.completed event
-func (d *EventDispatcher) DispatchBlastCompleted(ctx context.Context, accountID, campaignID, blastID uuid.UUID) error {
+func (d *EventDispatcher) DispatchBlastCompleted(ctx context.Context, accountID, blastID uuid.UUID) error {
 	data := map[string]interface{}{
-		"campaign_id": campaignID.String(),
-		"blast_id":    blastID.String(),
+		"blast_id": blastID.String(),
 	}
 
-	err := d.eventProducer.PublishEvent(ctx, accountID, &campaignID, EventBlastCompleted, data)
+	err := d.eventProducer.PublishEvent(ctx, accountID, nil, EventBlastCompleted, data)
 	if err != nil {
 		d.logger.Error(ctx, "failed to dispatch blast.completed event", err)
 		return err

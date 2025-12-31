@@ -19,13 +19,12 @@ import (
 type BlastStore interface {
 	GetEmailBlastByID(ctx context.Context, blastID uuid.UUID) (store.EmailBlast, error)
 	GetSegmentByID(ctx context.Context, segmentID uuid.UUID) (store.Segment, error)
-	GetEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.EmailTemplate, error)
+	GetBlastEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.BlastEmailTemplate, error)
 	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)
 	UpdateEmailBlastStatus(ctx context.Context, blastID uuid.UUID, status string, errorMessage *string) (store.EmailBlast, error)
 	UpdateEmailBlastTotalRecipients(ctx context.Context, blastID uuid.UUID, totalRecipients int) error
 	UpdateEmailBlastProgressWithSent(ctx context.Context, blastID uuid.UUID, sentCount int, currentBatch int) error
-	GetUsersForBlast(ctx context.Context, campaignID uuid.UUID, criteria store.SegmentFilterCriteria) ([]store.WaitlistUser, error)
-	CreateBlastRecipientsBulk(ctx context.Context, blastID uuid.UUID, users []store.WaitlistUser, batchSize int) error
+	CreateBlastRecipientsFromMultipleSegments(ctx context.Context, blastID uuid.UUID, segmentIDs []uuid.UUID, batchSize int) (int, error)
 	GetBlastRecipientsByBatch(ctx context.Context, blastID uuid.UUID, batchNumber int) ([]store.BlastRecipient, error)
 	UpdateBlastRecipientStatus(ctx context.Context, recipientID uuid.UUID, status string, emailLogID *uuid.UUID, errorMessage *string) error
 	CountBlastRecipientsByStatus(ctx context.Context, blastID uuid.UUID, status string) (int, error)
@@ -85,20 +84,18 @@ func (p *BlastEventProcessor) Process(ctx context.Context, event workers.EventMe
 }
 
 // handleBlastStarted initializes the blast by:
-// 1. Fetching segment users
-// 2. Creating blast recipients in bulk
-// 3. Updating blast status to "sending"
-// 4. Dispatching first batch event
+// 1. Creating blast recipients from all segments (with deduplication)
+// 2. Updating blast status to "sending"
+// 3. Dispatching first batch event
 func (p *BlastEventProcessor) handleBlastStarted(ctx context.Context, event workers.EventMessage) error {
 	// Parse event data
-	blastID, campaignID, accountID, err := p.parseBlastEventData(event)
+	blastID, accountID, err := p.parseBlastEventData(event)
 	if err != nil {
 		return err
 	}
 
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "blast_id", Value: blastID},
-		observability.Field{Key: "campaign_id", Value: campaignID},
 	)
 
 	// Get blast
@@ -113,24 +110,19 @@ func (p *BlastEventProcessor) handleBlastStarted(ctx context.Context, event work
 		return nil
 	}
 
-	// Get segment and parse filter criteria
-	segment, err := p.store.GetSegmentByID(ctx, blast.SegmentID)
-	if err != nil {
-		return p.failBlast(ctx, blastID, fmt.Errorf("failed to get segment: %w", err))
+	// Create blast recipients in bulk
+	batchSize := blast.BatchSize
+	if batchSize <= 0 {
+		batchSize = 100
 	}
 
-	criteria, err := store.ParseFilterCriteria(segment.FilterCriteria)
+	// Create recipients from all segments with deduplication
+	totalRecipients, err := p.store.CreateBlastRecipientsFromMultipleSegments(ctx, blastID, blast.SegmentIDs, batchSize)
 	if err != nil {
-		return p.failBlast(ctx, blastID, fmt.Errorf("failed to parse filter criteria: %w", err))
+		return p.failBlast(ctx, blastID, fmt.Errorf("failed to create blast recipients: %w", err))
 	}
 
-	// Get all users matching the segment
-	users, err := p.store.GetUsersForBlast(ctx, campaignID, criteria)
-	if err != nil {
-		return p.failBlast(ctx, blastID, fmt.Errorf("failed to get users for blast: %w", err))
-	}
-
-	if len(users) == 0 {
+	if totalRecipients == 0 {
 		// No recipients - complete the blast immediately
 		_, err = p.store.UpdateEmailBlastStatus(ctx, blastID, string(store.EmailBlastStatusCompleted), nil)
 		if err != nil {
@@ -140,19 +132,8 @@ func (p *BlastEventProcessor) handleBlastStarted(ctx context.Context, event work
 		return nil
 	}
 
-	// Create blast recipients in bulk
-	batchSize := blast.BatchSize
-	if batchSize <= 0 {
-		batchSize = 100
-	}
-
-	err = p.store.CreateBlastRecipientsBulk(ctx, blastID, users, batchSize)
-	if err != nil {
-		return p.failBlast(ctx, blastID, fmt.Errorf("failed to create blast recipients: %w", err))
-	}
-
 	// Update total recipients count
-	err = p.store.UpdateEmailBlastTotalRecipients(ctx, blastID, len(users))
+	err = p.store.UpdateEmailBlastTotalRecipients(ctx, blastID, totalRecipients)
 	if err != nil {
 		return p.failBlast(ctx, blastID, fmt.Errorf("failed to update total recipients: %w", err))
 	}
@@ -164,12 +145,12 @@ func (p *BlastEventProcessor) handleBlastStarted(ctx context.Context, event work
 	}
 
 	// Dispatch first batch
-	err = p.eventDispatcher.DispatchBlastBatchSend(ctx, accountID, campaignID, blastID, 1)
+	err = p.eventDispatcher.DispatchBlastBatchSend(ctx, accountID, blastID, 1)
 	if err != nil {
 		return p.failBlast(ctx, blastID, fmt.Errorf("failed to dispatch first batch: %w", err))
 	}
 
-	p.logger.Info(ctx, fmt.Sprintf("Blast started with %d recipients, dispatched batch 1", len(users)))
+	p.logger.Info(ctx, fmt.Sprintf("Blast started with %d recipients, dispatched batch 1", totalRecipients))
 	return nil
 }
 
@@ -179,7 +160,7 @@ func (p *BlastEventProcessor) handleBlastStarted(ctx context.Context, event work
 // 3. Update recipient statuses
 // 4. Either dispatch next batch or complete blast
 func (p *BlastEventProcessor) handleBlastBatch(ctx context.Context, event workers.EventMessage) error {
-	blastID, campaignID, accountID, err := p.parseBlastEventData(event)
+	blastID, accountID, err := p.parseBlastEventData(event)
 	if err != nil {
 		return err
 	}
@@ -192,7 +173,6 @@ func (p *BlastEventProcessor) handleBlastBatch(ctx context.Context, event worker
 
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "blast_id", Value: blastID},
-		observability.Field{Key: "campaign_id", Value: campaignID},
 		observability.Field{Key: "batch_number", Value: batchNumber},
 	)
 
@@ -209,7 +189,7 @@ func (p *BlastEventProcessor) handleBlastBatch(ctx context.Context, event worker
 	}
 
 	// Get template
-	template, err := p.store.GetEmailTemplateByID(ctx, blast.TemplateID)
+	template, err := p.store.GetBlastEmailTemplateByID(ctx, blast.BlastTemplateID)
 	if err != nil {
 		return p.failBlast(ctx, blastID, fmt.Errorf("failed to get template: %w", err))
 	}
@@ -222,7 +202,7 @@ func (p *BlastEventProcessor) handleBlastBatch(ctx context.Context, event worker
 
 	if len(recipients) == 0 {
 		// No more recipients - check if blast should complete
-		return p.checkBlastCompletion(ctx, blastID, campaignID, accountID)
+		return p.checkBlastCompletion(ctx, blastID, accountID)
 	}
 
 	// Process each recipient
@@ -265,13 +245,13 @@ func (p *BlastEventProcessor) handleBlastBatch(ctx context.Context, event worker
 
 	if len(nextBatchRecipients) > 0 {
 		// Dispatch next batch
-		err = p.eventDispatcher.DispatchBlastBatchSend(ctx, accountID, campaignID, blastID, batchNumber+1)
+		err = p.eventDispatcher.DispatchBlastBatchSend(ctx, accountID, blastID, batchNumber+1)
 		if err != nil {
 			return p.failBlast(ctx, blastID, fmt.Errorf("failed to dispatch next batch: %w", err))
 		}
 	} else {
 		// All batches complete
-		return p.checkBlastCompletion(ctx, blastID, campaignID, accountID)
+		return p.checkBlastCompletion(ctx, blastID, accountID)
 	}
 
 	return nil
@@ -279,7 +259,7 @@ func (p *BlastEventProcessor) handleBlastBatch(ctx context.Context, event worker
 
 // handleBlastCompleted marks the blast as completed
 func (p *BlastEventProcessor) handleBlastCompleted(ctx context.Context, event workers.EventMessage) error {
-	blastID, _, _, err := p.parseBlastEventData(event)
+	blastID, _, err := p.parseBlastEventData(event)
 	if err != nil {
 		return err
 	}
@@ -307,7 +287,7 @@ func (p *BlastEventProcessor) handleBlastCompleted(ctx context.Context, event wo
 }
 
 // sendBlastEmail sends a single email for the blast
-func (p *BlastEventProcessor) sendBlastEmail(ctx context.Context, recipient store.BlastRecipient, blast store.EmailBlast, template store.EmailTemplate) error {
+func (p *BlastEventProcessor) sendBlastEmail(ctx context.Context, recipient store.BlastRecipient, blast store.EmailBlast, template store.BlastEmailTemplate) error {
 	// Prepare template data
 	data := email.TemplateData{
 		Email: recipient.Email,
@@ -335,7 +315,7 @@ func (p *BlastEventProcessor) failBlast(ctx context.Context, blastID uuid.UUID, 
 }
 
 // checkBlastCompletion checks if all recipients have been processed and completes the blast
-func (p *BlastEventProcessor) checkBlastCompletion(ctx context.Context, blastID, campaignID, accountID uuid.UUID) error {
+func (p *BlastEventProcessor) checkBlastCompletion(ctx context.Context, blastID, accountID uuid.UUID) error {
 	// Check if there are any pending recipients
 	pendingCount, err := p.store.CountBlastRecipientsByStatus(ctx, blastID, string(store.BlastRecipientStatusPending))
 	if err != nil {
@@ -344,7 +324,7 @@ func (p *BlastEventProcessor) checkBlastCompletion(ctx context.Context, blastID,
 
 	if pendingCount == 0 {
 		// All done - dispatch completion event
-		err = p.eventDispatcher.DispatchBlastCompleted(ctx, accountID, campaignID, blastID)
+		err = p.eventDispatcher.DispatchBlastCompleted(ctx, accountID, blastID)
 		if err != nil {
 			return fmt.Errorf("failed to dispatch completion event: %w", err)
 		}
@@ -353,37 +333,31 @@ func (p *BlastEventProcessor) checkBlastCompletion(ctx context.Context, blastID,
 	return nil
 }
 
-// parseBlastEventData extracts blast_id, campaign_id, and account_id from event data
-func (p *BlastEventProcessor) parseBlastEventData(event workers.EventMessage) (blastID, campaignID, accountID uuid.UUID, err error) {
+// parseBlastEventData extracts blast_id and account_id from event data
+func (p *BlastEventProcessor) parseBlastEventData(event workers.EventMessage) (blastID, accountID uuid.UUID, err error) {
 	// Parse account ID
 	accountID, err = uuid.Parse(event.AccountID)
 	if err != nil {
-		return uuid.Nil, uuid.Nil, uuid.Nil, fmt.Errorf("invalid account_id: %w", err)
+		return uuid.Nil, uuid.Nil, fmt.Errorf("invalid account_id: %w", err)
 	}
 
 	// Parse event data
 	dataBytes, err := json.Marshal(event.Data)
 	if err != nil {
-		return uuid.Nil, uuid.Nil, uuid.Nil, fmt.Errorf("failed to marshal event data: %w", err)
+		return uuid.Nil, uuid.Nil, fmt.Errorf("failed to marshal event data: %w", err)
 	}
 
 	var eventData struct {
-		BlastID    string `json:"blast_id"`
-		CampaignID string `json:"campaign_id"`
+		BlastID string `json:"blast_id"`
 	}
 	if err := json.Unmarshal(dataBytes, &eventData); err != nil {
-		return uuid.Nil, uuid.Nil, uuid.Nil, fmt.Errorf("failed to unmarshal event data: %w", err)
+		return uuid.Nil, uuid.Nil, fmt.Errorf("failed to unmarshal event data: %w", err)
 	}
 
 	blastID, err = uuid.Parse(eventData.BlastID)
 	if err != nil {
-		return uuid.Nil, uuid.Nil, uuid.Nil, fmt.Errorf("invalid blast_id: %w", err)
+		return uuid.Nil, uuid.Nil, fmt.Errorf("invalid blast_id: %w", err)
 	}
 
-	campaignID, err = uuid.Parse(eventData.CampaignID)
-	if err != nil {
-		return uuid.Nil, uuid.Nil, uuid.Nil, fmt.Errorf("invalid campaign_id: %w", err)
-	}
-
-	return blastID, campaignID, accountID, nil
+	return blastID, accountID, nil
 }

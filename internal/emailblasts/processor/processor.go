@@ -5,8 +5,6 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
-	"base-server/internal/tiers"
-	"base-server/internal/webhooks/events"
 	"context"
 	"errors"
 	"time"
@@ -18,11 +16,11 @@ import (
 type EmailBlastStore interface {
 	GetCampaignByID(ctx context.Context, campaignID uuid.UUID) (store.Campaign, error)
 	GetSegmentByID(ctx context.Context, segmentID uuid.UUID) (store.Segment, error)
-	GetEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.EmailTemplate, error)
+	GetBlastEmailTemplateByID(ctx context.Context, templateID uuid.UUID) (store.BlastEmailTemplate, error)
 	CreateEmailBlast(ctx context.Context, params store.CreateEmailBlastParams) (store.EmailBlast, error)
 	GetEmailBlastByID(ctx context.Context, blastID uuid.UUID) (store.EmailBlast, error)
-	GetEmailBlastsByCampaign(ctx context.Context, campaignID uuid.UUID, limit, offset int) ([]store.EmailBlast, error)
-	CountEmailBlastsByCampaign(ctx context.Context, campaignID uuid.UUID) (int, error)
+	GetEmailBlastsByAccount(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]store.EmailBlast, error)
+	CountEmailBlastsByAccount(ctx context.Context, accountID uuid.UUID) (int, error)
 	UpdateEmailBlast(ctx context.Context, blastID uuid.UUID, params store.UpdateEmailBlastParams) (store.EmailBlast, error)
 	DeleteEmailBlast(ctx context.Context, blastID uuid.UUID) error
 	UpdateEmailBlastStatus(ctx context.Context, blastID uuid.UUID, status string, errorMessage *string) (store.EmailBlast, error)
@@ -31,9 +29,19 @@ type EmailBlastStore interface {
 	GetBlastRecipientsByBlast(ctx context.Context, blastID uuid.UUID, limit, offset int) ([]store.BlastRecipient, error)
 	CountBlastRecipientsByBlast(ctx context.Context, blastID uuid.UUID) (int, error)
 	GetBlastRecipientStats(ctx context.Context, blastID uuid.UUID) (store.BlastRecipientStats, error)
-	CountUsersMatchingCriteria(ctx context.Context, campaignID uuid.UUID, criteria store.SegmentFilterCriteria) (int, error)
-	GetUsersForBlast(ctx context.Context, campaignID uuid.UUID, criteria store.SegmentFilterCriteria) ([]store.WaitlistUser, error)
-	CreateBlastRecipientsBulk(ctx context.Context, blastID uuid.UUID, users []store.WaitlistUser, batchSize int) error
+	PreviewBlastRecipients(ctx context.Context, segmentIDs []uuid.UUID) (store.BlastRecipientsPreview, error)
+	CreateBlastRecipientsFromMultipleSegments(ctx context.Context, blastID uuid.UUID, segmentIDs []uuid.UUID, batchSize int) (int, error)
+}
+
+// TierChecker defines the tier checking operations required by EmailBlastProcessor
+type TierChecker interface {
+	HasFeatureByAccountID(ctx context.Context, accountID uuid.UUID, featureName string) (bool, error)
+}
+
+// EventDispatcher defines the event dispatching operations required by EmailBlastProcessor
+type EventDispatcher interface {
+	DispatchBlastStarted(ctx context.Context, accountID, blastID uuid.UUID) error
+	DispatchBlastBatchSend(ctx context.Context, accountID, blastID uuid.UUID, batchNumber int) error
 }
 
 var (
@@ -55,15 +63,15 @@ var (
 
 type EmailBlastProcessor struct {
 	store           EmailBlastStore
-	tierService     *tiers.TierService
-	eventDispatcher *events.EventDispatcher
+	tierChecker     TierChecker
+	eventDispatcher EventDispatcher
 	logger          *observability.Logger
 }
 
-func New(store EmailBlastStore, tierService *tiers.TierService, eventDispatcher *events.EventDispatcher, logger *observability.Logger) EmailBlastProcessor {
+func New(store EmailBlastStore, tierChecker TierChecker, eventDispatcher EventDispatcher, logger *observability.Logger) EmailBlastProcessor {
 	return EmailBlastProcessor{
 		store:           store,
-		tierService:     tierService,
+		tierChecker:     tierChecker,
 		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
@@ -72,23 +80,22 @@ func New(store EmailBlastStore, tierService *tiers.TierService, eventDispatcher 
 // CreateEmailBlastRequest represents a request to create an email blast
 type CreateEmailBlastRequest struct {
 	Name                  string
-	SegmentID             uuid.UUID
-	TemplateID            uuid.UUID
+	SegmentIDs            []uuid.UUID
+	BlastTemplateID       uuid.UUID
 	Subject               string
 	ScheduledAt           *time.Time
 	BatchSize             int
 	SendThrottlePerSecond *int
 }
 
-// CreateEmailBlast creates a new email blast for a campaign
-func (p *EmailBlastProcessor) CreateEmailBlast(ctx context.Context, accountID, campaignID uuid.UUID, userID *uuid.UUID, req CreateEmailBlastRequest) (store.EmailBlast, error) {
+// CreateEmailBlast creates a new email blast for an account
+func (p *EmailBlastProcessor) CreateEmailBlast(ctx context.Context, accountID uuid.UUID, userID *uuid.UUID, req CreateEmailBlastRequest) (store.EmailBlast, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 	)
 
 	// Check if account has email blasts feature
-	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "email_blasts")
+	hasFeature, err := p.tierChecker.HasFeatureByAccountID(ctx, accountID, "email_blasts")
 	if err != nil {
 		p.logger.Error(ctx, "failed to check email blasts feature", err)
 		return store.EmailBlast{}, err
@@ -97,36 +104,39 @@ func (p *EmailBlastProcessor) CreateEmailBlast(ctx context.Context, accountID, c
 		return store.EmailBlast{}, ErrEmailBlastsNotAvailable
 	}
 
-	// Verify campaign exists and belongs to account
-	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return store.EmailBlast{}, ErrCampaignNotFound
+	// Validate at least one segment is provided
+	if len(req.SegmentIDs) == 0 {
+		return store.EmailBlast{}, ErrSegmentNotFound
+	}
+
+	// Verify all segments exist and belong to campaigns owned by the account
+	for _, segmentID := range req.SegmentIDs {
+		segment, err := p.store.GetSegmentByID(ctx, segmentID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return store.EmailBlast{}, ErrSegmentNotFound
+			}
+			p.logger.Error(ctx, "failed to get segment", err)
+			return store.EmailBlast{}, err
 		}
-		p.logger.Error(ctx, "failed to get campaign", err)
-		return store.EmailBlast{}, err
-	}
 
-	if campaign.AccountID != accountID {
-		return store.EmailBlast{}, ErrUnauthorized
-	}
-
-	// Verify segment exists and belongs to campaign
-	segment, err := p.store.GetSegmentByID(ctx, req.SegmentID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return store.EmailBlast{}, ErrSegmentNotFound
+		// Verify the segment's campaign belongs to the account
+		campaign, err := p.store.GetCampaignByID(ctx, segment.CampaignID)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return store.EmailBlast{}, ErrCampaignNotFound
+			}
+			p.logger.Error(ctx, "failed to get campaign", err)
+			return store.EmailBlast{}, err
 		}
-		p.logger.Error(ctx, "failed to get segment", err)
-		return store.EmailBlast{}, err
+
+		if campaign.AccountID != accountID {
+			return store.EmailBlast{}, ErrUnauthorized
+		}
 	}
 
-	if segment.CampaignID != campaignID {
-		return store.EmailBlast{}, ErrUnauthorized
-	}
-
-	// Verify template exists and belongs to campaign
-	template, err := p.store.GetEmailTemplateByID(ctx, req.TemplateID)
+	// Verify blast template exists and belongs to account
+	template, err := p.store.GetBlastEmailTemplateByID(ctx, req.BlastTemplateID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return store.EmailBlast{}, ErrTemplateNotFound
@@ -135,7 +145,7 @@ func (p *EmailBlastProcessor) CreateEmailBlast(ctx context.Context, accountID, c
 		return store.EmailBlast{}, err
 	}
 
-	if template.CampaignID != campaignID {
+	if template.AccountID != accountID {
 		return store.EmailBlast{}, ErrUnauthorized
 	}
 
@@ -151,9 +161,9 @@ func (p *EmailBlastProcessor) CreateEmailBlast(ctx context.Context, accountID, c
 	}
 
 	params := store.CreateEmailBlastParams{
-		CampaignID:            campaignID,
-		SegmentID:             req.SegmentID,
-		TemplateID:            req.TemplateID,
+		AccountID:             accountID,
+		BlastTemplateID:       req.BlastTemplateID,
+		SegmentIDs:            req.SegmentIDs,
 		Name:                  req.Name,
 		Subject:               req.Subject,
 		ScheduledAt:           req.ScheduledAt,
@@ -173,26 +183,11 @@ func (p *EmailBlastProcessor) CreateEmailBlast(ctx context.Context, accountID, c
 }
 
 // GetEmailBlast retrieves an email blast by ID
-func (p *EmailBlastProcessor) GetEmailBlast(ctx context.Context, accountID, campaignID, blastID uuid.UUID) (store.EmailBlast, error) {
+func (p *EmailBlastProcessor) GetEmailBlast(ctx context.Context, accountID, blastID uuid.UUID) (store.EmailBlast, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
-
-	// Verify campaign exists and belongs to account
-	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return store.EmailBlast{}, ErrCampaignNotFound
-		}
-		p.logger.Error(ctx, "failed to get campaign", err)
-		return store.EmailBlast{}, err
-	}
-
-	if campaign.AccountID != accountID {
-		return store.EmailBlast{}, ErrUnauthorized
-	}
 
 	blast, err := p.store.GetEmailBlastByID(ctx, blastID)
 	if err != nil {
@@ -203,8 +198,8 @@ func (p *EmailBlastProcessor) GetEmailBlast(ctx context.Context, accountID, camp
 		return store.EmailBlast{}, err
 	}
 
-	// Verify blast belongs to the campaign
-	if blast.CampaignID != campaignID {
+	// Verify blast belongs to the account
+	if blast.AccountID != accountID {
 		return store.EmailBlast{}, ErrUnauthorized
 	}
 
@@ -226,26 +221,11 @@ type ListEmailBlastsResponse struct {
 	TotalPages int                `json:"total_pages"`
 }
 
-// ListEmailBlasts retrieves email blasts for a campaign with pagination
-func (p *EmailBlastProcessor) ListEmailBlasts(ctx context.Context, accountID, campaignID uuid.UUID, req ListEmailBlastsRequest) (ListEmailBlastsResponse, error) {
+// ListEmailBlasts retrieves email blasts for an account with pagination
+func (p *EmailBlastProcessor) ListEmailBlasts(ctx context.Context, accountID uuid.UUID, req ListEmailBlastsRequest) (ListEmailBlastsResponse, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 	)
-
-	// Verify campaign exists and belongs to account
-	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return ListEmailBlastsResponse{}, ErrCampaignNotFound
-		}
-		p.logger.Error(ctx, "failed to get campaign", err)
-		return ListEmailBlastsResponse{}, err
-	}
-
-	if campaign.AccountID != accountID {
-		return ListEmailBlastsResponse{}, ErrUnauthorized
-	}
 
 	// Default pagination
 	if req.Page <= 0 {
@@ -260,7 +240,7 @@ func (p *EmailBlastProcessor) ListEmailBlasts(ctx context.Context, accountID, ca
 
 	offset := (req.Page - 1) * req.Limit
 
-	blasts, err := p.store.GetEmailBlastsByCampaign(ctx, campaignID, req.Limit, offset)
+	blasts, err := p.store.GetEmailBlastsByAccount(ctx, accountID, req.Limit, offset)
 	if err != nil {
 		p.logger.Error(ctx, "failed to list email blasts", err)
 		return ListEmailBlastsResponse{}, err
@@ -270,7 +250,7 @@ func (p *EmailBlastProcessor) ListEmailBlasts(ctx context.Context, accountID, ca
 		blasts = []store.EmailBlast{}
 	}
 
-	total, err := p.store.CountEmailBlastsByCampaign(ctx, campaignID)
+	total, err := p.store.CountEmailBlastsByAccount(ctx, accountID)
 	if err != nil {
 		p.logger.Error(ctx, "failed to count email blasts", err)
 		return ListEmailBlastsResponse{}, err
@@ -295,28 +275,13 @@ type UpdateEmailBlastRequest struct {
 }
 
 // UpdateEmailBlast updates an email blast (only if in draft status)
-func (p *EmailBlastProcessor) UpdateEmailBlast(ctx context.Context, accountID, campaignID, blastID uuid.UUID, req UpdateEmailBlastRequest) (store.EmailBlast, error) {
+func (p *EmailBlastProcessor) UpdateEmailBlast(ctx context.Context, accountID, blastID uuid.UUID, req UpdateEmailBlastRequest) (store.EmailBlast, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
 
-	// Verify campaign exists and belongs to account
-	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return store.EmailBlast{}, ErrCampaignNotFound
-		}
-		p.logger.Error(ctx, "failed to get campaign", err)
-		return store.EmailBlast{}, err
-	}
-
-	if campaign.AccountID != accountID {
-		return store.EmailBlast{}, ErrUnauthorized
-	}
-
-	// Verify blast exists and belongs to campaign
+	// Verify blast exists and belongs to account
 	existingBlast, err := p.store.GetEmailBlastByID(ctx, blastID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -326,7 +291,7 @@ func (p *EmailBlastProcessor) UpdateEmailBlast(ctx context.Context, accountID, c
 		return store.EmailBlast{}, err
 	}
 
-	if existingBlast.CampaignID != campaignID {
+	if existingBlast.AccountID != accountID {
 		return store.EmailBlast{}, ErrUnauthorized
 	}
 
@@ -355,28 +320,13 @@ func (p *EmailBlastProcessor) UpdateEmailBlast(ctx context.Context, accountID, c
 }
 
 // DeleteEmailBlast soft deletes an email blast
-func (p *EmailBlastProcessor) DeleteEmailBlast(ctx context.Context, accountID, campaignID, blastID uuid.UUID) error {
+func (p *EmailBlastProcessor) DeleteEmailBlast(ctx context.Context, accountID, blastID uuid.UUID) error {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
 
-	// Verify campaign exists and belongs to account
-	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return ErrCampaignNotFound
-		}
-		p.logger.Error(ctx, "failed to get campaign", err)
-		return err
-	}
-
-	if campaign.AccountID != accountID {
-		return ErrUnauthorized
-	}
-
-	// Verify blast exists and belongs to campaign
+	// Verify blast exists and belongs to account
 	existingBlast, err := p.store.GetEmailBlastByID(ctx, blastID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -386,7 +336,7 @@ func (p *EmailBlastProcessor) DeleteEmailBlast(ctx context.Context, accountID, c
 		return err
 	}
 
-	if existingBlast.CampaignID != campaignID {
+	if existingBlast.AccountID != accountID {
 		return ErrUnauthorized
 	}
 
@@ -404,10 +354,9 @@ func (p *EmailBlastProcessor) DeleteEmailBlast(ctx context.Context, accountID, c
 }
 
 // ScheduleBlast schedules a blast for future sending
-func (p *EmailBlastProcessor) ScheduleBlast(ctx context.Context, accountID, campaignID, blastID uuid.UUID, scheduledAt time.Time) (store.EmailBlast, error) {
+func (p *EmailBlastProcessor) ScheduleBlast(ctx context.Context, accountID, blastID uuid.UUID, scheduledAt time.Time) (store.EmailBlast, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
 
@@ -416,21 +365,7 @@ func (p *EmailBlastProcessor) ScheduleBlast(ctx context.Context, accountID, camp
 		return store.EmailBlast{}, ErrInvalidScheduleTime
 	}
 
-	// Verify campaign exists and belongs to account
-	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return store.EmailBlast{}, ErrCampaignNotFound
-		}
-		p.logger.Error(ctx, "failed to get campaign", err)
-		return store.EmailBlast{}, err
-	}
-
-	if campaign.AccountID != accountID {
-		return store.EmailBlast{}, ErrUnauthorized
-	}
-
-	// Verify blast exists and is in draft status
+	// Verify blast exists and belongs to account
 	existingBlast, err := p.store.GetEmailBlastByID(ctx, blastID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -440,7 +375,7 @@ func (p *EmailBlastProcessor) ScheduleBlast(ctx context.Context, accountID, camp
 		return store.EmailBlast{}, err
 	}
 
-	if existingBlast.CampaignID != campaignID {
+	if existingBlast.AccountID != accountID {
 		return store.EmailBlast{}, ErrUnauthorized
 	}
 
@@ -462,28 +397,13 @@ func (p *EmailBlastProcessor) ScheduleBlast(ctx context.Context, accountID, camp
 }
 
 // SendBlastNow starts sending a blast immediately
-func (p *EmailBlastProcessor) SendBlastNow(ctx context.Context, accountID, campaignID, blastID uuid.UUID) (store.EmailBlast, error) {
+func (p *EmailBlastProcessor) SendBlastNow(ctx context.Context, accountID, blastID uuid.UUID) (store.EmailBlast, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
 
-	// Verify campaign exists and belongs to account
-	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return store.EmailBlast{}, ErrCampaignNotFound
-		}
-		p.logger.Error(ctx, "failed to get campaign", err)
-		return store.EmailBlast{}, err
-	}
-
-	if campaign.AccountID != accountID {
-		return store.EmailBlast{}, ErrUnauthorized
-	}
-
-	// Verify blast exists and is in a valid status to send
+	// Verify blast exists and belongs to account
 	existingBlast, err := p.store.GetEmailBlastByID(ctx, blastID)
 	if err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -493,7 +413,7 @@ func (p *EmailBlastProcessor) SendBlastNow(ctx context.Context, accountID, campa
 		return store.EmailBlast{}, err
 	}
 
-	if existingBlast.CampaignID != campaignID {
+	if existingBlast.AccountID != accountID {
 		return store.EmailBlast{}, ErrUnauthorized
 	}
 
@@ -509,7 +429,7 @@ func (p *EmailBlastProcessor) SendBlastNow(ctx context.Context, accountID, campa
 	}
 
 	// Dispatch blast.started event for async processing
-	err = p.eventDispatcher.DispatchBlastStarted(ctx, accountID, campaignID, blastID)
+	err = p.eventDispatcher.DispatchBlastStarted(ctx, accountID, blastID)
 	if err != nil {
 		p.logger.Error(ctx, "failed to dispatch blast started event", err)
 		// Revert status back to draft
@@ -522,15 +442,14 @@ func (p *EmailBlastProcessor) SendBlastNow(ctx context.Context, accountID, campa
 }
 
 // PauseBlast pauses a sending blast
-func (p *EmailBlastProcessor) PauseBlast(ctx context.Context, accountID, campaignID, blastID uuid.UUID) (store.EmailBlast, error) {
+func (p *EmailBlastProcessor) PauseBlast(ctx context.Context, accountID, blastID uuid.UUID) (store.EmailBlast, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
 
 	// Verify and get existing blast
-	existingBlast, err := p.GetEmailBlast(ctx, accountID, campaignID, blastID)
+	existingBlast, err := p.GetEmailBlast(ctx, accountID, blastID)
 	if err != nil {
 		return store.EmailBlast{}, err
 	}
@@ -550,15 +469,14 @@ func (p *EmailBlastProcessor) PauseBlast(ctx context.Context, accountID, campaig
 }
 
 // ResumeBlast resumes a paused blast
-func (p *EmailBlastProcessor) ResumeBlast(ctx context.Context, accountID, campaignID, blastID uuid.UUID) (store.EmailBlast, error) {
+func (p *EmailBlastProcessor) ResumeBlast(ctx context.Context, accountID, blastID uuid.UUID) (store.EmailBlast, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
 
 	// Verify and get existing blast
-	existingBlast, err := p.GetEmailBlast(ctx, accountID, campaignID, blastID)
+	existingBlast, err := p.GetEmailBlast(ctx, accountID, blastID)
 	if err != nil {
 		return store.EmailBlast{}, err
 	}
@@ -575,7 +493,7 @@ func (p *EmailBlastProcessor) ResumeBlast(ctx context.Context, accountID, campai
 
 	// Dispatch batch event to continue processing from where we left off
 	nextBatch := existingBlast.CurrentBatch + 1
-	err = p.eventDispatcher.DispatchBlastBatchSend(ctx, accountID, campaignID, blastID, nextBatch)
+	err = p.eventDispatcher.DispatchBlastBatchSend(ctx, accountID, blastID, nextBatch)
 	if err != nil {
 		p.logger.Error(ctx, "failed to dispatch resume batch event", err)
 		// Don't fail the resume, the batch will be picked up on next scheduler run
@@ -586,15 +504,14 @@ func (p *EmailBlastProcessor) ResumeBlast(ctx context.Context, accountID, campai
 }
 
 // CancelBlast cancels a blast
-func (p *EmailBlastProcessor) CancelBlast(ctx context.Context, accountID, campaignID, blastID uuid.UUID) (store.EmailBlast, error) {
+func (p *EmailBlastProcessor) CancelBlast(ctx context.Context, accountID, blastID uuid.UUID) (store.EmailBlast, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
 
 	// Verify and get existing blast
-	existingBlast, err := p.GetEmailBlast(ctx, accountID, campaignID, blastID)
+	existingBlast, err := p.GetEmailBlast(ctx, accountID, blastID)
 	if err != nil {
 		return store.EmailBlast{}, err
 	}
@@ -643,14 +560,13 @@ type BlastAnalytics struct {
 }
 
 // GetBlastAnalytics retrieves analytics for an email blast
-func (p *EmailBlastProcessor) GetBlastAnalytics(ctx context.Context, accountID, campaignID, blastID uuid.UUID) (BlastAnalytics, error) {
+func (p *EmailBlastProcessor) GetBlastAnalytics(ctx context.Context, accountID, blastID uuid.UUID) (BlastAnalytics, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
 
-	blast, err := p.GetEmailBlast(ctx, accountID, campaignID, blastID)
+	blast, err := p.GetEmailBlast(ctx, accountID, blastID)
 	if err != nil {
 		return BlastAnalytics{}, err
 	}
@@ -708,15 +624,14 @@ type ListBlastRecipientsResponse struct {
 }
 
 // ListBlastRecipients retrieves recipients for a blast with pagination
-func (p *EmailBlastProcessor) ListBlastRecipients(ctx context.Context, accountID, campaignID, blastID uuid.UUID, req ListBlastRecipientsRequest) (ListBlastRecipientsResponse, error) {
+func (p *EmailBlastProcessor) ListBlastRecipients(ctx context.Context, accountID, blastID uuid.UUID, req ListBlastRecipientsRequest) (ListBlastRecipientsResponse, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
-		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "blast_id", Value: blastID.String()},
 	)
 
 	// Verify access
-	_, err := p.GetEmailBlast(ctx, accountID, campaignID, blastID)
+	_, err := p.GetEmailBlast(ctx, accountID, blastID)
 	if err != nil {
 		return ListBlastRecipientsResponse{}, err
 	}
