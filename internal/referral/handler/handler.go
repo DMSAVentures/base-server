@@ -44,6 +44,8 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 		apierrors.BadRequest(c, "INVALID_REFERRAL", "Invalid referral code")
 	case errors.Is(err, processor.ErrReferralCodeEmpty):
 		apierrors.BadRequest(c, "REFERRAL_CODE_EMPTY", "Referral code is required")
+	case errors.Is(err, processor.ErrReferralSystemNotAvailable):
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Referral system is not available in your plan. Please upgrade to Pro or Team plan.")
 	default:
 		apierrors.InternalError(c, err)
 	}

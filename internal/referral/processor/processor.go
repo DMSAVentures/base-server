@@ -5,6 +5,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"base-server/internal/waitlist/utils"
 	"context"
 	"errors"
@@ -26,24 +27,27 @@ type ReferralStore interface {
 }
 
 var (
-	ErrReferralNotFound  = errors.New("referral not found")
-	ErrCampaignNotFound  = errors.New("campaign not found")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUnauthorized      = errors.New("unauthorized access to campaign")
-	ErrInvalidStatus     = errors.New("invalid referral status")
-	ErrInvalidReferral   = errors.New("invalid referral code")
-	ErrReferralCodeEmpty = errors.New("referral code is required")
+	ErrReferralNotFound           = errors.New("referral not found")
+	ErrCampaignNotFound           = errors.New("campaign not found")
+	ErrUserNotFound               = errors.New("user not found")
+	ErrUnauthorized               = errors.New("unauthorized access to campaign")
+	ErrInvalidStatus              = errors.New("invalid referral status")
+	ErrInvalidReferral            = errors.New("invalid referral code")
+	ErrReferralCodeEmpty          = errors.New("referral code is required")
+	ErrReferralSystemNotAvailable = errors.New("referral system is not available in your plan")
 )
 
 type ReferralProcessor struct {
-	store  ReferralStore
-	logger *observability.Logger
+	store       ReferralStore
+	tierService *tiers.TierService
+	logger      *observability.Logger
 }
 
-func New(store ReferralStore, logger *observability.Logger) ReferralProcessor {
+func New(store ReferralStore, tierService *tiers.TierService, logger *observability.Logger) ReferralProcessor {
 	return ReferralProcessor{
-		store:  store,
-		logger: logger,
+		store:       store,
+		tierService: tierService,
+		logger:      logger,
 	}
 }
 
@@ -73,6 +77,16 @@ func (p *ReferralProcessor) ListReferrals(ctx context.Context, accountID, campai
 		observability.Field{Key: "account_id", Value: accountID.String()},
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 	)
+
+	// Check if account has referral_system feature
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "referral_system")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check referral_system feature", err)
+		return ListReferralsResponse{}, err
+	}
+	if !hasFeature {
+		return ListReferralsResponse{}, ErrReferralSystemNotAvailable
+	}
 
 	// Verify campaign belongs to account
 	if err := p.verifyCampaignAccess(ctx, accountID, campaignID); err != nil {
@@ -209,6 +223,16 @@ func (p *ReferralProcessor) GetUserReferrals(ctx context.Context, accountID, cam
 		observability.Field{Key: "user_id", Value: userID.String()},
 	)
 
+	// Check if account has referral_system feature
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "referral_system")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check referral_system feature", err)
+		return GetUserReferralsResponse{}, err
+	}
+	if !hasFeature {
+		return GetUserReferralsResponse{}, ErrReferralSystemNotAvailable
+	}
+
 	// Verify campaign belongs to account
 	if err := p.verifyCampaignAccess(ctx, accountID, campaignID); err != nil {
 		return GetUserReferralsResponse{}, err
@@ -294,6 +318,16 @@ func (p *ReferralProcessor) GetReferralLink(ctx context.Context, accountID, camp
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 	)
+
+	// Check if account has referral_system feature
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "referral_system")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check referral_system feature", err)
+		return GetReferralLinkResponse{}, err
+	}
+	if !hasFeature {
+		return GetReferralLinkResponse{}, ErrReferralSystemNotAvailable
+	}
 
 	// Verify campaign belongs to account
 	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
