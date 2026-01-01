@@ -19,6 +19,7 @@ import (
 	"base-server/internal/store"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -35,10 +36,12 @@ type TierConfig struct {
 
 var (
 	// Tier mutex and price IDs for thread-safe initialization
-	tierMutex       sync.Mutex
-	freeTierPriceID uuid.UUID
-	proTierPriceID  uuid.UUID
-	teamTierPriceID uuid.UUID
+	tierMutex             sync.Mutex
+	freeTierPriceID       uuid.UUID
+	proTierPriceID        uuid.UUID
+	proAnnualTierPriceID  uuid.UUID
+	teamTierPriceID       uuid.UUID
+	teamAnnualTierPriceID uuid.UUID
 )
 
 var (
@@ -57,6 +60,10 @@ func getTierConfigs() map[string]TierConfig {
 	proCampaigns := 5
 	proLeads := 5000
 	proTeamMembers := 1
+
+	// Team tier limits
+	teamLeads := 100000
+	teamMembers := 5
 
 	return map[string]TierConfig{
 		"free": {
@@ -107,6 +114,30 @@ func getTierConfigs() map[string]TierConfig {
 				"team_members": &proTeamMembers,
 			},
 		},
+		"pro_annual": {
+			Name:            "lc_pro_annual",
+			PriceStripeID:   "price_test_pro_annual",
+			ProductStripeID: "prod_test_pro",
+			Features: map[string]bool{
+				"email_verification":   true,
+				"referral_system":      true,
+				"visual_form_builder":  true,
+				"visual_email_builder": true,
+				"all_widget_types":     true,
+				"remove_branding":      true,
+				"anti_spam_protection": true,
+				"enhanced_lead_data":   true,
+				"tracking_pixels":      true,
+				"webhooks_zapier":      false, // Not in Pro
+				"email_blasts":         true,
+				"json_export":          true,
+			},
+			Limits: map[string]*int{
+				"campaigns":    &proCampaigns,
+				"leads":        &proLeads,
+				"team_members": &proTeamMembers,
+			},
+		},
 		"team": {
 			Name:            "lc_team_monthly",
 			PriceStripeID:   "price_test_team",
@@ -127,8 +158,32 @@ func getTierConfigs() map[string]TierConfig {
 			},
 			Limits: map[string]*int{
 				"campaigns":    nil, // Unlimited
-				"leads":        nil, // Unlimited
-				"team_members": nil, // Unlimited
+				"leads":        &teamLeads,
+				"team_members": &teamMembers,
+			},
+		},
+		"team_annual": {
+			Name:            "lc_team_annual",
+			PriceStripeID:   "price_test_team_annual",
+			ProductStripeID: "prod_test_team",
+			Features: map[string]bool{
+				"email_verification":   true,
+				"referral_system":      true,
+				"visual_form_builder":  true,
+				"visual_email_builder": true,
+				"all_widget_types":     true,
+				"remove_branding":      true,
+				"anti_spam_protection": true,
+				"enhanced_lead_data":   true,
+				"tracking_pixels":      true,
+				"webhooks_zapier":      true, // Team tier has webhooks
+				"email_blasts":         true,
+				"json_export":          true,
+			},
+			Limits: map[string]*int{
+				"campaigns":    nil, // Unlimited
+				"leads":        &teamLeads,
+				"team_members": &teamMembers,
 			},
 		},
 	}
@@ -416,8 +471,8 @@ func createAuthenticatedTestUserWithTeamTier(t *testing.T) string {
 	return createAuthenticatedTestUserWithTier(t, "team")
 }
 
-// ensureTierExists finds an existing tier's price from the database (thread-safe)
-// The tiers are seeded via migrations, so we just need to look them up
+// ensureTierExists finds or creates a tier's price in the database (thread-safe)
+// Creates the product, price, and plan_feature_limits if they don't exist
 func ensureTierExists(t *testing.T, tierName string) uuid.UUID {
 	configs := getTierConfigs()
 	config, ok := configs[tierName]
@@ -434,8 +489,12 @@ func ensureTierExists(t *testing.T, tierName string) uuid.UUID {
 		priceIDPtr = &freeTierPriceID
 	case "pro":
 		priceIDPtr = &proTierPriceID
+	case "pro_annual":
+		priceIDPtr = &proAnnualTierPriceID
 	case "team":
 		priceIDPtr = &teamTierPriceID
+	case "team_annual":
+		priceIDPtr = &teamAnnualTierPriceID
 	default:
 		t.Fatalf("Unknown tier: %s", tierName)
 	}
@@ -445,22 +504,259 @@ func ensureTierExists(t *testing.T, tierName string) uuid.UUID {
 		return *priceIDPtr
 	}
 
-	// Look up the existing price from the database (seeded via migrations)
 	testStore := setupTestStore(t)
 	ctx := context.Background()
 	db := testStore.GetDB()
 
+	// Try to find existing price
 	var priceID uuid.UUID
 	err := db.GetContext(ctx, &priceID, `
 		SELECT id FROM prices WHERE description = $1 AND deleted_at IS NULL LIMIT 1
 	`, config.Name)
+
+	if err == nil {
+		// Price exists, cache and return
+		*priceIDPtr = priceID
+		return priceID
+	}
+
+	// Price doesn't exist, need to create it
+	// First, ensure all tiers are created to avoid partial state
+	ensureAllTiersCreated(t, db, ctx)
+
+	// Now look up the price again
+	err = db.GetContext(ctx, &priceID, `
+		SELECT id FROM prices WHERE description = $1 AND deleted_at IS NULL LIMIT 1
+	`, config.Name)
 	if err != nil {
-		t.Fatalf("Failed to find price for tier %s (description=%s): %v. Make sure migrations have been run.", tierName, config.Name, err)
+		t.Fatalf("Failed to find price for tier %s (description=%s) after creation: %v", tierName, config.Name, err)
 	}
 
 	// Cache and return the price ID
 	*priceIDPtr = priceID
 	return priceID
+}
+
+// ensureAllTiersCreated creates all products, prices, features, limits, and plan_feature_limits
+// This is called once when any tier is first needed
+func ensureAllTiersCreated(t *testing.T, db *sqlx.DB, ctx context.Context) {
+	// Check if we've already created the tiers by looking for the free price
+	var count int
+	err := db.GetContext(ctx, &count, `SELECT COUNT(*) FROM prices WHERE description = 'free' AND deleted_at IS NULL`)
+	if err == nil && count > 0 {
+		return // Already created
+	}
+
+	// Create products
+	createTestProducts(t, db, ctx)
+
+	// Create prices
+	createTestPrices(t, db, ctx)
+
+	// Ensure features exist
+	ensureFeaturesExist(t, db, ctx)
+
+	// Ensure limits exist
+	ensureLimitsExist(t, db, ctx)
+
+	// Create plan_feature_limits
+	createPlanFeatureLimits(t, db, ctx)
+}
+
+// createTestProducts creates the test products if they don't exist
+func createTestProducts(t *testing.T, db *sqlx.DB, ctx context.Context) {
+	products := []struct {
+		name        string
+		description string
+		stripeID    string
+	}{
+		{"Free Plan", "Free tier product", "prod_test_free"},
+		{"Pro Plan", "Pro tier product", "prod_test_pro"},
+		{"Team Plan", "Team tier product", "prod_test_team"},
+	}
+
+	for _, p := range products {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO products (name, description, stripe_id)
+			VALUES ($1, $2, $3)
+			ON CONFLICT DO NOTHING
+		`, p.name, p.description, p.stripeID)
+		if err != nil {
+			t.Fatalf("Failed to create product %s: %v", p.name, err)
+		}
+	}
+}
+
+// createTestPrices creates the test prices if they don't exist
+func createTestPrices(t *testing.T, db *sqlx.DB, ctx context.Context) {
+	prices := []struct {
+		productStripeID string
+		description     string
+		stripeID        string
+	}{
+		{"prod_test_free", "free", "price_test_free"},
+		{"prod_test_pro", "lc_pro_monthly", "price_test_pro"},
+		{"prod_test_pro", "lc_pro_annual", "price_test_pro_annual"},
+		{"prod_test_team", "lc_team_monthly", "price_test_team"},
+		{"prod_test_team", "lc_team_annual", "price_test_team_annual"},
+	}
+
+	for _, p := range prices {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO prices (product_id, description, stripe_id)
+			SELECT id, $2, $3 FROM products WHERE stripe_id = $1 AND deleted_at IS NULL
+			ON CONFLICT DO NOTHING
+		`, p.productStripeID, p.description, p.stripeID)
+		if err != nil {
+			t.Fatalf("Failed to create price %s: %v", p.description, err)
+		}
+	}
+}
+
+// ensureFeaturesExist ensures all features exist in the database
+func ensureFeaturesExist(t *testing.T, db *sqlx.DB, ctx context.Context) {
+	features := []struct {
+		name        string
+		description string
+	}{
+		{"email_verification", "Verify user emails before adding to waitlist"},
+		{"referral_system", "Enable referral tracking and rewards"},
+		{"visual_form_builder", "Drag-and-drop form customization"},
+		{"visual_email_builder", "Design emails with visual editor"},
+		{"all_widget_types", "Access to all widget types"},
+		{"remove_branding", "Remove platform branding from forms"},
+		{"anti_spam_protection", "Advanced spam and bot protection"},
+		{"enhanced_lead_data", "Collect additional lead information"},
+		{"tracking_pixels", "Add Facebook, Google, and other tracking pixels"},
+		{"webhooks_zapier", "Integrate with external services"},
+		{"email_blasts", "Send bulk emails to waitlist"},
+		{"json_export", "Export data in JSON format"},
+		{"campaigns", "Number of waitlist campaigns"},
+		{"leads", "Maximum leads per account"},
+		{"team_members", "Number of team members"},
+	}
+
+	for _, f := range features {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO features (name, description)
+			VALUES ($1, $2)
+			ON CONFLICT (name) DO NOTHING
+		`, f.name, f.description)
+		if err != nil {
+			t.Fatalf("Failed to create feature %s: %v", f.name, err)
+		}
+	}
+}
+
+// ensureLimitsExist ensures all limits exist in the database
+func ensureLimitsExist(t *testing.T, db *sqlx.DB, ctx context.Context) {
+	limits := []struct {
+		featureName string
+		limitName   string
+		limitValue  int
+	}{
+		{"campaigns", "campaigns_free", 1},
+		{"leads", "leads_free", 200},
+		{"leads", "leads_pro", 5000},
+		{"leads", "leads_team", 100000},
+		{"team_members", "team_members_free", 1},
+		{"team_members", "team_members_pro", 1},
+		{"team_members", "team_members_team", 5},
+	}
+
+	for _, l := range limits {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO limits (feature_id, limit_name, limit_value)
+			SELECT id, $2, $3 FROM features WHERE name = $1
+			ON CONFLICT (feature_id, limit_name) DO NOTHING
+		`, l.featureName, l.limitName, l.limitValue)
+		if err != nil {
+			t.Fatalf("Failed to create limit %s: %v", l.limitName, err)
+		}
+	}
+}
+
+// createPlanFeatureLimits creates the plan_feature_limits mappings
+func createPlanFeatureLimits(t *testing.T, db *sqlx.DB, ctx context.Context) {
+	configs := getTierConfigs()
+
+	// Boolean features (not resource limits)
+	boolFeatures := []string{
+		"email_verification", "referral_system", "visual_form_builder", "visual_email_builder",
+		"all_widget_types", "remove_branding", "anti_spam_protection", "enhanced_lead_data",
+		"tracking_pixels", "webhooks_zapier", "email_blasts", "json_export",
+	}
+
+	for tierName, config := range configs {
+		// Get price ID
+		var priceID uuid.UUID
+		err := db.GetContext(ctx, &priceID, `
+			SELECT id FROM prices WHERE description = $1 AND deleted_at IS NULL LIMIT 1
+		`, config.Name)
+		if err != nil {
+			t.Fatalf("Failed to get price ID for tier %s: %v", tierName, err)
+		}
+
+		// Insert boolean features
+		for _, featureName := range boolFeatures {
+			enabled := config.Features[featureName]
+			_, err := db.ExecContext(ctx, `
+				INSERT INTO plan_feature_limits (plan_id, feature_id, limit_id, enabled)
+				SELECT $1, id, NULL, $3 FROM features WHERE name = $2
+				ON CONFLICT (plan_id, feature_id) DO NOTHING
+			`, priceID, featureName, enabled)
+			if err != nil {
+				t.Fatalf("Failed to create plan_feature_limit for tier %s, feature %s: %v", tierName, featureName, err)
+			}
+		}
+
+		// Insert resource limits (campaigns, leads, team_members)
+		insertResourceLimit(t, db, ctx, priceID, "campaigns", config.Limits["campaigns"], tierName)
+		insertResourceLimit(t, db, ctx, priceID, "leads", config.Limits["leads"], tierName)
+		insertResourceLimit(t, db, ctx, priceID, "team_members", config.Limits["team_members"], tierName)
+	}
+}
+
+// insertResourceLimit inserts a resource limit for a tier
+func insertResourceLimit(t *testing.T, db *sqlx.DB, ctx context.Context, priceID uuid.UUID, featureName string, limitValue *int, tierName string) {
+	if limitValue == nil {
+		// Unlimited - insert with NULL limit_id
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO plan_feature_limits (plan_id, feature_id, limit_id, enabled)
+			SELECT $1, id, NULL, true FROM features WHERE name = $2
+			ON CONFLICT (plan_id, feature_id) DO NOTHING
+		`, priceID, featureName)
+		if err != nil {
+			t.Fatalf("Failed to create unlimited plan_feature_limit for tier %s, feature %s: %v", tierName, featureName, err)
+		}
+	} else {
+		// Limited - find the appropriate limit and link it
+		limitName := getLimitName(featureName, tierName)
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO plan_feature_limits (plan_id, feature_id, limit_id, enabled)
+			SELECT $1, f.id, l.id, true
+			FROM features f
+			JOIN limits l ON l.feature_id = f.id
+			WHERE f.name = $2 AND l.limit_name = $3
+			ON CONFLICT (plan_id, feature_id) DO NOTHING
+		`, priceID, featureName, limitName)
+		if err != nil {
+			t.Fatalf("Failed to create plan_feature_limit for tier %s, feature %s, limit %s: %v", tierName, featureName, limitName, err)
+		}
+	}
+}
+
+// getLimitName returns the limit name for a feature and tier
+func getLimitName(featureName, tierName string) string {
+	tierBase := tierName
+	// Map annual tiers to their base tier for limit names
+	switch tierName {
+	case "pro_annual":
+		tierBase = "pro"
+	case "team_annual":
+		tierBase = "team"
+	}
+	return featureName + "_" + tierBase
 }
 
 // createTierSubscription creates a subscription for a user with the specified tier
