@@ -20,7 +20,8 @@ func createAuthenticatedUser(t *testing.T) string {
 
 func TestAPI_Campaign_Create(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	// Use Pro tier to allow creating multiple campaigns (up to 5)
+	token := createAuthenticatedTestUserWithProTier(t)
 
 	tests := []struct {
 		name           string
@@ -162,7 +163,8 @@ func TestAPI_Campaign_Create(t *testing.T) {
 
 func TestAPI_Campaign_List(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	// Use Pro tier to allow creating multiple campaigns (up to 5)
+	token := createAuthenticatedTestUserWithProTier(t)
 
 	// Create a few test campaigns
 	for i := 0; i < 3; i++ {
@@ -579,7 +581,8 @@ func TestAPI_Campaign_Delete(t *testing.T) {
 
 func TestAPI_Campaign_GetPublicCampaign(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	// Use Pro tier to allow creating multiple campaigns for testing
+	token := createAuthenticatedTestUserWithProTier(t)
 
 	// Create a draft campaign with settings
 	draftResp := POST(t, "/api/v1/campaigns").
@@ -753,7 +756,8 @@ func containsInMiddle(s, substr string) bool {
 // TestAPI_Campaign_CreateWithFormFields tests form field validation
 func TestAPI_Campaign_CreateWithFormFields(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	// Use Pro tier to allow creating multiple campaigns (up to 5)
+	token := createAuthenticatedTestUserWithProTier(t)
 
 	tests := []struct {
 		name           string
@@ -870,7 +874,8 @@ func TestAPI_Campaign_CreateWithFormFields(t *testing.T) {
 // TestAPI_Campaign_CreateWithShareMessages tests share message validation
 func TestAPI_Campaign_CreateWithShareMessages(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	// Use Pro tier to allow creating multiple campaigns (up to 5)
+	token := createAuthenticatedTestUserWithProTier(t)
 
 	tests := []struct {
 		name           string
@@ -1038,7 +1043,8 @@ func TestAPI_Campaign_CreateWithTrackingIntegrations(t *testing.T) {
 // TestAPI_Campaign_CreateWithReferralSettings tests referral settings validation
 func TestAPI_Campaign_CreateWithReferralSettings(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	// Use Pro tier to allow creating multiple campaigns (up to 5)
+	token := createAuthenticatedTestUserWithProTier(t)
 
 	tests := []struct {
 		name           string
@@ -1173,7 +1179,8 @@ func TestAPI_Campaign_CreateWithReferralSettings(t *testing.T) {
 // TestAPI_Campaign_CreateWithFormSettings tests form settings validation
 func TestAPI_Campaign_CreateWithFormSettings(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	// Use Team tier to allow creating unlimited campaigns
+	token := createAuthenticatedTestUserWithTeamTier(t)
 
 	tests := []struct {
 		name           string
@@ -1477,7 +1484,8 @@ func TestAPI_Campaign_UpdateWithSettings(t *testing.T) {
 // TestAPI_Campaign_DuplicateSlug tests that duplicate slugs are rejected
 func TestAPI_Campaign_DuplicateSlug(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	// Use Pro tier to allow creating multiple campaigns for duplicate slug test
+	token := createAuthenticatedTestUserWithProTier(t)
 	slug := generateTestCampaignSlug()
 
 	// Create first campaign with the slug

@@ -264,7 +264,8 @@ func TestAPI_WaitlistUser_PublicSignup(t *testing.T) {
 
 func TestAPI_WaitlistUser_SignupFailsForNonActiveCampaign(t *testing.T) {
 	t.Parallel()
-	token := createAuthenticatedUser(t)
+	// Use Pro tier to allow creating multiple campaigns for testing
+	token := createAuthenticatedTestUserWithProTier(t)
 
 	// Create test campaigns for each non-active status
 	statusTests := []struct {
