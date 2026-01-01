@@ -29,6 +29,7 @@ type AuthStore interface {
 // BillingProcessor defines the billing operations required by AuthProcessor
 type BillingProcessor interface {
 	CreateStripeCustomer(ctx context.Context, email string) (string, error)
+	CreateFreeSubscription(ctx context.Context, stripeCustomerID string) error
 }
 
 // GoogleOAuthClient defines the OAuth operations required by AuthProcessor
@@ -156,6 +157,12 @@ func (p *AuthProcessor) Signup(ctx context.Context, firstName string, lastName s
 	err = p.store.UpdateStripeCustomerIDByUserID(ctx, user.ID, stripeCustomerId)
 	if err != nil {
 		p.logger.Error(ctx, "failed to update stripe customer id", err)
+		return SignedUpUser{}, ErrFailedSignup
+	}
+
+	err = p.billingProcessor.CreateFreeSubscription(ctx, stripeCustomerId)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create free subscription", err)
 		return SignedUpUser{}, ErrFailedSignup
 	}
 

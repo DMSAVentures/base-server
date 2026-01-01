@@ -104,6 +104,20 @@ func (mr *MockBillingProcessorInterfaceMockRecorder) CreateCustomerPortal(ctx, u
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCustomerPortal", reflect.TypeOf((*MockBillingProcessorInterface)(nil).CreateCustomerPortal), ctx, user)
 }
 
+// CreateFreeSubscription mocks base method.
+func (m *MockBillingProcessorInterface) CreateFreeSubscription(ctx context.Context, stripeCustomerID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateFreeSubscription", ctx, stripeCustomerID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateFreeSubscription indicates an expected call of CreateFreeSubscription.
+func (mr *MockBillingProcessorInterfaceMockRecorder) CreateFreeSubscription(ctx, stripeCustomerID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateFreeSubscription", reflect.TypeOf((*MockBillingProcessorInterface)(nil).CreateFreeSubscription), ctx, stripeCustomerID)
+}
+
 // CreateStripeCustomer mocks base method.
 func (m *MockBillingProcessorInterface) CreateStripeCustomer(ctx context.Context, email string) (string, error) {
 	m.ctrl.T.Helper()
@@ -412,6 +426,21 @@ func NewMockBillingStore(ctrl *gomock.Controller) *MockBillingStore {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockBillingStore) EXPECT() *MockBillingStoreMockRecorder {
 	return m.recorder
+}
+
+// GetFreePriceStripeID mocks base method.
+func (m *MockBillingStore) GetFreePriceStripeID(ctx context.Context) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetFreePriceStripeID", ctx)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetFreePriceStripeID indicates an expected call of GetFreePriceStripeID.
+func (mr *MockBillingStoreMockRecorder) GetFreePriceStripeID(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFreePriceStripeID", reflect.TypeOf((*MockBillingStore)(nil).GetFreePriceStripeID), ctx)
 }
 
 // GetPaymentMethodByUserID mocks base method.

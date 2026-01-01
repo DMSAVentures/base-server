@@ -52,6 +52,12 @@ func (p *AuthProcessor) SignInGoogleUserWithCode(ctx context.Context, code strin
 			p.logger.Error(ctx, "failed to update stripe customer id", err)
 			return "", ErrFailedSignIn
 		}
+
+		err = p.billingProcessor.CreateFreeSubscription(ctx, stripeCustomerId)
+		if err != nil {
+			p.logger.Error(ctx, "failed to create free subscription", err)
+			return "", ErrFailedSignIn
+		}
 	}
 	// If the userAuth exists, get the userAuth
 	oauthUser, err := p.store.GetOauthUserByEmail(ctx, userInfo.Email)

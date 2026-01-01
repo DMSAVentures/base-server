@@ -23,6 +23,7 @@ type BillingProcessorInterface interface {
 
 	// Subscription Management
 	CreateSubscriptionIntent(ctx context.Context, userID uuid.UUID, priceID string) (string, error)
+	CreateFreeSubscription(ctx context.Context, stripeCustomerID string) error
 	CancelSubscription(ctx context.Context, userID uuid.UUID) error
 	CancelSubscriptionBySubscriptionExternalID(ctx context.Context, stripSubID string) error
 	UpdateSubscription(ctx context.Context, userID uuid.UUID, priceID string) error
@@ -60,6 +61,7 @@ type BillingStore interface {
 	GetStripeCustomerIDByUserExternalID(ctx context.Context, ID uuid.UUID) (string, error)
 	GetPaymentMethodByUserID(ctx context.Context, userID uuid.UUID) (*store.PaymentMethod, error)
 	GetPriceByID(ctx context.Context, priceID string) (store.Price, error)
+	GetFreePriceStripeID(ctx context.Context) (string, error)
 }
 
 // ProductService defines the product operations required by BillingProcessor

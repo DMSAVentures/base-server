@@ -186,6 +186,20 @@ func (m *MockBillingProcessor) EXPECT() *MockBillingProcessorMockRecorder {
 	return m.recorder
 }
 
+// CreateFreeSubscription mocks base method.
+func (m *MockBillingProcessor) CreateFreeSubscription(ctx context.Context, stripeCustomerID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateFreeSubscription", ctx, stripeCustomerID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateFreeSubscription indicates an expected call of CreateFreeSubscription.
+func (mr *MockBillingProcessorMockRecorder) CreateFreeSubscription(ctx, stripeCustomerID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateFreeSubscription", reflect.TypeOf((*MockBillingProcessor)(nil).CreateFreeSubscription), ctx, stripeCustomerID)
+}
+
 // CreateStripeCustomer mocks base method.
 func (m *MockBillingProcessor) CreateStripeCustomer(ctx context.Context, email string) (string, error) {
 	m.ctrl.T.Helper()

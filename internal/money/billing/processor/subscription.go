@@ -15,11 +15,12 @@ import (
 
 var (
 	// ErrNoActiveSubscription is returned when no active subscription is found for a user
-	ErrNoActiveSubscription             = errors.New("no active subscription found")
-	ErrFailedToCreateSubscriptionIntent = errors.New("failed to create subscription intent")
-	ErrFailedToCancelSubscription       = errors.New("failed to cancel subscription")
-	ErrFailedToUpdateSubscription       = errors.New("failed to update subscription")
-	ErrFailedToGetSubscription          = errors.New("failed to get subscription")
+	ErrNoActiveSubscription              = errors.New("no active subscription found")
+	ErrFailedToCreateSubscriptionIntent  = errors.New("failed to create subscription intent")
+	ErrFailedToCancelSubscription        = errors.New("failed to cancel subscription")
+	ErrFailedToUpdateSubscription        = errors.New("failed to update subscription")
+	ErrFailedToGetSubscription           = errors.New("failed to get subscription")
+	ErrFailedToCreateFreeSubscription    = errors.New("failed to create free subscription")
 )
 
 func (p *BillingProcessor) CreateSubscriptionIntent(ctx context.Context, userID uuid.UUID, priceID string) (string, error) {
@@ -75,6 +76,36 @@ func (p *BillingProcessor) CreateSubscriptionIntent(ctx context.Context, userID 
 	}
 
 	return clientSecret, nil
+}
+
+func (p *BillingProcessor) CreateFreeSubscription(ctx context.Context, stripeCustomerID string) error {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "stripe_customer_id", Value: stripeCustomerID})
+
+	p.logger.Info(ctx, "Creating free subscription for customer")
+
+	freePriceStripeID, err := p.store.GetFreePriceStripeID(ctx)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get free price stripe id", err)
+		return ErrFailedToCreateFreeSubscription
+	}
+
+	params := &stripe.SubscriptionParams{
+		Customer: stripe.String(stripeCustomerID),
+		Items: []*stripe.SubscriptionItemsParams{
+			{
+				Price: stripe.String(freePriceStripeID),
+			},
+		},
+	}
+
+	_, err = subscription.New(params)
+	if err != nil {
+		p.logger.Error(ctx, "failed to create free subscription", err)
+		return ErrFailedToCreateFreeSubscription
+	}
+
+	return nil
 }
 
 func (p *BillingProcessor) CancelSubscription(ctx context.Context, userID uuid.UUID) error {

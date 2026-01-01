@@ -100,3 +100,22 @@ func (s *Store) GetPriceByID(ctx context.Context, priceID string) (Price, error)
 	}
 	return price, nil
 }
+
+const sqlGetFreePriceStripeID = `
+SELECT stripe_id
+FROM prices
+WHERE description = 'free' AND deleted_at IS NULL
+LIMIT 1
+`
+
+func (s *Store) GetFreePriceStripeID(ctx context.Context) (string, error) {
+	var stripeID string
+	err := s.db.GetContext(ctx, &stripeID, sqlGetFreePriceStripeID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("failed to get free price stripe id: %w", err)
+	}
+	return stripeID, nil
+}

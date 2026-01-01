@@ -36,6 +36,7 @@ func TestSignup_Success(t *testing.T) {
 		Return(store.User{ID: userID, FirstName: firstName, LastName: lastName}, nil)
 	mockBilling.EXPECT().CreateStripeCustomer(gomock.Any(), email).Return(stripeCustomerID, nil)
 	mockStore.EXPECT().UpdateStripeCustomerIDByUserID(gomock.Any(), userID, stripeCustomerID).Return(nil)
+	mockBilling.EXPECT().CreateFreeSubscription(gomock.Any(), stripeCustomerID).Return(nil)
 
 	result, err := processor.Signup(ctx, firstName, lastName, email, password)
 
@@ -142,6 +143,68 @@ func TestSignup_StripeCustomerError(t *testing.T) {
 	mockBilling.EXPECT().CreateStripeCustomer(gomock.Any(), email).Return("", errors.New("stripe error"))
 
 	_, err := processor.Signup(ctx, "John", "Doe", email, "password123")
+
+	if !errors.Is(err, ErrFailedSignup) {
+		t.Errorf("expected ErrFailedSignup, got %v", err)
+	}
+}
+
+func TestSignup_UpdateStripeCustomerIDError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockAuthStore(ctrl)
+	mockBilling := NewMockBillingProcessor(ctrl)
+	mockEmail := NewMockEmailService(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, AuthConfig{}, nil, mockBilling, mockEmail, logger)
+
+	ctx := context.Background()
+	email := "test@example.com"
+	userID := uuid.New()
+	stripeCustomerID := "cus_123"
+
+	mockStore.EXPECT().CheckIfEmailExists(gomock.Any(), email).Return(false, nil)
+	mockStore.EXPECT().CreateUserOnEmailSignup(gomock.Any(), gomock.Any(), gomock.Any(), email, gomock.Any()).
+		Return(store.User{ID: userID}, nil)
+	mockBilling.EXPECT().CreateStripeCustomer(gomock.Any(), email).Return(stripeCustomerID, nil)
+	mockStore.EXPECT().UpdateStripeCustomerIDByUserID(gomock.Any(), userID, stripeCustomerID).Return(errors.New("db error"))
+
+	_, err := processor.Signup(ctx, "John", "Doe", email, "password123")
+
+	if !errors.Is(err, ErrFailedSignup) {
+		t.Errorf("expected ErrFailedSignup, got %v", err)
+	}
+}
+
+func TestSignup_CreateFreeSubscriptionError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockStore := NewMockAuthStore(ctrl)
+	mockBilling := NewMockBillingProcessor(ctrl)
+	mockEmail := NewMockEmailService(ctrl)
+	logger := observability.NewLogger()
+
+	processor := New(mockStore, AuthConfig{}, nil, mockBilling, mockEmail, logger)
+
+	ctx := context.Background()
+	email := "test@example.com"
+	firstName := "John"
+	lastName := "Doe"
+	password := "password123"
+	userID := uuid.New()
+	stripeCustomerID := "cus_123"
+
+	mockStore.EXPECT().CheckIfEmailExists(gomock.Any(), email).Return(false, nil)
+	mockStore.EXPECT().CreateUserOnEmailSignup(gomock.Any(), firstName, lastName, email, gomock.Any()).
+		Return(store.User{ID: userID, FirstName: firstName, LastName: lastName}, nil)
+	mockBilling.EXPECT().CreateStripeCustomer(gomock.Any(), email).Return(stripeCustomerID, nil)
+	mockStore.EXPECT().UpdateStripeCustomerIDByUserID(gomock.Any(), userID, stripeCustomerID).Return(nil)
+	mockBilling.EXPECT().CreateFreeSubscription(gomock.Any(), stripeCustomerID).Return(errors.New("free subscription error"))
+
+	_, err := processor.Signup(ctx, firstName, lastName, email, password)
 
 	if !errors.Is(err, ErrFailedSignup) {
 		t.Errorf("expected ErrFailedSignup, got %v", err)
