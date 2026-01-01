@@ -72,6 +72,12 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 		apierrors.Conflict(c, "CAMPAIGN_NOT_ACTIVE", "Campaign is not accepting signups")
 	case errors.Is(err, processor.ErrJSONExportNotAvailable):
 		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "JSON export is not available in your plan")
+	case errors.Is(err, processor.ErrLeadsLimitReached):
+		apierrors.Forbidden(c, "LEADS_LIMIT_REACHED", "You have reached your leads limit. Please upgrade your plan to add more leads.")
+	case errors.Is(err, processor.ErrEmailVerificationNotAvailable):
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Email verification is not available in your plan. Please upgrade to Pro or Team plan.")
+	case errors.Is(err, processor.ErrCustomFieldFilteringUnavailable):
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Custom field filtering requires enhanced lead data feature. Please upgrade to Pro or Team plan.")
 	default:
 		apierrors.InternalError(c, err)
 	}
@@ -594,6 +600,25 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 		return
 	}
 
+	// Verify campaign ownership
+	if err := h.processor.VerifyCampaignOwnership(ctx, accountID, campaignID); err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	// Check leads limit before starting import (per campaign)
+	limitResult, err := h.processor.CheckLeadsLimit(ctx, accountID, campaignID, 0)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	// If at limit, reject the import immediately
+	if limitResult.Limit != nil && limitResult.CanAdd == 0 {
+		apierrors.Forbidden(c, "LEADS_LIMIT_REACHED", "This campaign has reached its leads limit. Please upgrade your plan to add more leads.")
+		return
+	}
+
 	// Parse multipart form
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
@@ -609,12 +634,18 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 	// In production, this would queue a background job
 	jobID := uuid.New()
 
+	// Determine max leads to import based on remaining limit
+	maxToImport := -1 // -1 means unlimited
+	if limitResult.Limit != nil {
+		maxToImport = limitResult.CanAdd
+	}
+
 	// Parse the file based on format (simplified implementation)
 	importedCount := 0
 	if format == "csv" {
-		importedCount, err = h.importFromCSV(ctx, campaignID, file, header)
+		importedCount, err = h.importFromCSV(ctx, campaignID, file, header, maxToImport)
 	} else if format == "json" {
-		importedCount, err = h.importFromJSON(ctx, accountID, campaignID, file)
+		importedCount, err = h.importFromJSON(ctx, accountID, campaignID, file, maxToImport)
 	} else {
 		apierrors.BadRequest(c, "INVALID_FORMAT", "Invalid format, must be csv or json")
 		return
@@ -625,16 +656,22 @@ func (h *Handler) HandleImportUsers(c *gin.Context) {
 		return
 	}
 
+	// Build response message
+	message := fmt.Sprintf("Import completed successfully. Imported %d users.", importedCount)
+	if limitResult.Limit != nil && importedCount < maxToImport {
+		// Only show partial message if we actually hit the limit during import
+	}
+
 	c.JSON(http.StatusAccepted, gin.H{
 		"job_id":         jobID,
-		"message":        fmt.Sprintf("Import completed successfully. Imported %d users.", importedCount),
+		"message":        message,
 		"status":         "completed",
 		"imported_count": importedCount,
 	})
 }
 
 // importFromCSV imports users from CSV file
-func (h *Handler) importFromCSV(ctx context.Context, campaignID uuid.UUID, file multipart.File, header *multipart.FileHeader) (int, error) {
+func (h *Handler) importFromCSV(ctx context.Context, campaignID uuid.UUID, file multipart.File, header *multipart.FileHeader, maxToImport int) (int, error) {
 	reader := csv.NewReader(file)
 
 	// Read header row
@@ -665,6 +702,12 @@ func (h *Handler) importFromCSV(ctx context.Context, campaignID uuid.UUID, file 
 
 	count := 0
 	for {
+		// Check if we've reached the import limit
+		if maxToImport >= 0 && count >= maxToImport {
+			h.logger.Info(ctx, "reached leads import limit")
+			break
+		}
+
 		record, err := reader.Read()
 		if err == io.EOF {
 			break
@@ -723,7 +766,7 @@ func (h *Handler) importFromCSV(ctx context.Context, campaignID uuid.UUID, file 
 }
 
 // importFromJSON imports users from JSON file
-func (h *Handler) importFromJSON(ctx context.Context, accountID, campaignID uuid.UUID, file multipart.File) (int, error) {
+func (h *Handler) importFromJSON(ctx context.Context, accountID, campaignID uuid.UUID, file multipart.File, maxToImport int) (int, error) {
 	var users []SignupRequest
 	decoder := json.NewDecoder(file)
 
@@ -733,6 +776,12 @@ func (h *Handler) importFromJSON(ctx context.Context, accountID, campaignID uuid
 
 	count := 0
 	for _, user := range users {
+		// Check if we've reached the import limit
+		if maxToImport >= 0 && count >= maxToImport {
+			h.logger.Info(ctx, "reached leads import limit")
+			break
+		}
+
 		req := processor.SignupUserRequest{
 			Email:         user.Email,
 			FirstName:     nil,

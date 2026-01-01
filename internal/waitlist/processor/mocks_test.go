@@ -56,6 +56,21 @@ func (mr *MockWaitlistStoreMockRecorder) BulkUpdateWaitlistUserPositions(ctx, us
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BulkUpdateWaitlistUserPositions", reflect.TypeOf((*MockWaitlistStore)(nil).BulkUpdateWaitlistUserPositions), ctx, userIDs, positions)
 }
 
+// CountWaitlistUsersBasic mocks base method.
+func (m *MockWaitlistStore) CountWaitlistUsersBasic(ctx context.Context, params store.BasicListWaitlistUsersParams) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountWaitlistUsersBasic", ctx, params)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountWaitlistUsersBasic indicates an expected call of CountWaitlistUsersBasic.
+func (mr *MockWaitlistStoreMockRecorder) CountWaitlistUsersBasic(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountWaitlistUsersBasic", reflect.TypeOf((*MockWaitlistStore)(nil).CountWaitlistUsersBasic), ctx, params)
+}
+
 // CountWaitlistUsersByCampaign mocks base method.
 func (m *MockWaitlistStore) CountWaitlistUsersByCampaign(ctx context.Context, campaignID uuid.UUID) (int, error) {
 	m.ctrl.T.Helper()
@@ -292,6 +307,21 @@ func (m *MockWaitlistStore) IncrementVerifiedReferralCount(ctx context.Context, 
 func (mr *MockWaitlistStoreMockRecorder) IncrementVerifiedReferralCount(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IncrementVerifiedReferralCount", reflect.TypeOf((*MockWaitlistStore)(nil).IncrementVerifiedReferralCount), ctx, userID)
+}
+
+// ListWaitlistUsersBasic mocks base method.
+func (m *MockWaitlistStore) ListWaitlistUsersBasic(ctx context.Context, params store.BasicListWaitlistUsersParams) ([]store.WaitlistUser, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListWaitlistUsersBasic", ctx, params)
+	ret0, _ := ret[0].([]store.WaitlistUser)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListWaitlistUsersBasic indicates an expected call of ListWaitlistUsersBasic.
+func (mr *MockWaitlistStoreMockRecorder) ListWaitlistUsersBasic(ctx, params any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListWaitlistUsersBasic", reflect.TypeOf((*MockWaitlistStore)(nil).ListWaitlistUsersBasic), ctx, params)
 }
 
 // ListWaitlistUsersWithExtendedFilters mocks base method.

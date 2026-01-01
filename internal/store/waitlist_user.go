@@ -118,8 +118,13 @@ func (s *Store) CreateWaitlistUser(ctx context.Context, params CreateWaitlistUse
 	return user, nil
 }
 
-// waitlistUserColumns contains all columns for SELECT queries
+// waitlistUserColumns contains all columns for SELECT queries (Pro/Team tier)
 const waitlistUserColumns = `id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, country_code, city, device_fingerprint, country, region, region_code, postal_code, user_timezone, latitude, longitude, metro_code, device_type, device_os, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at`
+
+// waitlistUserBasicColumns excludes enhanced lead data fields (Free tier)
+// Excluded: country, region, region_code, postal_code, city, country_code, user_timezone, latitude, longitude, metro_code, device_type, device_os
+// Note: metadata (form answers) is included for all plans
+const waitlistUserBasicColumns = `id, campaign_id, email, first_name, last_name, status, position, original_position, referral_code, referred_by_id, referral_count, verified_referral_count, points, email_verified, verification_token, verification_sent_at, verified_at, source, utm_source, utm_medium, utm_campaign, utm_term, utm_content, ip_address, user_agent, device_fingerprint, metadata, marketing_consent, marketing_consent_at, terms_accepted, terms_accepted_at, last_activity_at, share_count, created_at, updated_at, deleted_at`
 
 const sqlGetWaitlistUserByID = `
 SELECT ` + waitlistUserColumns + `
@@ -841,6 +846,169 @@ func (s *Store) ListWaitlistUsersWithExtendedFilters(ctx context.Context, params
 	}
 
 	return users, nil
+}
+
+// BasicListWaitlistUsersParams represents parameters for basic listing (Free tier)
+// Does not support custom field filtering or enhanced data
+type BasicListWaitlistUsersParams struct {
+	CampaignID   uuid.UUID
+	Statuses     []string
+	Sources      []string
+	HasReferrals *bool
+	MinPosition  *int
+	MaxPosition  *int
+	DateFrom     *time.Time
+	DateTo       *time.Time
+	SortBy       string
+	SortOrder    string
+	Limit        int
+	Offset       int
+}
+
+// ListWaitlistUsersBasic retrieves users without enhanced lead data (Free tier)
+// Does not return: country, region, region_code, postal_code, city, country_code,
+// user_timezone, latitude, longitude, metro_code, device_type, device_os, metadata
+func (s *Store) ListWaitlistUsersBasic(ctx context.Context, params BasicListWaitlistUsersParams) ([]WaitlistUser, error) {
+	query := `SELECT ` + waitlistUserBasicColumns + `
+	FROM waitlist_users
+	WHERE campaign_id = $1 AND deleted_at IS NULL`
+
+	args := []interface{}{params.CampaignID}
+	argCount := 1
+
+	// Add status filter
+	if len(params.Statuses) > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND status = ANY($%d)", argCount)
+		args = append(args, params.Statuses)
+	}
+
+	// Add source filter
+	if len(params.Sources) > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND source = ANY($%d)", argCount)
+		args = append(args, params.Sources)
+	}
+
+	// Add has referrals filter
+	if params.HasReferrals != nil && *params.HasReferrals {
+		query += " AND referral_count > 0"
+	}
+
+	// Add position range filters
+	if params.MinPosition != nil {
+		argCount++
+		query += fmt.Sprintf(" AND position >= $%d", argCount)
+		args = append(args, *params.MinPosition)
+	}
+	if params.MaxPosition != nil {
+		argCount++
+		query += fmt.Sprintf(" AND position <= $%d", argCount)
+		args = append(args, *params.MaxPosition)
+	}
+
+	// Add date range filters
+	if params.DateFrom != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at >= $%d", argCount)
+		args = append(args, *params.DateFrom)
+	}
+	if params.DateTo != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at <= $%d", argCount)
+		args = append(args, *params.DateTo)
+	}
+
+	// Add sorting
+	sortBy := "position"
+	validSortFields := map[string]bool{
+		"position":       true,
+		"created_at":     true,
+		"referral_count": true,
+		"email":          true,
+		"status":         true,
+		"source":         true,
+	}
+	if params.SortBy != "" && validSortFields[params.SortBy] {
+		sortBy = params.SortBy
+	}
+
+	sortOrder := "ASC"
+	if params.SortOrder == "desc" {
+		sortOrder = "DESC"
+	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
+
+	// Add pagination
+	argCount++
+	query += fmt.Sprintf(" LIMIT $%d", argCount)
+	args = append(args, params.Limit)
+
+	argCount++
+	query += fmt.Sprintf(" OFFSET $%d", argCount)
+	args = append(args, params.Offset)
+
+	var users []WaitlistUser
+	err := s.db.SelectContext(ctx, &users, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list waitlist users basic: %w", err)
+	}
+
+	return users, nil
+}
+
+// CountWaitlistUsersBasic counts users for basic listing (Free tier)
+func (s *Store) CountWaitlistUsersBasic(ctx context.Context, params BasicListWaitlistUsersParams) (int, error) {
+	query := `SELECT COUNT(*) FROM waitlist_users WHERE campaign_id = $1 AND deleted_at IS NULL`
+	args := []interface{}{params.CampaignID}
+	argCount := 1
+
+	if len(params.Statuses) > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND status = ANY($%d)", argCount)
+		args = append(args, params.Statuses)
+	}
+
+	if len(params.Sources) > 0 {
+		argCount++
+		query += fmt.Sprintf(" AND source = ANY($%d)", argCount)
+		args = append(args, params.Sources)
+	}
+
+	if params.HasReferrals != nil && *params.HasReferrals {
+		query += " AND referral_count > 0"
+	}
+
+	if params.MinPosition != nil {
+		argCount++
+		query += fmt.Sprintf(" AND position >= $%d", argCount)
+		args = append(args, *params.MinPosition)
+	}
+	if params.MaxPosition != nil {
+		argCount++
+		query += fmt.Sprintf(" AND position <= $%d", argCount)
+		args = append(args, *params.MaxPosition)
+	}
+
+	if params.DateFrom != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at >= $%d", argCount)
+		args = append(args, *params.DateFrom)
+	}
+	if params.DateTo != nil {
+		argCount++
+		query += fmt.Sprintf(" AND created_at <= $%d", argCount)
+		args = append(args, *params.DateTo)
+	}
+
+	var count int
+	err := s.db.GetContext(ctx, &count, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count waitlist users basic: %w", err)
+	}
+
+	return count, nil
 }
 
 // CountWaitlistUsersWithExtendedFilters counts users matching extended filter criteria

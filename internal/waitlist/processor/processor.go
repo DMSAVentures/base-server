@@ -40,9 +40,12 @@ type WaitlistStore interface {
 	// Channel code methods
 	CreateUserChannelCodes(ctx context.Context, userID uuid.UUID, codes map[string]string) ([]store.UserChannelCode, error)
 	GetUserByChannelCode(ctx context.Context, code string) (*store.WaitlistUser, string, error)
-	// Extended filtering methods
+	// Extended filtering methods (Pro/Team tier - includes enhanced lead data)
 	ListWaitlistUsersWithExtendedFilters(ctx context.Context, params store.ExtendedListWaitlistUsersParams) ([]store.WaitlistUser, error)
 	CountWaitlistUsersWithExtendedFilters(ctx context.Context, params store.ExtendedListWaitlistUsersParams) (int, error)
+	// Basic filtering methods (Free tier - excludes enhanced lead data)
+	ListWaitlistUsersBasic(ctx context.Context, params store.BasicListWaitlistUsersParams) ([]store.WaitlistUser, error)
+	CountWaitlistUsersBasic(ctx context.Context, params store.BasicListWaitlistUsersParams) (int, error)
 }
 
 // EventDispatcher defines the event operations required by WaitlistProcessor
@@ -58,20 +61,23 @@ type CaptchaVerifier interface {
 }
 
 var (
-	ErrUserNotFound             = errors.New("user not found")
-	ErrCampaignNotFound         = errors.New("campaign not found")
-	ErrEmailAlreadyExists       = errors.New("email already exists for this campaign")
-	ErrInvalidReferralCode      = errors.New("invalid referral code")
-	ErrInvalidStatus            = errors.New("invalid user status")
-	ErrInvalidSource            = errors.New("invalid user source")
-	ErrUnauthorized             = errors.New("unauthorized access to campaign")
-	ErrInvalidVerificationToken = errors.New("invalid verification token")
-	ErrEmailAlreadyVerified     = errors.New("email already verified")
-	ErrMaxSignupsReached        = errors.New("campaign has reached maximum signups")
-	ErrCaptchaRequired          = errors.New("captcha verification required")
-	ErrCaptchaFailed            = errors.New("captcha verification failed")
-	ErrCampaignNotActive        = errors.New("campaign is not accepting signups")
-	ErrJSONExportNotAvailable   = errors.New("JSON export is not available in your plan")
+	ErrUserNotFound                    = errors.New("user not found")
+	ErrCampaignNotFound                = errors.New("campaign not found")
+	ErrEmailAlreadyExists              = errors.New("email already exists for this campaign")
+	ErrInvalidReferralCode             = errors.New("invalid referral code")
+	ErrInvalidStatus                   = errors.New("invalid user status")
+	ErrInvalidSource                   = errors.New("invalid user source")
+	ErrUnauthorized                    = errors.New("unauthorized access to campaign")
+	ErrInvalidVerificationToken        = errors.New("invalid verification token")
+	ErrEmailAlreadyVerified            = errors.New("email already verified")
+	ErrMaxSignupsReached               = errors.New("campaign has reached maximum signups")
+	ErrCaptchaRequired                 = errors.New("captcha verification required")
+	ErrCaptchaFailed                   = errors.New("captcha verification failed")
+	ErrCampaignNotActive               = errors.New("campaign is not accepting signups")
+	ErrJSONExportNotAvailable          = errors.New("JSON export is not available in your plan")
+	ErrLeadsLimitReached               = errors.New("leads limit reached for your plan")
+	ErrEmailVerificationNotAvailable   = errors.New("email verification is not available in your plan")
+	ErrCustomFieldFilteringUnavailable = errors.New("custom field filtering requires enhanced lead data feature")
 )
 
 type WaitlistProcessor struct {
@@ -390,7 +396,10 @@ type ListUsersResponse struct {
 	TotalPages int                  `json:"total_pages"`
 }
 
-// ListUsers retrieves waitlist users with extended filters and pagination
+// ListUsers retrieves waitlist users with filters and pagination
+// Uses different store methods based on plan:
+// - Free tier: ListWaitlistUsersBasic (excludes enhanced lead data)
+// - Pro/Team tier: ListWaitlistUsersWithExtendedFilters (includes enhanced lead data)
 func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID uuid.UUID, req ListUsersRequest) (ListUsersResponse, error) {
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "account_id", Value: accountID.String()},
@@ -400,6 +409,18 @@ func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID
 	// Verify campaign belongs to account
 	if err := p.verifyCampaignAccess(ctx, accountID, campaignID); err != nil {
 		return ListUsersResponse{}, err
+	}
+
+	// Check if account has enhanced_lead_data feature
+	hasEnhancedData, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "enhanced_lead_data")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check enhanced_lead_data feature", err)
+		return ListUsersResponse{}, err
+	}
+
+	// Gate custom field filtering - requires enhanced_lead_data feature
+	if len(req.CustomFields) > 0 && !hasEnhancedData {
+		return ListUsersResponse{}, ErrCustomFieldFilteringUnavailable
 	}
 
 	// Validate and set defaults
@@ -463,38 +484,71 @@ func (p *WaitlistProcessor) ListUsers(ctx context.Context, accountID, campaignID
 		}
 	}
 
-	params := store.ExtendedListWaitlistUsersParams{
-		CampaignID:   campaignID,
-		Statuses:     req.Statuses,
-		Sources:      req.Sources,
-		HasReferrals: req.HasReferrals,
-		MinPosition:  req.MinPosition,
-		MaxPosition:  req.MaxPosition,
-		DateFrom:     dateFrom,
-		DateTo:       dateTo,
-		CustomFields: req.CustomFields,
-		SortBy:       req.SortBy,
-		SortOrder:    req.SortOrder,
-		Limit:        req.Limit,
-		Offset:       offset,
-	}
+	var users []store.WaitlistUser
+	var totalCount int
 
-	users, err := p.store.ListWaitlistUsersWithExtendedFilters(ctx, params)
-	if err != nil {
-		p.logger.Error(ctx, "failed to list users", err)
-		return ListUsersResponse{}, err
+	if hasEnhancedData {
+		// Pro/Team tier: Use extended method with all data
+		params := store.ExtendedListWaitlistUsersParams{
+			CampaignID:   campaignID,
+			Statuses:     req.Statuses,
+			Sources:      req.Sources,
+			HasReferrals: req.HasReferrals,
+			MinPosition:  req.MinPosition,
+			MaxPosition:  req.MaxPosition,
+			DateFrom:     dateFrom,
+			DateTo:       dateTo,
+			CustomFields: req.CustomFields,
+			SortBy:       req.SortBy,
+			SortOrder:    req.SortOrder,
+			Limit:        req.Limit,
+			Offset:       offset,
+		}
+
+		users, err = p.store.ListWaitlistUsersWithExtendedFilters(ctx, params)
+		if err != nil {
+			p.logger.Error(ctx, "failed to list users with extended filters", err)
+			return ListUsersResponse{}, err
+		}
+
+		totalCount, err = p.store.CountWaitlistUsersWithExtendedFilters(ctx, params)
+		if err != nil {
+			p.logger.Error(ctx, "failed to count users with extended filters", err)
+			return ListUsersResponse{}, err
+		}
+	} else {
+		// Free tier: Use basic method without enhanced data
+		params := store.BasicListWaitlistUsersParams{
+			CampaignID:   campaignID,
+			Statuses:     req.Statuses,
+			Sources:      req.Sources,
+			HasReferrals: req.HasReferrals,
+			MinPosition:  req.MinPosition,
+			MaxPosition:  req.MaxPosition,
+			DateFrom:     dateFrom,
+			DateTo:       dateTo,
+			SortBy:       req.SortBy,
+			SortOrder:    req.SortOrder,
+			Limit:        req.Limit,
+			Offset:       offset,
+		}
+
+		users, err = p.store.ListWaitlistUsersBasic(ctx, params)
+		if err != nil {
+			p.logger.Error(ctx, "failed to list users basic", err)
+			return ListUsersResponse{}, err
+		}
+
+		totalCount, err = p.store.CountWaitlistUsersBasic(ctx, params)
+		if err != nil {
+			p.logger.Error(ctx, "failed to count users basic", err)
+			return ListUsersResponse{}, err
+		}
 	}
 
 	// Ensure users is never null - return empty array instead
 	if users == nil {
 		users = []store.WaitlistUser{}
-	}
-
-	// Get total count with same filters
-	totalCount, err := p.store.CountWaitlistUsersWithExtendedFilters(ctx, params)
-	if err != nil {
-		p.logger.Error(ctx, "failed to count users", err)
-		return ListUsersResponse{}, err
 	}
 
 	totalPages := (totalCount + req.Limit - 1) / req.Limit
@@ -553,6 +607,18 @@ func (p *WaitlistProcessor) GetUser(ctx context.Context, accountID, campaignID, 
 	// Verify user belongs to campaign
 	if user.CampaignID != campaignID {
 		return store.WaitlistUser{}, ErrUserNotFound
+	}
+
+	// Check if account has enhanced_lead_data feature
+	hasEnhancedData, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "enhanced_lead_data")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check enhanced_lead_data feature", err)
+		return store.WaitlistUser{}, err
+	}
+
+	// Strip enhanced lead data if feature not available
+	if !hasEnhancedData {
+		user = StripEnhancedLeadData(user)
 	}
 
 	return user, nil
@@ -688,6 +754,13 @@ func (p *WaitlistProcessor) SearchUsers(ctx context.Context, accountID, campaign
 		return ListUsersResponse{}, err
 	}
 
+	// Check if account has enhanced_lead_data feature
+	hasEnhancedData, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "enhanced_lead_data")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check enhanced_lead_data feature", err)
+		return ListUsersResponse{}, err
+	}
+
 	// Validate and set defaults
 	if req.Page < 1 {
 		req.Page = 1
@@ -735,6 +808,11 @@ func (p *WaitlistProcessor) SearchUsers(ctx context.Context, accountID, campaign
 		totalCount = req.Page * req.Limit // Estimate
 	}
 
+	// Strip enhanced lead data if feature not available
+	if !hasEnhancedData {
+		users = StripEnhancedLeadDataFromSlice(users)
+	}
+
 	return ListUsersResponse{
 		Users:      users,
 		TotalCount: totalCount,
@@ -757,6 +835,67 @@ func (p *WaitlistProcessor) CheckJSONExportFeature(ctx context.Context, accountI
 	return nil
 }
 
+// CheckLeadsLimitResult contains information about the leads limit check
+type CheckLeadsLimitResult struct {
+	CurrentCount int
+	Limit        *int // nil means unlimited
+	CanAdd       int  // how many leads can be added (0 if at limit, -1 if unlimited)
+}
+
+// CheckLeadsLimit checks if a campaign can add more leads based on the account's tier limit
+// The leads limit is per campaign, not per account
+func (p *WaitlistProcessor) CheckLeadsLimit(ctx context.Context, accountID, campaignID uuid.UUID, countToAdd int) (CheckLeadsLimitResult, error) {
+	ctx = observability.WithFields(ctx,
+		observability.Field{Key: "account_id", Value: accountID.String()},
+		observability.Field{Key: "campaign_id", Value: campaignID.String()},
+		observability.Field{Key: "count_to_add", Value: countToAdd},
+	)
+
+	// Get current leads count for the campaign
+	currentCount, err := p.store.CountWaitlistUsersByCampaign(ctx, campaignID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to count leads by campaign", err)
+		return CheckLeadsLimitResult{}, err
+	}
+
+	// Get leads limit for the account (applies per campaign)
+	leadsLimit, err := p.tierService.GetLimitByAccountID(ctx, accountID, "leads")
+	if err != nil {
+		p.logger.Error(ctx, "failed to get leads limit", err)
+		return CheckLeadsLimitResult{}, err
+	}
+
+	result := CheckLeadsLimitResult{
+		CurrentCount: currentCount,
+		Limit:        leadsLimit,
+	}
+
+	// If limit is nil (unlimited), they can add any amount
+	if leadsLimit == nil {
+		result.CanAdd = -1 // -1 means unlimited
+		return result, nil
+	}
+
+	// Calculate how many more leads can be added
+	remaining := *leadsLimit - currentCount
+	if remaining < 0 {
+		remaining = 0
+	}
+	result.CanAdd = remaining
+
+	// Check if adding the requested count would exceed the limit
+	if countToAdd > 0 && currentCount+countToAdd > *leadsLimit {
+		ctx = observability.WithFields(ctx,
+			observability.Field{Key: "current_count", Value: currentCount},
+			observability.Field{Key: "limit", Value: *leadsLimit},
+		)
+		p.logger.Warn(ctx, "leads limit would be exceeded")
+		return result, ErrLeadsLimitReached
+	}
+
+	return result, nil
+}
+
 // VerifyUser manually verifies a user's email
 func (p *WaitlistProcessor) VerifyUser(ctx context.Context, accountID, campaignID, userID uuid.UUID) error {
 	ctx = observability.WithFields(ctx,
@@ -764,6 +903,16 @@ func (p *WaitlistProcessor) VerifyUser(ctx context.Context, accountID, campaignI
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "user_id", Value: userID.String()},
 	)
+
+	// Check if account has email_verification feature
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "email_verification")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check email_verification feature", err)
+		return err
+	}
+	if !hasFeature {
+		return ErrEmailVerificationNotAvailable
+	}
 
 	// Verify campaign belongs to account
 	if err := p.verifyCampaignAccess(ctx, accountID, campaignID); err != nil {
@@ -817,6 +966,16 @@ func (p *WaitlistProcessor) ResendVerificationToken(ctx context.Context, account
 		observability.Field{Key: "user_id", Value: userID.String()},
 	)
 
+	// Check if account has email_verification feature
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "email_verification")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check email_verification feature", err)
+		return "", err
+	}
+	if !hasFeature {
+		return "", ErrEmailVerificationNotAvailable
+	}
+
 	// Verify campaign belongs to account
 	if err := p.verifyCampaignAccess(ctx, accountID, campaignID); err != nil {
 		return "", err
@@ -858,6 +1017,37 @@ func (p *WaitlistProcessor) ResendVerificationToken(ctx context.Context, account
 
 	p.logger.Info(ctx, "verification token updated successfully")
 	return token, nil
+}
+
+// StripEnhancedLeadData removes enhanced lead data fields from a user
+// This is called when the account doesn't have the enhanced_lead_data feature
+// Note: metadata (form answers) is NOT stripped - it's available to all plans
+func StripEnhancedLeadData(user store.WaitlistUser) store.WaitlistUser {
+	// Geographic data
+	user.Country = nil
+	user.Region = nil
+	user.RegionCode = nil
+	user.PostalCode = nil
+	user.City = nil
+	user.CountryCode = nil
+	user.UserTimezone = nil
+	user.Latitude = nil
+	user.Longitude = nil
+	user.MetroCode = nil
+
+	// Device data
+	user.DeviceType = nil
+	user.DeviceOS = nil
+
+	return user
+}
+
+// StripEnhancedLeadDataFromSlice strips enhanced data from a slice of users
+func StripEnhancedLeadDataFromSlice(users []store.WaitlistUser) []store.WaitlistUser {
+	for i := range users {
+		users[i] = StripEnhancedLeadData(users[i])
+	}
+	return users
 }
 
 // Helper functions

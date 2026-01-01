@@ -202,7 +202,7 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	deps.AnalyticsHandler = analyticsHandler.New(analyticsProc, logger)
 
 	// Initialize referral processor and handler
-	referralProc := referralProcessor.New(&deps.Store, logger)
+	referralProc := referralProcessor.New(&deps.Store, tierService, logger)
 	deps.ReferralHandler = referralHandler.New(referralProc, logger, cfg.Services.WebAppURI)
 
 	// Initialize rewards processor and handler
@@ -210,7 +210,7 @@ func Initialize(ctx context.Context, cfg *config.Config, logger *observability.L
 	deps.RewardHandler = rewardHandler.New(rewardProc, logger)
 
 	// Initialize campaign email template processor and handler
-	campaignEmailTemplateProc := campaignemailsProcessor.New(&deps.Store, emailService, logger)
+	campaignEmailTemplateProc := campaignemailsProcessor.New(&deps.Store, emailService, tierService, logger)
 	deps.CampaignEmailTemplateHandler = campaignemailsHandler.New(campaignEmailTemplateProc, logger)
 
 	// Initialize blast email template processor and handler

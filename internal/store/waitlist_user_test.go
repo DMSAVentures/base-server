@@ -1044,3 +1044,346 @@ func boolPtr(b bool) *bool {
 func intPtr(i int) *int {
 	return &i
 }
+
+func TestStore_ListWaitlistUsersBasic(t *testing.T) {
+	t.Parallel()
+	testDB := SetupTestDB(t, TestDBTypePostgres)
+
+	ctx := context.Background()
+	account := createTestAccount(t, testDB)
+	campaign := createTestCampaign(t, testDB, account.ID, "Basic List Test-"+uuid.New().String(), "basic-list-test-"+uuid.New().String())
+
+	// Create users with enhanced data fields
+	user1, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
+		CampaignID:       campaign.ID,
+		Email:            uuid.New().String() + "@example.com",
+		ReferralCode:     "BREF1-" + uuid.New().String(),
+		Position:         1,
+		OriginalPosition: 1,
+		Source:           stringPtr("direct"),
+		Country:          stringPtr("United States"),
+		Region:           stringPtr("California"),
+		City:             stringPtr("San Francisco"),
+		DeviceType:       stringPtr("desktop"),
+		DeviceOS:         stringPtr("ios"),
+		Metadata: JSONB{
+			"company": "Acme",
+			"role":    "Developer",
+		},
+		TermsAccepted: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create user1: %v", err)
+	}
+
+	user2, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
+		CampaignID:       campaign.ID,
+		Email:            uuid.New().String() + "@example.com",
+		ReferralCode:     "BREF2-" + uuid.New().String(),
+		Position:         2,
+		OriginalPosition: 2,
+		Source:           stringPtr("referral"),
+		Country:          stringPtr("Canada"),
+		Region:           stringPtr("Ontario"),
+		City:             stringPtr("Toronto"),
+		DeviceType:       stringPtr("mobile"),
+		DeviceOS:         stringPtr("ios"),
+		Metadata: JSONB{
+			"company": "Beta",
+		},
+		TermsAccepted: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create user2: %v", err)
+	}
+
+	tests := []struct {
+		name          string
+		params        BasicListWaitlistUsersParams
+		expectedCount int
+		expectedIDs   []uuid.UUID
+	}{
+		{
+			name: "list all users",
+			params: BasicListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Limit:      10,
+				Offset:     0,
+			},
+			expectedCount: 2,
+			expectedIDs:   []uuid.UUID{user1.ID, user2.ID},
+		},
+		{
+			name: "filter by source direct",
+			params: BasicListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Sources:    []string{"direct"},
+				Limit:      10,
+				Offset:     0,
+			},
+			expectedCount: 1,
+			expectedIDs:   []uuid.UUID{user1.ID},
+		},
+		{
+			name: "filter by source referral",
+			params: BasicListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Sources:    []string{"referral"},
+				Limit:      10,
+				Offset:     0,
+			},
+			expectedCount: 1,
+			expectedIDs:   []uuid.UUID{user2.ID},
+		},
+		{
+			name: "pagination - page 1",
+			params: BasicListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Limit:      1,
+				Offset:     0,
+				SortBy:     "position",
+				SortOrder:  "asc",
+			},
+			expectedCount: 1,
+			expectedIDs:   []uuid.UUID{user1.ID},
+		},
+		{
+			name: "pagination - page 2",
+			params: BasicListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Limit:      1,
+				Offset:     1,
+				SortBy:     "position",
+				SortOrder:  "asc",
+			},
+			expectedCount: 1,
+			expectedIDs:   []uuid.UUID{user2.ID},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			users, err := testDB.Store.ListWaitlistUsersBasic(ctx, tt.params)
+			if err != nil {
+				t.Fatalf("ListWaitlistUsersBasic() error = %v", err)
+			}
+
+			if len(users) != tt.expectedCount {
+				t.Errorf("got %d users, want %d", len(users), tt.expectedCount)
+			}
+
+			// Verify expected user IDs are in the result
+			for i, expectedID := range tt.expectedIDs {
+				if i < len(users) && users[i].ID != expectedID {
+					t.Errorf("user[%d] ID = %v, want %v", i, users[i].ID, expectedID)
+				}
+			}
+		})
+	}
+}
+
+func TestStore_ListWaitlistUsersBasic_ExcludesEnhancedData(t *testing.T) {
+	t.Parallel()
+	testDB := SetupTestDB(t, TestDBTypePostgres)
+
+	ctx := context.Background()
+	account := createTestAccount(t, testDB)
+	campaign := createTestCampaign(t, testDB, account.ID, "Basic Exclude Test-"+uuid.New().String(), "basic-exclude-test-"+uuid.New().String())
+
+	// Create user with all enhanced data fields populated
+	_, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
+		CampaignID:       campaign.ID,
+		Email:            uuid.New().String() + "@example.com",
+		ReferralCode:     "EXCL-" + uuid.New().String(),
+		Position:         1,
+		OriginalPosition: 1,
+		Source:           stringPtr("direct"),
+		// Enhanced geographic data
+		Country:      stringPtr("United States"),
+		Region:       stringPtr("California"),
+		RegionCode:   stringPtr("CA"),
+		City:         stringPtr("San Francisco"),
+		CountryCode:  stringPtr("US"),
+		PostalCode:   stringPtr("94102"),
+		UserTimezone: stringPtr("America/Los_Angeles"),
+		Latitude:     float64Ptr(37.7749),
+		Longitude:    float64Ptr(-122.4194),
+		MetroCode:    stringPtr("807"),
+		// Enhanced device data
+		DeviceType: stringPtr("desktop"),
+		DeviceOS:   stringPtr("ios"),
+		// Metadata (should still be included)
+		Metadata: JSONB{
+			"company": "TestCo",
+			"role":    "Engineer",
+		},
+		TermsAccepted: true,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create user: %v", err)
+	}
+
+	// Fetch using basic method
+	users, err := testDB.Store.ListWaitlistUsersBasic(ctx, BasicListWaitlistUsersParams{
+		CampaignID: campaign.ID,
+		Limit:      10,
+		Offset:     0,
+	})
+	if err != nil {
+		t.Fatalf("ListWaitlistUsersBasic() error = %v", err)
+	}
+
+	if len(users) != 1 {
+		t.Fatalf("expected 1 user, got %d", len(users))
+	}
+
+	user := users[0]
+
+	// Verify enhanced geographic data is NOT included (nil/zero values)
+	if user.Country != nil {
+		t.Errorf("Country should be nil, got %v", *user.Country)
+	}
+	if user.Region != nil {
+		t.Errorf("Region should be nil, got %v", *user.Region)
+	}
+	if user.RegionCode != nil {
+		t.Errorf("RegionCode should be nil, got %v", *user.RegionCode)
+	}
+	if user.City != nil {
+		t.Errorf("City should be nil, got %v", *user.City)
+	}
+	if user.CountryCode != nil {
+		t.Errorf("CountryCode should be nil, got %v", *user.CountryCode)
+	}
+	if user.PostalCode != nil {
+		t.Errorf("PostalCode should be nil, got %v", *user.PostalCode)
+	}
+	if user.UserTimezone != nil {
+		t.Errorf("UserTimezone should be nil, got %v", *user.UserTimezone)
+	}
+	if user.Latitude != nil {
+		t.Errorf("Latitude should be nil, got %v", *user.Latitude)
+	}
+	if user.Longitude != nil {
+		t.Errorf("Longitude should be nil, got %v", *user.Longitude)
+	}
+	if user.MetroCode != nil {
+		t.Errorf("MetroCode should be nil, got %v", *user.MetroCode)
+	}
+
+	// Verify enhanced device data is NOT included
+	if user.DeviceType != nil {
+		t.Errorf("DeviceType should be nil, got %v", *user.DeviceType)
+	}
+	if user.DeviceOS != nil {
+		t.Errorf("DeviceOS should be nil, got %v", *user.DeviceOS)
+	}
+
+	// Verify metadata (form answers) IS included
+	if user.Metadata == nil {
+		t.Error("Metadata should be included, got nil")
+	} else {
+		if user.Metadata["company"] != "TestCo" {
+			t.Errorf("Metadata[company] = %v, want TestCo", user.Metadata["company"])
+		}
+		if user.Metadata["role"] != "Engineer" {
+			t.Errorf("Metadata[role] = %v, want Engineer", user.Metadata["role"])
+		}
+	}
+
+	// Verify basic fields are still included
+	if user.Email == "" {
+		t.Error("Email should be included")
+	}
+	if user.Position != 1 {
+		t.Errorf("Position = %d, want 1", user.Position)
+	}
+	if user.Source == nil || *user.Source != "direct" {
+		t.Errorf("Source = %v, want direct", user.Source)
+	}
+}
+
+func TestStore_CountWaitlistUsersBasic(t *testing.T) {
+	t.Parallel()
+	testDB := SetupTestDB(t, TestDBTypePostgres)
+
+	ctx := context.Background()
+	account := createTestAccount(t, testDB)
+	campaign := createTestCampaign(t, testDB, account.ID, "Basic Count Test-"+uuid.New().String(), "basic-count-test-"+uuid.New().String())
+
+	// Create 3 users with different attributes
+	for i := 0; i < 3; i++ {
+		source := "direct"
+		if i%2 == 0 {
+			source = "referral"
+		}
+		_, err := testDB.Store.CreateWaitlistUser(ctx, CreateWaitlistUserParams{
+			CampaignID:       campaign.ID,
+			Email:            uuid.New().String() + "@example.com",
+			ReferralCode:     "BCNT-" + uuid.New().String(),
+			Position:         i + 1,
+			OriginalPosition: i + 1,
+			Source:           stringPtr(source),
+			TermsAccepted:    true,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create user %d: %v", i, err)
+		}
+	}
+
+	tests := []struct {
+		name          string
+		params        BasicListWaitlistUsersParams
+		expectedCount int
+	}{
+		{
+			name: "count all users",
+			params: BasicListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+			},
+			expectedCount: 3,
+		},
+		{
+			name: "count by source direct",
+			params: BasicListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Sources:    []string{"direct"},
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "count by source referral",
+			params: BasicListWaitlistUsersParams{
+				CampaignID: campaign.ID,
+				Sources:    []string{"referral"},
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "count by position range",
+			params: BasicListWaitlistUsersParams{
+				CampaignID:  campaign.ID,
+				MinPosition: intPtr(1),
+				MaxPosition: intPtr(2),
+			},
+			expectedCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := testDB.Store.CountWaitlistUsersBasic(ctx, tt.params)
+			if err != nil {
+				t.Fatalf("CountWaitlistUsersBasic() error = %v", err)
+			}
+
+			if count != tt.expectedCount {
+				t.Errorf("got count %d, want %d", count, tt.expectedCount)
+			}
+		})
+	}
+}
+
+func float64Ptr(f float64) *float64 {
+	return &f
+}
