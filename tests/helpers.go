@@ -49,6 +49,13 @@ var (
 	logger  *observability.Logger
 )
 
+// Shared test store - initialized once and reused across all tests
+var (
+	sharedTestStore     store.Store
+	sharedTestStoreOnce sync.Once
+	sharedTestStoreErr  error
+)
+
 // getTierConfigs returns the configuration for all tiers
 func getTierConfigs() map[string]TierConfig {
 	// Free tier limits
@@ -204,22 +211,31 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-// setupTestStore creates a connection to the test database
+// getSharedTestStore returns a shared database connection for all tests.
+// This prevents "too many connections" errors by reusing a single connection pool.
+func getSharedTestStore() (store.Store, error) {
+	sharedTestStoreOnce.Do(func() {
+		dbHost := getEnv("TEST_DB_HOST", "localhost")
+		dbPort := getEnv("TEST_DB_PORT", "5432")
+		dbUser := getEnv("TEST_DB_USER", "postgres")
+		dbPass := getEnv("TEST_DB_PASS", "password123")
+		dbName := getEnv("TEST_DB_NAME", "base_server_test")
+
+		connectionString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+			dbUser, dbPass, dbHost, dbPort, dbName)
+
+		sharedTestStore, sharedTestStoreErr = store.New(connectionString, logger)
+	})
+	return sharedTestStore, sharedTestStoreErr
+}
+
+// setupTestStore returns the shared test database connection.
+// Uses a single connection pool across all tests to prevent connection exhaustion.
 func setupTestStore(t *testing.T) store.Store {
-	dbHost := getEnv("TEST_DB_HOST", "localhost")
-	dbPort := getEnv("TEST_DB_PORT", "5432")
-	dbUser := getEnv("TEST_DB_USER", "postgres")
-	dbPass := getEnv("TEST_DB_PASS", "password123")
-	dbName := getEnv("TEST_DB_NAME", "base_server_test")
-
-	connectionString := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		dbUser, dbPass, dbHost, dbPort, dbName)
-
-	testStore, err := store.New(connectionString, logger)
+	testStore, err := getSharedTestStore()
 	if err != nil {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}
-
 	return testStore
 }
 
@@ -405,27 +421,12 @@ func createTestUserDirectly(t *testing.T, firstName, lastName, email, password s
 	return user.ID.String(), accID.String()
 }
 
-// createAuthenticatedTestUser creates a test user in the database and returns a valid JWT token
+// createAuthenticatedTestUser creates a test user with TeamTier subscription (default).
+// TeamTier is used by default because it has all features enabled, which is appropriate
+// for most tests. Use createAuthenticatedTestUserWithFreeTier or createAuthenticatedTestUserWithProTier
+// when testing tier-specific feature restrictions.
 func createAuthenticatedTestUser(t *testing.T) string {
-	email := generateTestEmail()
-	password := "testpassword123"
-
-	// Create user directly in database
-	createTestUserDirectly(t, "Test", "User", email, password)
-
-	// Login via API to get token
-	loginReq := map[string]interface{}{
-		"email":    email,
-		"password": password,
-	}
-	loginResp, loginBody := makeRequest(t, http.MethodPost, "/api/auth/login/email", loginReq, nil)
-	if loginResp.StatusCode != http.StatusOK {
-		t.Fatalf("Failed to login test user: %s", string(loginBody))
-	}
-
-	var loginRespData map[string]interface{}
-	parseJSONResponse(t, loginBody, &loginRespData)
-	return loginRespData["token"].(string)
+	return createAuthenticatedTestUserWithTier(t, "team")
 }
 
 // createAuthenticatedTestUserWithTier creates a test user with a specific tier subscription

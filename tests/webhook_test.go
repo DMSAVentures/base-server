@@ -15,7 +15,7 @@ func TestAPI_Webhook_Create(t *testing.T) {
 
 	// Test feature gating with free tier user
 	t.Run("feature gating for free tier", func(t *testing.T) {
-		token := createAuthenticatedUser(t)
+		token := createAuthenticatedTestUserWithFreeTier(t)
 
 		// Create a campaign for testing webhook with campaign_id
 		campaignReq := map[string]interface{}{
