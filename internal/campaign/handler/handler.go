@@ -420,6 +420,10 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 		apierrors.Forbidden(c, "FORBIDDEN", "You do not have access to this campaign")
 	case errors.Is(err, processor.ErrCampaignLimitReached):
 		apierrors.Forbidden(c, "CAMPAIGN_LIMIT_REACHED", "You have reached your campaign limit. Please upgrade your plan to create more campaigns.")
+	case errors.Is(err, processor.ErrTrackingPixelsNotAvailable):
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Tracking pixels feature is not available in your plan. Please upgrade to Team plan.")
+	case errors.Is(err, processor.ErrAntiSpamNotAvailable):
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Anti-spam protection is not available in your plan. Please upgrade to Pro or Team plan.")
 	default:
 		apierrors.InternalError(c, err)
 	}

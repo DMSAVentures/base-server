@@ -56,12 +56,14 @@ type CampaignStore interface {
 }
 
 var (
-	ErrCampaignNotFound      = errors.New("campaign not found")
-	ErrSlugAlreadyExists     = errors.New("slug already exists")
-	ErrInvalidCampaignStatus = errors.New("invalid campaign status")
-	ErrInvalidCampaignType   = errors.New("invalid campaign type")
-	ErrUnauthorized          = errors.New("unauthorized access to campaign")
-	ErrCampaignLimitReached  = errors.New("campaign limit reached for your plan")
+	ErrCampaignNotFound              = errors.New("campaign not found")
+	ErrSlugAlreadyExists             = errors.New("slug already exists")
+	ErrInvalidCampaignStatus         = errors.New("invalid campaign status")
+	ErrInvalidCampaignType           = errors.New("invalid campaign type")
+	ErrUnauthorized                  = errors.New("unauthorized access to campaign")
+	ErrCampaignLimitReached          = errors.New("campaign limit reached for your plan")
+	ErrTrackingPixelsNotAvailable    = errors.New("tracking pixels feature is not available in your plan")
+	ErrAntiSpamNotAvailable          = errors.New("anti-spam protection is not available in your plan")
 )
 
 type CampaignProcessor struct {
@@ -230,7 +232,7 @@ func (p *CampaignProcessor) CreateCampaign(ctx context.Context, accountID uuid.U
 	}
 
 	// Upsert settings
-	if err := p.upsertCampaignSettings(ctx, campaign.ID, params.Settings); err != nil {
+	if err := p.upsertCampaignSettings(ctx, accountID, campaign.ID, params.Settings); err != nil {
 		p.logger.Error(ctx, "failed to create campaign settings", err)
 		return store.Campaign{}, err
 	}
@@ -247,7 +249,31 @@ func (p *CampaignProcessor) CreateCampaign(ctx context.Context, accountID uuid.U
 }
 
 // upsertCampaignSettings creates or updates all settings for a campaign
-func (p *CampaignProcessor) upsertCampaignSettings(ctx context.Context, campaignID uuid.UUID, settings CampaignSettingsParams) error {
+func (p *CampaignProcessor) upsertCampaignSettings(ctx context.Context, accountID, campaignID uuid.UUID, settings CampaignSettingsParams) error {
+	// Check tracking_pixels feature if tracking integrations are being added
+	if len(settings.TrackingIntegrations) > 0 {
+		hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "tracking_pixels")
+		if err != nil {
+			p.logger.Error(ctx, "failed to check tracking_pixels feature", err)
+			return err
+		}
+		if !hasFeature {
+			return ErrTrackingPixelsNotAvailable
+		}
+	}
+
+	// Check anti_spam_protection feature if captcha is being enabled
+	if settings.FormSettings != nil && settings.FormSettings.CaptchaEnabled {
+		hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "anti_spam_protection")
+		if err != nil {
+			p.logger.Error(ctx, "failed to check anti_spam_protection feature", err)
+			return err
+		}
+		if !hasFeature {
+			return ErrAntiSpamNotAvailable
+		}
+	}
+
 	// Upsert email settings
 	if settings.EmailSettings != nil {
 		_, err := p.store.UpsertCampaignEmailSettings(ctx, store.CreateCampaignEmailSettingsParams{
@@ -508,7 +534,7 @@ func (p *CampaignProcessor) UpdateCampaign(ctx context.Context, accountID, campa
 	}
 
 	// Upsert settings
-	if err := p.upsertCampaignSettings(ctx, campaignID, params.Settings); err != nil {
+	if err := p.upsertCampaignSettings(ctx, accountID, campaignID, params.Settings); err != nil {
 		p.logger.Error(ctx, "failed to update campaign settings", err)
 		return store.Campaign{}, err
 	}
