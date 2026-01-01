@@ -14,7 +14,10 @@
       "Bash(export TEST_DB_USER=base_user:*)",
       "Bash(export TEST_DB_PASS=base_password)",
       "Bash(export TEST_DB_NAME=base_db)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "WebSearch",
+      "WebFetch(domain:docs.anthropic.com)"
     ],
     "deny": [],
     "ask": []
