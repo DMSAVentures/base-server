@@ -148,7 +148,7 @@ func (h *Handler) HandleListCampaignEmailTemplates(c *gin.Context) {
 	c.JSON(http.StatusOK, templates)
 }
 
-// HandleListAllCampaignEmailTemplates handles GET /api/v1/email-templates
+// HandleListAllCampaignEmailTemplates handles GET /api/v1/campaign-email-templates
 func (h *Handler) HandleListAllCampaignEmailTemplates(c *gin.Context) {
 	ctx := c.Request.Context()
 
