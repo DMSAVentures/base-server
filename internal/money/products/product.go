@@ -66,7 +66,7 @@ func (p *ProductService) CreatePrice(ctx context.Context, priceCreated stripe.Pr
 	price := store.Price{
 		ProductID:   productInDB.ID,
 		StripeID:    priceCreated.ID,
-		Description: priceCreated.Nickname,
+		Description: priceCreated.LookupKey,
 	}
 
 	if err := p.store.CreatePrice(ctx, price); err != nil {
