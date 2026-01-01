@@ -38,6 +38,8 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 		apierrors.BadRequest(c, "INVALID_INPUT", "Invalid template content")
 	case errors.Is(err, processor.ErrTestEmailFailed):
 		apierrors.BadRequest(c, "EMAIL_SEND_FAILED", "Failed to send test email")
+	case errors.Is(err, processor.ErrVisualEmailBuilderNotAvailable):
+		apierrors.Forbidden(c, "FEATURE_NOT_AVAILABLE", "Visual email builder is not available in your plan. Please upgrade to Pro or Team plan.")
 	default:
 		apierrors.InternalError(c, err)
 	}

@@ -5,6 +5,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"bytes"
 	"context"
 	"errors"
@@ -31,24 +32,27 @@ type EmailService interface {
 }
 
 var (
-	ErrCampaignEmailTemplateNotFound = errors.New("campaign email template not found")
-	ErrCampaignNotFound              = errors.New("campaign not found")
-	ErrUnauthorized                  = errors.New("unauthorized access to template")
-	ErrInvalidTemplateType           = errors.New("invalid template type")
-	ErrInvalidTemplateContent        = errors.New("invalid template content")
-	ErrTestEmailFailed               = errors.New("failed to send test email")
+	ErrCampaignEmailTemplateNotFound   = errors.New("campaign email template not found")
+	ErrCampaignNotFound                = errors.New("campaign not found")
+	ErrUnauthorized                    = errors.New("unauthorized access to template")
+	ErrInvalidTemplateType             = errors.New("invalid template type")
+	ErrInvalidTemplateContent          = errors.New("invalid template content")
+	ErrTestEmailFailed                 = errors.New("failed to send test email")
+	ErrVisualEmailBuilderNotAvailable  = errors.New("visual email builder is not available in your plan")
 )
 
 type CampaignEmailTemplateProcessor struct {
 	store        CampaignEmailTemplateStore
 	emailService EmailService
+	tierService  *tiers.TierService
 	logger       *observability.Logger
 }
 
-func New(store CampaignEmailTemplateStore, emailService EmailService, logger *observability.Logger) CampaignEmailTemplateProcessor {
+func New(store CampaignEmailTemplateStore, emailService EmailService, tierService *tiers.TierService, logger *observability.Logger) CampaignEmailTemplateProcessor {
 	return CampaignEmailTemplateProcessor{
 		store:        store,
 		emailService: emailService,
+		tierService:  tierService,
 		logger:       logger,
 	}
 }
@@ -71,6 +75,16 @@ func (p *CampaignEmailTemplateProcessor) CreateCampaignEmailTemplate(ctx context
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "template_type", Value: req.Type},
 	)
+
+	// Check if account has visual_email_builder feature
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "visual_email_builder")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check visual_email_builder feature", err)
+		return store.CampaignEmailTemplate{}, err
+	}
+	if !hasFeature {
+		return store.CampaignEmailTemplate{}, ErrVisualEmailBuilderNotAvailable
+	}
 
 	// Validate template type
 	if !isValidTemplateType(req.Type) {
@@ -256,6 +270,16 @@ func (p *CampaignEmailTemplateProcessor) UpdateCampaignEmailTemplate(ctx context
 		observability.Field{Key: "campaign_id", Value: campaignID.String()},
 		observability.Field{Key: "template_id", Value: templateID.String()},
 	)
+
+	// Check if account has visual_email_builder feature
+	hasFeature, err := p.tierService.HasFeatureByAccountID(ctx, accountID, "visual_email_builder")
+	if err != nil {
+		p.logger.Error(ctx, "failed to check visual_email_builder feature", err)
+		return store.CampaignEmailTemplate{}, err
+	}
+	if !hasFeature {
+		return store.CampaignEmailTemplate{}, ErrVisualEmailBuilderNotAvailable
+	}
 
 	// Verify campaign exists and belongs to account
 	campaign, err := p.store.GetCampaignByID(ctx, campaignID)
