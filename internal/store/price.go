@@ -10,12 +10,12 @@ import (
 )
 
 const sqlCreatePrice = `
-INSERT INTO prices (product_id, stripe_id, description)
-VALUES ($1, $2, $3)
-RETURNING id, product_id, stripe_id, description, created_at, updated_at`
+INSERT INTO prices (product_id, stripe_id, description, unit_amount, currency, interval)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, product_id, stripe_id, description, unit_amount, currency, interval, created_at, updated_at`
 
 func (s *Store) CreatePrice(ctx context.Context, price Price) error {
-	_, err := s.db.ExecContext(ctx, sqlCreatePrice, price.ProductID, price.StripeID, price.Description)
+	_, err := s.db.ExecContext(ctx, sqlCreatePrice, price.ProductID, price.StripeID, price.Description, price.UnitAmount, price.Currency, price.Interval)
 	if err != nil {
 		return fmt.Errorf("failed to insert price: %w", err)
 	}
@@ -24,12 +24,12 @@ func (s *Store) CreatePrice(ctx context.Context, price Price) error {
 
 const sqlUpdatePriceByStripeID = `
 UPDATE prices
-SET product_id = $1, description = $2
-WHERE stripe_id = $3
+SET product_id = $1, description = $2, unit_amount = $3, currency = $4, interval = $5
+WHERE stripe_id = $6
 `
 
-func (s *Store) UpdatePriceByStripeID(ctx context.Context, productID uuid.UUID, description, stripeID string) error {
-	result, err := s.db.ExecContext(ctx, sqlUpdatePriceByStripeID, productID, description, stripeID)
+func (s *Store) UpdatePriceByStripeID(ctx context.Context, productID uuid.UUID, description string, unitAmount *int64, currency *string, interval *string, stripeID string) error {
+	result, err := s.db.ExecContext(ctx, sqlUpdatePriceByStripeID, productID, description, unitAmount, currency, interval, stripeID)
 	if err != nil {
 		return fmt.Errorf("failed to update price: %w", err)
 	}
@@ -53,7 +53,7 @@ func (s *Store) DeletePriceByStripeID(ctx context.Context, stripeID string) erro
 }
 
 const sqlGetPriceByStripeID = `
-SELECT id, product_id, stripe_id, description, created_at, updated_at
+SELECT id, product_id, stripe_id, description, unit_amount, currency, interval, created_at, updated_at
 FROM prices
 WHERE stripe_id = $1
 `
@@ -68,7 +68,7 @@ func (s *Store) GetPriceByStripeID(ctx context.Context, stripeID string) (Price,
 }
 
 const sqlGetAllPrices = `
-SELECT id, product_id, stripe_id, description, created_at, updated_at
+SELECT id, product_id, stripe_id, description, unit_amount, currency, interval, created_at, updated_at
 FROM prices
 `
 
@@ -87,7 +87,7 @@ func (s *Store) ListPrices(ctx context.Context) ([]Price, error) {
 }
 
 const sqlGetPriceByID = `
-SELECT id, product_id, stripe_id, description, created_at, updated_at
+SELECT id, product_id, stripe_id, description, unit_amount, currency, interval, created_at, updated_at
 FROM prices
 WHERE id = $1
 `

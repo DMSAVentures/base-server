@@ -15,6 +15,9 @@ type Price struct {
 	ProductID   uuid.UUID `json:"product_id"`
 	PriceID     uuid.UUID `json:"price_id"`
 	Description string    `json:"description"`
+	UnitAmount  *int64    `json:"unit_amount"`
+	Currency    *string   `json:"currency"`
+	Interval    *string   `json:"interval"`
 }
 
 func (p *ProductService) CreateProduct(ctx context.Context, productCreated stripe.Product) error {
@@ -62,11 +65,28 @@ func (p *ProductService) CreatePrice(ctx context.Context, priceCreated stripe.Pr
 		}
 	}
 
+	// Extract interval from recurring if present
+	var interval *string
+	if priceCreated.Recurring != nil && priceCreated.Recurring.Interval != "" {
+		intervalStr := string(priceCreated.Recurring.Interval)
+		interval = &intervalStr
+	}
+
+	// Extract currency
+	var currency *string
+	if priceCreated.Currency != "" {
+		currencyStr := string(priceCreated.Currency)
+		currency = &currencyStr
+	}
+
 	// Create the price in the local database
 	price := store.Price{
 		ProductID:   productInDB.ID,
 		StripeID:    priceCreated.ID,
 		Description: priceCreated.LookupKey,
+		UnitAmount:  &priceCreated.UnitAmount,
+		Currency:    currency,
+		Interval:    interval,
 	}
 
 	if err := p.store.CreatePrice(ctx, price); err != nil {
@@ -89,7 +109,21 @@ func (p *ProductService) UpdatePrice(ctx context.Context, priceUpdated stripe.Pr
 		return fmt.Errorf("failed to find associalted product: %w", err)
 	}
 
-	err = p.store.UpdatePriceByStripeID(ctx, product.ID, priceUpdated.LookupKey, priceUpdated.ID)
+	// Extract interval from recurring if present
+	var interval *string
+	if priceUpdated.Recurring != nil && priceUpdated.Recurring.Interval != "" {
+		intervalStr := string(priceUpdated.Recurring.Interval)
+		interval = &intervalStr
+	}
+
+	// Extract currency
+	var currency *string
+	if priceUpdated.Currency != "" {
+		currencyStr := string(priceUpdated.Currency)
+		currency = &currencyStr
+	}
+
+	err = p.store.UpdatePriceByStripeID(ctx, product.ID, priceUpdated.LookupKey, &priceUpdated.UnitAmount, currency, interval, priceUpdated.ID)
 	if err != nil {
 		p.logger.Error(ctx, "failed to update price", err)
 		return fmt.Errorf("failed to update price: %w", err)
@@ -123,6 +157,9 @@ func (p *ProductService) ListPrices(ctx context.Context) ([]Price, error) {
 			ProductID:   price.ProductID,
 			PriceID:     price.ID,
 			Description: price.Description,
+			UnitAmount:  price.UnitAmount,
+			Currency:    price.Currency,
+			Interval:    price.Interval,
 		}
 	}
 	return pricesTransformed, nil

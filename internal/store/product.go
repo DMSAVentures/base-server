@@ -21,6 +21,9 @@ type Price struct {
 	ProductID   uuid.UUID `db:"product_id"`
 	StripeID    string    `db:"stripe_id"`
 	Description string    `db:"description"`
+	UnitAmount  *int64    `db:"unit_amount"`
+	Currency    *string   `db:"currency"`
+	Interval    *string   `db:"interval"`
 	CreatedAt   string    `db:"created_at"`
 	UpdatedAt   string    `db:"updated_at"`
 }

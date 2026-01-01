@@ -194,7 +194,10 @@ func TestStore_UpdatePriceByStripeID(t *testing.T) {
 		}
 
 		newDescription := "$39.99/month"
-		err = testDB.Store.UpdatePriceByStripeID(ctx, product.ID, newDescription, priceStripeID)
+		newAmount := int64(3999)
+		newCurrency := "usd"
+		newInterval := "month"
+		err = testDB.Store.UpdatePriceByStripeID(ctx, product.ID, newDescription, &newAmount, &newCurrency, &newInterval, priceStripeID)
 		if err != nil {
 			t.Errorf("UpdatePriceByStripeID() error = %v", err)
 			return
@@ -213,7 +216,10 @@ func TestStore_UpdatePriceByStripeID(t *testing.T) {
 
 	t.Run("update non-existent price", func(t *testing.T) {
 		t.Parallel()
-		err := testDB.Store.UpdatePriceByStripeID(ctx, uuid.New(), "$49.99/month", "price_nonexistent_"+uuid.New().String())
+		amount := int64(4999)
+		currency := "usd"
+		interval := "month"
+		err := testDB.Store.UpdatePriceByStripeID(ctx, uuid.New(), "$49.99/month", &amount, &currency, &interval, "price_nonexistent_"+uuid.New().String())
 		if err == nil {
 			t.Error("UpdatePriceByStripeID() expected error for non-existent price")
 		}
