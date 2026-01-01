@@ -138,8 +138,8 @@ func TestStore_GetSignupsOverTime(t *testing.T) {
 	})
 
 	t.Run("monthly period", func(t *testing.T) {
-		from := now.AddDate(0, -2, 0)
-		to := now
+		from := todayNoon.AddDate(0, -2, 0)
+		to := todayNoon.AddDate(0, 0, 1) // Include today
 
 		results, err := testDB.Store.GetSignupsOverTime(ctx, campaign.ID, from, to, "month")
 		if err != nil {
@@ -162,7 +162,7 @@ func TestStore_GetSignupsOverTime(t *testing.T) {
 		currentMonthFound := false
 		for _, r := range results {
 			dateUTC := r.Date.UTC()
-			if dateUTC.Year() == now.Year() && dateUTC.Month() == now.Month() && r.Count > 0 {
+			if dateUTC.Year() == todayNoon.Year() && dateUTC.Month() == todayNoon.Month() && r.Count > 0 {
 				currentMonthFound = true
 				break
 			}
