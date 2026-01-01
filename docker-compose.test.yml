@@ -1,0 +1,112 @@
+name: base-server-test
+
+services:
+  db:
+    container_name: base-server-test-db
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: base_db
+      POSTGRES_USER: base_user
+      POSTGRES_PASSWORD: base_password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U base_user -d base_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: ["postgres", "-c", "fsync=off", "-c", "full_page_writes=off"]
+
+  flyway:
+    container_name: base-server-test-flyway
+    image: flyway/flyway
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/flyway/sql
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db:5432/base_db
+      FLYWAY_USER: base_user
+      FLYWAY_PASSWORD: base_password
+      FLYWAY_SCHEMAS: public
+      FLYWAY_CONNECT_RETRIES: 60
+    command: migrate
+
+  kafka:
+    container_name: base-server-test-kafka
+    image: confluentinc/cp-kafka:latest
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9094
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      CLUSTER_ID: 'TestCluster12345678901'
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  server:
+    container_name: base-server-test-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+    env_file:
+      - env.test
+    environment:
+      # Override database and kafka to use Docker service names
+      DB_HOST: db
+      KAFKA_BROKERS: kafka:9092
+      GO_ENV: test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  runner:
+    container_name: base-server-test-runner
+    hostname: test-runner
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    # No depends_on - services should already be up via docker-up
+    environment:
+      TEST_DB_HOST: db
+      TEST_DB_PORT: 5432
+      TEST_DB_USER: base_user
+      TEST_DB_PASS: base_password
+      TEST_DB_NAME: base_db
+      TEST_API_HOST: server
+      TEST_API_PORT: 8080
+      KAFKA_BROKERS: kafka:9092
+      # For mock webhook server - use container hostname so server can reach it
+      TEST_WEBHOOK_HOST: test-runner
+    volumes:
+      - ./:/app
+      - test_go_mod_cache:/go/pkg/mod
+      - test_go_build_cache:/root/.cache/go-build
+    working_dir: /app
+
+volumes:
+  test_postgres_data:
+  test_go_mod_cache:
+  test_go_build_cache:

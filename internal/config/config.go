@@ -72,8 +72,10 @@ type ServerConfig struct {
 
 // Load reads and validates all required environment variables
 func Load() (*Config, error) {
-	// Load env.local in non-production environments
-	if os.Getenv("GO_ENV") != "production" {
+	// Load env.local only in local development (not production or test)
+	// In test/production, env vars should be set via Docker or environment
+	goEnv := os.Getenv("GO_ENV")
+	if goEnv != "production" && goEnv != "test" {
 		if err := godotenv.Load("env.local"); err != nil {
 			return nil, fmt.Errorf("failed to load env.local: %w", err)
 		}

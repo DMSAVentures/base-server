@@ -1,0 +1,17 @@
+# Test runner image with Go installed
+FROM golang:1.23-alpine
+
+# Install required tools and build dependencies for CGO (needed for -race flag)
+RUN apk --no-cache add git curl bash gcc musl-dev
+
+# Enable CGO for race detector support
+ENV CGO_ENABLED=1
+
+WORKDIR /app
+
+# Copy go mod files first for caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Default command - can be overridden
+CMD ["go", "test", "-v", "./..."]

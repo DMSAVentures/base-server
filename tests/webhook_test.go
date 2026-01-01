@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"testing"
 )
 
@@ -746,7 +747,7 @@ func TestAPI_Webhook_TestWebhook(t *testing.T) {
 	})
 
 	server := &http.Server{
-		Addr:    "127.0.0.1:0", // Random port
+		Addr:    "0.0.0.0:0", // Random port, bind to all interfaces
 		Handler: mockServer,
 	}
 
@@ -759,8 +760,14 @@ func TestAPI_Webhook_TestWebhook(t *testing.T) {
 
 	go server.Serve(listener)
 
-	// Get the actual port
-	mockServerURL := fmt.Sprintf("http://%s/webhook", listener.Addr().String())
+	// Get the actual port - use TEST_WEBHOOK_HOST env var if set (for Docker),
+	// otherwise extract host from listener address
+	_, port, _ := net.SplitHostPort(listener.Addr().String())
+	webhookHost := os.Getenv("TEST_WEBHOOK_HOST")
+	if webhookHost == "" {
+		webhookHost = "127.0.0.1"
+	}
+	mockServerURL := fmt.Sprintf("http://%s:%s/webhook", webhookHost, port)
 
 	// Create a test webhook pointing to our mock server
 	createReq := map[string]interface{}{
