@@ -3,6 +3,7 @@ package processor
 import (
 	"base-server/internal/observability"
 	"base-server/internal/store"
+	"base-server/internal/tiers"
 	"context"
 	"errors"
 	"testing"
@@ -11,6 +12,35 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
+// mockTierStore is a test implementation that returns unlimited tier info with all features enabled
+type mockTierStore struct{}
+
+func (m *mockTierStore) GetTierInfoByAccountID(ctx context.Context, accountID uuid.UUID) (store.TierInfo, error) {
+	return store.TierInfo{
+		PriceDescription: "team",
+		Features:         map[string]bool{"referral_system": true},
+		Limits:           map[string]*int{},
+	}, nil
+}
+
+func (m *mockTierStore) GetTierInfoByUserID(ctx context.Context, userID uuid.UUID) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+func (m *mockTierStore) GetTierInfoByPriceID(ctx context.Context, priceID uuid.UUID) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+func (m *mockTierStore) GetFreeTierInfo(ctx context.Context) (store.TierInfo, error) {
+	return m.GetTierInfoByAccountID(ctx, uuid.Nil)
+}
+
+// createTestTierService creates a TierService with all features enabled for testing
+func createTestTierService() *tiers.TierService {
+	logger := observability.NewLogger()
+	return tiers.New(&mockTierStore{}, logger)
+}
+
 func TestListReferrals_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -18,7 +48,7 @@ func TestListReferrals_Success(t *testing.T) {
 	mockStore := NewMockReferralStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -53,7 +83,7 @@ func TestListReferrals_CampaignNotFound(t *testing.T) {
 	mockStore := NewMockReferralStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -76,7 +106,7 @@ func TestListReferrals_Unauthorized(t *testing.T) {
 	mockStore := NewMockReferralStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
@@ -100,7 +130,7 @@ func TestTrackReferral_Success(t *testing.T) {
 	mockStore := NewMockReferralStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -133,7 +163,7 @@ func TestTrackReferral_EmptyCode(t *testing.T) {
 	mockStore := NewMockReferralStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -152,7 +182,7 @@ func TestTrackReferral_InvalidCode(t *testing.T) {
 	mockStore := NewMockReferralStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	campaignID := uuid.New()
@@ -175,7 +205,7 @@ func TestGetUserReferrals_Success(t *testing.T) {
 	mockStore := NewMockReferralStore(ctrl)
 	logger := observability.NewLogger()
 
-	processor := New(mockStore, logger)
+	processor := New(mockStore, createTestTierService(), logger)
 
 	ctx := context.Background()
 	accountID := uuid.New()
