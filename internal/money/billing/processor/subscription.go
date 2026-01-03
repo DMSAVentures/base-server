@@ -15,68 +15,13 @@ import (
 
 var (
 	// ErrNoActiveSubscription is returned when no active subscription is found for a user
-	ErrNoActiveSubscription              = errors.New("no active subscription found")
-	ErrFailedToCreateSubscriptionIntent  = errors.New("failed to create subscription intent")
-	ErrFailedToCancelSubscription        = errors.New("failed to cancel subscription")
-	ErrFailedToUpdateSubscription        = errors.New("failed to update subscription")
-	ErrFailedToGetSubscription           = errors.New("failed to get subscription")
-	ErrFailedToCreateFreeSubscription    = errors.New("failed to create free subscription")
+	ErrNoActiveSubscription           = errors.New("no active subscription found")
+	ErrSubscriptionAlreadyExists      = errors.New("user already has an active subscription")
+	ErrFailedToCancelSubscription     = errors.New("failed to cancel subscription")
+	ErrFailedToUpdateSubscription     = errors.New("failed to update subscription")
+	ErrFailedToGetSubscription        = errors.New("failed to get subscription")
+	ErrFailedToCreateFreeSubscription = errors.New("failed to create free subscription")
 )
-
-func (p *BillingProcessor) CreateSubscriptionIntent(ctx context.Context, userID uuid.UUID, priceID string) (string, error) {
-	ctx = observability.WithFields(ctx,
-		observability.Field{Key: "user_id", Value: userID},
-		observability.Field{Key: "price_id", Value: priceID})
-
-	p.logger.Info(ctx, "Creating subscription intent for user")
-
-	stripeCustomerID, err := p.store.GetStripeCustomerIDByUserExternalID(ctx, userID)
-	if err != nil {
-		p.logger.Error(ctx, "failed to get stripe customer id from db", err)
-		return "", ErrFailedToCreateSubscriptionIntent
-	}
-
-	price, err := p.store.GetPriceByID(ctx, priceID)
-	if err != nil {
-		p.logger.Error(ctx, "failed to get price by stripe id", err)
-		return "", ErrFailedToCreateSubscriptionIntent
-	}
-
-	// Create the subscription
-	params := &stripe.SubscriptionParams{
-		Customer: stripe.String(stripeCustomerID), // The customer ID
-		Items: []*stripe.SubscriptionItemsParams{
-			{
-				Price: stripe.String(price.StripeID), // The recurring price ID
-			},
-		},
-		PaymentBehavior: stripe.String("default_incomplete"), // Handle payment confirmation manually
-		Expand: []*string{
-			stripe.String("customer"),                      // Expand the customer object to include email and other details
-			stripe.String("latest_invoice.payment_intent"), // Expand the latest invoice object to include the payment intent
-		},
-	}
-
-	subscriptionInitialized, err := subscription.New(params)
-	if err != nil {
-		p.logger.Error(ctx, "failed to initialize incomplete subscription", err)
-		return "", ErrFailedToCreateSubscriptionIntent
-	}
-	ctx = observability.WithFields(ctx, observability.Field{Key: "subscription_id", Value: subscriptionInitialized.ID})
-
-	// Check if a PaymentIntent exists on the latest invoice
-	var clientSecret string
-	if subscriptionInitialized.LatestInvoice != nil && subscriptionInitialized.LatestInvoice.PaymentIntent != nil {
-		clientSecret = subscriptionInitialized.LatestInvoice.PaymentIntent.ClientSecret
-	}
-
-	if clientSecret == "" {
-		p.logger.Error(ctx, "failed to get client secret for payment intent", nil)
-		return "", ErrFailedToCreateSubscriptionIntent
-	}
-
-	return clientSecret, nil
-}
 
 func (p *BillingProcessor) CreateFreeSubscription(ctx context.Context, stripeCustomerID string) error {
 	ctx = observability.WithFields(ctx,
@@ -149,11 +94,34 @@ func (p *BillingProcessor) UpdateSubscription(ctx context.Context, userID uuid.U
 		return ErrNoActiveSubscription
 	}
 
+	// Fetch the subscription from Stripe to get the subscription item ID
+	// The subscription item ID (si_xxx) is different from subscription ID (sub_xxx)
+	stripeSub, err := subscription.Get(activeSub.StripeID, nil)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get subscription from stripe", err)
+		return ErrFailedToUpdateSubscription
+	}
+
+	if len(stripeSub.Items.Data) == 0 {
+		p.logger.Error(ctx, "subscription has no items", nil)
+		return ErrFailedToUpdateSubscription
+	}
+
+	// Get the Stripe price ID from our internal price ID
+	price, err := p.store.GetPriceByID(ctx, priceID)
+	if err != nil {
+		p.logger.Error(ctx, "failed to get price by id", err)
+		return ErrFailedToUpdateSubscription
+	}
+
+	// Use the subscription item ID, not the subscription ID
+	subscriptionItemID := stripeSub.Items.Data[0].ID
+
 	params := &stripe.SubscriptionParams{
 		Items: []*stripe.SubscriptionItemsParams{
 			{
-				ID:    stripe.String(activeSub.StripeID),
-				Price: stripe.String(priceID),
+				ID:    stripe.String(subscriptionItemID),
+				Price: stripe.String(price.StripeID),
 			},
 		},
 		ProrationBehavior: stripe.String("create_prorations"),
@@ -190,6 +158,19 @@ func (p *BillingProcessor) CreateCheckoutSession(ctx context.Context, userID uui
 	ctx = observability.WithFields(ctx,
 		observability.Field{Key: "user_id", Value: userID},
 		observability.Field{Key: "price_id", Value: priceID})
+
+	// Check if user already has an active subscription - only allow one subscription per user
+	_, err := p.GetActiveSubscription(ctx, userID)
+	if err == nil {
+		// User already has a subscription, they should use billing portal to change plans
+		p.logger.Info(ctx, "user already has an active subscription, use billing portal to change plans")
+		return nil, ErrSubscriptionAlreadyExists
+	}
+	if !errors.Is(err, ErrNoActiveSubscription) {
+		// Unexpected error checking subscription
+		p.logger.Error(ctx, "failed to check existing subscription", err)
+		return nil, errors.New("failed to check existing subscription")
+	}
 
 	stripeCustomerID, err := p.store.GetStripeCustomerIDByUserExternalID(ctx, userID)
 	if err != nil {

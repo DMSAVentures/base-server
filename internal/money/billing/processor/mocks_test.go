@@ -90,18 +90,18 @@ func (mr *MockBillingProcessorInterfaceMockRecorder) CreateCheckoutSession(ctx, 
 }
 
 // CreateCustomerPortal mocks base method.
-func (m *MockBillingProcessorInterface) CreateCustomerPortal(ctx context.Context, user uuid.UUID) (string, error) {
+func (m *MockBillingProcessorInterface) CreateCustomerPortal(ctx context.Context, userID uuid.UUID, priceID *string) (string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateCustomerPortal", ctx, user)
+	ret := m.ctrl.Call(m, "CreateCustomerPortal", ctx, userID, priceID)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CreateCustomerPortal indicates an expected call of CreateCustomerPortal.
-func (mr *MockBillingProcessorInterfaceMockRecorder) CreateCustomerPortal(ctx, user any) *gomock.Call {
+func (mr *MockBillingProcessorInterfaceMockRecorder) CreateCustomerPortal(ctx, userID, priceID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCustomerPortal", reflect.TypeOf((*MockBillingProcessorInterface)(nil).CreateCustomerPortal), ctx, user)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCustomerPortal", reflect.TypeOf((*MockBillingProcessorInterface)(nil).CreateCustomerPortal), ctx, userID, priceID)
 }
 
 // CreateFreeSubscription mocks base method.
@@ -131,36 +131,6 @@ func (m *MockBillingProcessorInterface) CreateStripeCustomer(ctx context.Context
 func (mr *MockBillingProcessorInterfaceMockRecorder) CreateStripeCustomer(ctx, email any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateStripeCustomer", reflect.TypeOf((*MockBillingProcessorInterface)(nil).CreateStripeCustomer), ctx, email)
-}
-
-// CreateStripePaymentIntent mocks base method.
-func (m *MockBillingProcessorInterface) CreateStripePaymentIntent(ctx context.Context, items []PaymentIntentItem) (string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateStripePaymentIntent", ctx, items)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreateStripePaymentIntent indicates an expected call of CreateStripePaymentIntent.
-func (mr *MockBillingProcessorInterfaceMockRecorder) CreateStripePaymentIntent(ctx, items any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateStripePaymentIntent", reflect.TypeOf((*MockBillingProcessorInterface)(nil).CreateStripePaymentIntent), ctx, items)
-}
-
-// CreateSubscriptionIntent mocks base method.
-func (m *MockBillingProcessorInterface) CreateSubscriptionIntent(ctx context.Context, userID uuid.UUID, priceID string) (string, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateSubscriptionIntent", ctx, userID, priceID)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// CreateSubscriptionIntent indicates an expected call of CreateSubscriptionIntent.
-func (mr *MockBillingProcessorInterfaceMockRecorder) CreateSubscriptionIntent(ctx, userID, priceID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSubscriptionIntent", reflect.TypeOf((*MockBillingProcessorInterface)(nil).CreateSubscriptionIntent), ctx, userID, priceID)
 }
 
 // GetActiveSubscription mocks base method.
@@ -388,20 +358,6 @@ func (m *MockBillingProcessorInterface) SubscriptionUpdated(ctx context.Context,
 func (mr *MockBillingProcessorInterfaceMockRecorder) SubscriptionUpdated(ctx, subscription any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscriptionUpdated", reflect.TypeOf((*MockBillingProcessorInterface)(nil).SubscriptionUpdated), ctx, subscription)
-}
-
-// UpdateSubscription mocks base method.
-func (m *MockBillingProcessorInterface) UpdateSubscription(ctx context.Context, userID uuid.UUID, priceID string) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateSubscription", ctx, userID, priceID)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UpdateSubscription indicates an expected call of UpdateSubscription.
-func (mr *MockBillingProcessorInterfaceMockRecorder) UpdateSubscription(ctx, userID, priceID any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSubscription", reflect.TypeOf((*MockBillingProcessorInterface)(nil).UpdateSubscription), ctx, userID, priceID)
 }
 
 // MockBillingStore is a mock of BillingStore interface.

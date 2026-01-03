@@ -22,22 +22,19 @@ type BillingProcessorInterface interface {
 	CreateStripeCustomer(ctx context.Context, email string) (string, error)
 
 	// Subscription Management
-	CreateSubscriptionIntent(ctx context.Context, userID uuid.UUID, priceID string) (string, error)
 	CreateFreeSubscription(ctx context.Context, stripeCustomerID string) error
 	CancelSubscription(ctx context.Context, userID uuid.UUID) error
 	CancelSubscriptionBySubscriptionExternalID(ctx context.Context, stripSubID string) error
-	UpdateSubscription(ctx context.Context, userID uuid.UUID, priceID string) error
 	GetActiveSubscription(ctx context.Context, userID uuid.UUID) (subscriptions.Subscription, error)
 
-	// Checkout Management
+	// Checkout & Portal Management
 	CreateCheckoutSession(ctx context.Context, userID uuid.UUID, priceID string) (*stripe.CheckoutSession, error)
 	GetCheckoutSession(ctx context.Context, sessionID string) (CheckoutSessionInfo, error)
+	CreateCustomerPortal(ctx context.Context, userID uuid.UUID) (string, error)
 
-	// Payment Processing
+	// Payment Method Management
 	SetupPaymentMethodUpdateIntent(ctx context.Context, userID uuid.UUID) (string, error)
 	GetPaymentMethodForUser(ctx context.Context, userID uuid.UUID) (PaymentMethod, error)
-	CreateStripePaymentIntent(ctx context.Context, items []PaymentIntentItem) (string, error)
-	CreateCustomerPortal(ctx context.Context, user uuid.UUID) (string, error)
 
 	// Pricing Management
 	ListPrices(ctx context.Context) ([]products.Price, error)
@@ -99,11 +96,6 @@ type BillingProcessor struct {
 	emailService        EmailService
 }
 
-type PaymentIntentItem struct {
-	Id     string `json:"id" binding:"required"`
-	Amount int64  `json:"amount" binding:"required"`
-}
-
 func New(stripKey string, webhookSecret string, webhostURL string, store BillingStore,
 	productService ProductService, subService SubscriptionService,
 	emailService EmailService, logger *observability.Logger) BillingProcessor {
@@ -134,5 +126,4 @@ func (p *BillingProcessor) CreateStripeCustomer(ctx context.Context, email strin
 	}
 
 	return customer.ID, nil
-
 }

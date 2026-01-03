@@ -23,6 +23,8 @@ func (h *Handler) handleError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, processor.ErrNoActiveSubscription):
 		apierrors.NotFound(c, "No active subscription found")
+	case errors.Is(err, processor.ErrSubscriptionAlreadyExists):
+		apierrors.Conflict(c, "SUBSCRIPTION_EXISTS", "You already have an active subscription. Use billing portal to change plans.")
 	default:
 		apierrors.InternalError(c, err)
 	}

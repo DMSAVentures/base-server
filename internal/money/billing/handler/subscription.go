@@ -2,7 +2,6 @@ package handler
 
 import (
 	"base-server/internal/apierrors"
-	"base-server/internal/money/billing/processor"
 	"base-server/internal/observability"
 	"net/http"
 
@@ -10,65 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-type CreatePaymentIntentRequest struct {
-	Items []processor.PaymentIntentItem `json:"items" binding:"required"`
-}
-
-type CreateSubscriptionRequest struct {
-	PriceID string `json:"price_id" binding:"required"`
-}
-
-type UpdatePaymentMethodRequest struct {
-	PaymentMethodID string `json:"payment_method_id" binding:"required"`
-}
-
 type CreateCheckoutSessionRequest struct {
 	PriceID string `json:"price_id" binding:"required"`
-}
-
-// Create Stripe payment intent
-func (h *Handler) HandleCreatePaymentIntent(c *gin.Context) {
-	ctx := c.Request.Context()
-	var req CreatePaymentIntentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.ValidationError(c, err)
-		return
-	}
-
-	userID := c.MustGet("User-ID")
-	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
-
-	clientSecret, err := h.processor.CreateStripePaymentIntent(ctx, req.Items)
-	if err != nil {
-		h.handleError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"client_secret": clientSecret})
-	return
-}
-
-func (h *Handler) HandleCreateSubscriptionIntent(c *gin.Context) {
-	ctx := c.Request.Context()
-	var req CreateSubscriptionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.ValidationError(c, err)
-		return
-	}
-
-	userID := c.MustGet("User-ID")
-	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
-
-	clientSecret, err := h.processor.CreateSubscriptionIntent(ctx, parsedUserID, req.PriceID)
-	if err != nil {
-		h.handleError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"client_secret": clientSecret})
-	return
 }
 
 func (h *Handler) HandleCancelSubscription(c *gin.Context) {
@@ -159,5 +101,4 @@ func (h *Handler) HandleCreateCustomerPortal(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"url": sessionURL})
-	return
 }

@@ -78,13 +78,8 @@ func (a *API) RegisterRoutes() {
 	protectedGroup := apiGroup.Group("/protected", a.authHandler.HandleJWTMiddleware)
 	{
 		protectedGroup.GET("/user", a.authHandler.GetUserInfo)
-		protectedGroup.POST("billing/create-payment-intent", a.billingHandler.HandleCreatePaymentIntent)
-		protectedGroup.POST("billing/create-subscription-intent", a.billingHandler.HandleCreateSubscriptionIntent)
 		protectedGroup.GET("billing/subscription", a.billingHandler.HandleGetSubscription)
-		protectedGroup.POST("billing/update-subscription", a.billingHandler.HandleUpdateSubscription)
 		protectedGroup.DELETE("billing/cancel-subscription", a.billingHandler.HandleCancelSubscription)
-		protectedGroup.POST("billing/payment-method-update-intent", a.billingHandler.HandleUpdatePaymentMethod)
-		protectedGroup.POST("billing/get-payment-method", a.billingHandler.HandleGetPaymentMethod)
 		protectedGroup.POST("billing/create-customer-portal", a.billingHandler.HandleCreateCustomerPortal)
 		protectedGroup.POST("billing/create-checkout-session", a.billingHandler.HandleCreateCheckoutSession)
 		protectedGroup.GET("billing/checkout-session", a.billingHandler.GetCheckoutSession)

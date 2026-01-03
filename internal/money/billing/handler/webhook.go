@@ -11,29 +11,6 @@ import (
 	"github.com/stripe/stripe-go/v79/webhook"
 )
 
-func (h *Handler) HandleUpdateSubscription(c *gin.Context) {
-	ctx := c.Request.Context()
-
-	userID := c.MustGet("User-ID")
-	parsedUserID := uuid.MustParse(userID.(string))
-	ctx = observability.WithFields(ctx, observability.Field{Key: "user_id", Value: parsedUserID})
-
-	var req CreateSubscriptionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		apierrors.ValidationError(c, err)
-		return
-	}
-
-	err := h.processor.UpdateSubscription(ctx, parsedUserID, req.PriceID)
-	if err != nil {
-		h.handleError(c, err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "success"})
-	return
-}
-
 func (h *Handler) HandleGetPaymentMethod(c *gin.Context) {
 	ctx := c.Request.Context()
 	userID := c.MustGet("User-ID")
