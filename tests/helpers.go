@@ -509,24 +509,13 @@ func ensureTierExists(t *testing.T, tierName string) uuid.UUID {
 	ctx := context.Background()
 	db := testStore.GetDB()
 
-	// Try to find existing price
-	var priceID uuid.UUID
-	err := db.GetContext(ctx, &priceID, `
-		SELECT id FROM prices WHERE description = $1 AND deleted_at IS NULL LIMIT 1
-	`, config.Name)
-
-	if err == nil {
-		// Price exists, cache and return
-		*priceIDPtr = priceID
-		return priceID
-	}
-
-	// Price doesn't exist, need to create it
-	// First, ensure all tiers are created to avoid partial state
+	// Always ensure tiers are set up (products, prices, features, limits, plan_feature_limits)
+	// This handles both creation of new data and updating existing data
 	ensureAllTiersCreated(t, db, ctx)
 
-	// Now look up the price again
-	err = db.GetContext(ctx, &priceID, `
+	// Now look up the price
+	var priceID uuid.UUID
+	err := db.GetContext(ctx, &priceID, `
 		SELECT id FROM prices WHERE description = $1 AND deleted_at IS NULL LIMIT 1
 	`, config.Name)
 	if err != nil {
@@ -538,30 +527,76 @@ func ensureTierExists(t *testing.T, tierName string) uuid.UUID {
 	return priceID
 }
 
+// tiersInitialized tracks whether tier data has been ensured in this test run
+var tiersInitialized bool
+
 // ensureAllTiersCreated creates all products, prices, features, limits, and plan_feature_limits
 // This is called once when any tier is first needed
 func ensureAllTiersCreated(t *testing.T, db *sqlx.DB, ctx context.Context) {
-	// Check if we've already created the tiers by looking for the free price
-	var count int
-	err := db.GetContext(ctx, &count, `SELECT COUNT(*) FROM prices WHERE description = 'free' AND deleted_at IS NULL`)
-	if err == nil && count > 0 {
-		return // Already created
+	// Only run once per test run (protected by mutex in ensureTierExists)
+	if tiersInitialized {
+		return
 	}
 
-	// Create products
+	// Create products (safe to run multiple times)
 	createTestProducts(t, db, ctx)
 
-	// Create prices
+	// Create prices (checks existence before inserting)
 	createTestPrices(t, db, ctx)
 
-	// Ensure features exist
+	// Ensure features exist (uses ON CONFLICT DO NOTHING)
 	ensureFeaturesExist(t, db, ctx)
 
-	// Ensure limits exist
+	// Ensure limits exist (uses ON CONFLICT DO NOTHING)
 	ensureLimitsExist(t, db, ctx)
 
-	// Create plan_feature_limits
+	// Create plan_feature_limits (deletes and recreates to ensure correct values)
 	createPlanFeatureLimits(t, db, ctx)
+
+	// Verify critical features are set correctly for free tier
+	verifyFreeTierFeatures(t, db, ctx)
+
+	tiersInitialized = true
+}
+
+// verifyFreeTierFeatures ensures free tier has restricted features
+func verifyFreeTierFeatures(t *testing.T, db *sqlx.DB, ctx context.Context) {
+	var priceID uuid.UUID
+	err := db.GetContext(ctx, &priceID, `
+		SELECT id FROM prices WHERE description = 'free' AND deleted_at IS NULL LIMIT 1
+	`)
+	if err != nil {
+		t.Fatalf("Could not find free tier price for verification: %v", err)
+	}
+
+	// Check tracking_pixels should be false for free tier
+	var trackingPixelsEnabled bool
+	err = db.GetContext(ctx, &trackingPixelsEnabled, `
+		SELECT pfl.enabled
+		FROM plan_feature_limits pfl
+		JOIN features f ON f.id = pfl.feature_id
+		WHERE pfl.plan_id = $1 AND f.name = 'tracking_pixels' AND pfl.deleted_at IS NULL
+	`, priceID)
+	if err != nil {
+		t.Fatalf("Could not verify tracking_pixels for free tier (price_id=%s): %v", priceID, err)
+	}
+	if trackingPixelsEnabled {
+		t.Fatalf("FATAL: Free tier (price_id=%s) has tracking_pixels=true but should be false!", priceID)
+	}
+
+	// Count total features for free tier
+	var featureCount int
+	err = db.GetContext(ctx, &featureCount, `
+		SELECT COUNT(*)
+		FROM plan_feature_limits pfl
+		WHERE pfl.plan_id = $1 AND pfl.deleted_at IS NULL
+	`, priceID)
+	if err != nil {
+		t.Fatalf("Could not count features for free tier: %v", err)
+	}
+	if featureCount < 12 {
+		t.Fatalf("Free tier (price_id=%s) has only %d plan_feature_limits entries, expected at least 12", priceID, featureCount)
+	}
 }
 
 // createTestProducts creates the test products if they don't exist
@@ -574,6 +609,7 @@ func createTestProducts(t *testing.T, db *sqlx.DB, ctx context.Context) {
 		{"Free Plan", "Free tier product", "prod_test_free"},
 		{"Pro Plan", "Pro tier product", "prod_test_pro"},
 		{"Team Plan", "Team tier product", "prod_test_team"},
+		{"Team Annual Plan", "Team annual tier product", "prod_test_team_annual"},
 	}
 
 	for _, p := range products {
@@ -597,19 +633,32 @@ func createTestPrices(t *testing.T, db *sqlx.DB, ctx context.Context) {
 	}{
 		{"prod_test_free", "free", "price_test_free"},
 		{"prod_test_pro", "lc_pro_monthly", "price_test_pro"},
-		{"prod_test_pro", "lc_pro_annual", "price_test_pro_annual"},
+		{"prod_test_pro", "lc_pro_annual", "price_test_pro_annual"},    // Pro annual uses prod_test_pro
 		{"prod_test_team", "lc_team_monthly", "price_test_team"},
-		{"prod_test_team", "lc_team_annual", "price_test_team_annual"},
+		{"prod_test_team_annual", "lc_team_annual", "price_test_team_annual"}, // Team annual needs its own product
 	}
 
 	for _, p := range prices {
-		_, err := db.ExecContext(ctx, `
+		// Check if price with this description already exists
+		var existingCount int
+		err := db.GetContext(ctx, &existingCount, `
+			SELECT COUNT(*) FROM prices WHERE description = $1 AND deleted_at IS NULL
+		`, p.description)
+		if err != nil {
+			t.Fatalf("Failed to check existing price for %s: %v", p.description, err)
+		}
+
+		if existingCount > 0 {
+			continue // Price already exists
+		}
+
+		// Insert new price
+		_, err = db.ExecContext(ctx, `
 			INSERT INTO prices (product_id, description, stripe_id)
 			SELECT id, $2, $3 FROM products WHERE stripe_id = $1 AND deleted_at IS NULL
-			ON CONFLICT DO NOTHING
 		`, p.productStripeID, p.description, p.stripeID)
 		if err != nil {
-			t.Fatalf("Failed to create price %s: %v", p.description, err)
+			t.Fatalf("Failed to create price for %s: %v", p.description, err)
 		}
 	}
 }
@@ -678,6 +727,7 @@ func ensureLimitsExist(t *testing.T, db *sqlx.DB, ctx context.Context) {
 }
 
 // createPlanFeatureLimits creates the plan_feature_limits mappings
+// Deletes existing entries and recreates them to ensure correct values
 func createPlanFeatureLimits(t *testing.T, db *sqlx.DB, ctx context.Context) {
 	configs := getTierConfigs()
 
@@ -687,6 +737,9 @@ func createPlanFeatureLimits(t *testing.T, db *sqlx.DB, ctx context.Context) {
 		"all_widget_types", "remove_branding", "anti_spam_protection", "enhanced_lead_data",
 		"tracking_pixels", "webhooks_zapier", "email_blasts", "json_export",
 	}
+
+	// Resource features
+	resourceFeatures := []string{"campaigns", "leads", "team_members"}
 
 	for tierName, config := range configs {
 		// Get price ID
@@ -698,23 +751,35 @@ func createPlanFeatureLimits(t *testing.T, db *sqlx.DB, ctx context.Context) {
 			t.Fatalf("Failed to get price ID for tier %s: %v", tierName, err)
 		}
 
-		// Insert boolean features
+		// Delete existing plan_feature_limits for this price
+		_, err = db.ExecContext(ctx, `
+			DELETE FROM plan_feature_limits WHERE plan_id = $1
+		`, priceID)
+		if err != nil {
+			t.Fatalf("Failed to delete plan_feature_limits for tier %s: %v", tierName, err)
+		}
+
+		// Insert boolean features fresh
 		for _, featureName := range boolFeatures {
 			enabled := config.Features[featureName]
-			_, err := db.ExecContext(ctx, `
+			result, err := db.ExecContext(ctx, `
 				INSERT INTO plan_feature_limits (plan_id, feature_id, limit_id, enabled)
 				SELECT $1, id, NULL, $3 FROM features WHERE name = $2
-				ON CONFLICT (plan_id, feature_id) DO NOTHING
 			`, priceID, featureName, enabled)
 			if err != nil {
 				t.Fatalf("Failed to create plan_feature_limit for tier %s, feature %s: %v", tierName, featureName, err)
 			}
+			rowsAffected, _ := result.RowsAffected()
+			if rowsAffected == 0 {
+				t.Fatalf("No rows inserted for plan_feature_limit tier %s, feature %s - feature may not exist", tierName, featureName)
+			}
 		}
 
 		// Insert resource limits (campaigns, leads, team_members)
-		insertResourceLimit(t, db, ctx, priceID, "campaigns", config.Limits["campaigns"], tierName)
-		insertResourceLimit(t, db, ctx, priceID, "leads", config.Limits["leads"], tierName)
-		insertResourceLimit(t, db, ctx, priceID, "team_members", config.Limits["team_members"], tierName)
+		for _, featureName := range resourceFeatures {
+			limitValue := config.Limits[featureName]
+			insertResourceLimit(t, db, ctx, priceID, featureName, limitValue, tierName)
+		}
 	}
 }
 
@@ -725,7 +790,6 @@ func insertResourceLimit(t *testing.T, db *sqlx.DB, ctx context.Context, priceID
 		_, err := db.ExecContext(ctx, `
 			INSERT INTO plan_feature_limits (plan_id, feature_id, limit_id, enabled)
 			SELECT $1, id, NULL, true FROM features WHERE name = $2
-			ON CONFLICT (plan_id, feature_id) DO NOTHING
 		`, priceID, featureName)
 		if err != nil {
 			t.Fatalf("Failed to create unlimited plan_feature_limit for tier %s, feature %s: %v", tierName, featureName, err)
@@ -739,7 +803,6 @@ func insertResourceLimit(t *testing.T, db *sqlx.DB, ctx context.Context, priceID
 			FROM features f
 			JOIN limits l ON l.feature_id = f.id
 			WHERE f.name = $2 AND l.limit_name = $3
-			ON CONFLICT (plan_id, feature_id) DO NOTHING
 		`, priceID, featureName, limitName)
 		if err != nil {
 			t.Fatalf("Failed to create plan_feature_limit for tier %s, feature %s, limit %s: %v", tierName, featureName, limitName, err)

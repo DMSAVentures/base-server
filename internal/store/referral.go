@@ -193,7 +193,7 @@ const sqlGetReferralsByCampaignWithStatusFilter = `
 SELECT id, campaign_id, referrer_id, referred_id, status, source, ip_address, verified_at, converted_at, created_at, updated_at
 FROM referrals
 WHERE campaign_id = $1
-  AND ($2::text IS NULL OR status = $2)
+  AND ($2::text IS NULL OR status::text = $2)
 ORDER BY created_at DESC
 LIMIT $3 OFFSET $4
 `
@@ -212,7 +212,7 @@ const sqlCountReferralsByCampaignWithStatusFilter = `
 SELECT COUNT(*)
 FROM referrals
 WHERE campaign_id = $1
-  AND ($2::text IS NULL OR status = $2)
+  AND ($2::text IS NULL OR status::text = $2)
 `
 
 // CountReferralsByCampaignWithStatusFilter counts total referrals for a campaign with optional status filter

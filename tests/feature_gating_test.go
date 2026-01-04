@@ -131,9 +131,15 @@ func TestAPI_TrackingPixels_Gating(t *testing.T) {
 		// Create a campaign first
 		campaignID := createTestCampaign(t, token)
 
-		// Try to update with tracking pixels
+		// Try to update with tracking pixels (using correct API format)
 		updateReq := map[string]interface{}{
-			"facebook_pixel_id": "123456789",
+			"tracking_integrations": []map[string]interface{}{
+				{
+					"integration_type": "meta_pixel",
+					"enabled":          true,
+					"tracking_id":      "123456789",
+				},
+			},
 		}
 		path := fmt.Sprintf("/api/v1/campaigns/%s", campaignID)
 		resp, body := makeAuthenticatedRequest(t, http.MethodPut, path, updateReq, token)
@@ -155,8 +161,15 @@ func TestAPI_TrackingPixels_Gating(t *testing.T) {
 
 		campaignID := createTestCampaign(t, token)
 
+		// Use correct API format for tracking integrations
 		updateReq := map[string]interface{}{
-			"google_analytics_id": "G-12345678",
+			"tracking_integrations": []map[string]interface{}{
+				{
+					"integration_type": "google_analytics",
+					"enabled":          true,
+					"tracking_id":      "G-12345678",
+				},
+			},
 		}
 		path := fmt.Sprintf("/api/v1/campaigns/%s", campaignID)
 		resp, body := makeAuthenticatedRequest(t, http.MethodPut, path, updateReq, token)
@@ -172,9 +185,20 @@ func TestAPI_TrackingPixels_Gating(t *testing.T) {
 
 		campaignID := createTestCampaign(t, token)
 
+		// Use correct API format for tracking integrations
 		updateReq := map[string]interface{}{
-			"facebook_pixel_id":   "123456789",
-			"google_analytics_id": "G-12345678",
+			"tracking_integrations": []map[string]interface{}{
+				{
+					"integration_type": "meta_pixel",
+					"enabled":          true,
+					"tracking_id":      "123456789",
+				},
+				{
+					"integration_type": "google_analytics",
+					"enabled":          true,
+					"tracking_id":      "G-12345678",
+				},
+			},
 		}
 		path := fmt.Sprintf("/api/v1/campaigns/%s", campaignID)
 		resp, body := makeAuthenticatedRequest(t, http.MethodPut, path, updateReq, token)
@@ -185,8 +209,11 @@ func TestAPI_TrackingPixels_Gating(t *testing.T) {
 
 		var campaign map[string]interface{}
 		parseJSONResponse(t, body, &campaign)
-		if campaign["facebook_pixel_id"] != "123456789" {
-			t.Errorf("expected facebook_pixel_id to be saved, got %v", campaign["facebook_pixel_id"])
+
+		// Verify tracking integrations were saved
+		trackingIntegrations, ok := campaign["tracking_integrations"].([]interface{})
+		if !ok || len(trackingIntegrations) != 2 {
+			t.Errorf("expected 2 tracking integrations, got %v", campaign["tracking_integrations"])
 		}
 	})
 }
@@ -204,8 +231,11 @@ func TestAPI_AntiSpamProtection_Gating(t *testing.T) {
 
 		campaignID := createTestCampaign(t, token)
 
+		// Use correct API format - captcha_enabled is inside form_settings
 		updateReq := map[string]interface{}{
-			"captcha_enabled": true,
+			"form_settings": map[string]interface{}{
+				"captcha_enabled": true,
+			},
 		}
 		path := fmt.Sprintf("/api/v1/campaigns/%s", campaignID)
 		resp, body := makeAuthenticatedRequest(t, http.MethodPut, path, updateReq, token)
@@ -227,8 +257,11 @@ func TestAPI_AntiSpamProtection_Gating(t *testing.T) {
 
 		campaignID := createTestCampaign(t, token)
 
+		// Use correct API format - captcha_enabled is inside form_settings
 		updateReq := map[string]interface{}{
-			"captcha_enabled": true,
+			"form_settings": map[string]interface{}{
+				"captcha_enabled": true,
+			},
 		}
 		path := fmt.Sprintf("/api/v1/campaigns/%s", campaignID)
 		resp, body := makeAuthenticatedRequest(t, http.MethodPut, path, updateReq, token)
@@ -239,8 +272,15 @@ func TestAPI_AntiSpamProtection_Gating(t *testing.T) {
 
 		var campaign map[string]interface{}
 		parseJSONResponse(t, body, &campaign)
-		if campaign["captcha_enabled"] != true {
-			t.Errorf("expected captcha_enabled to be true, got %v", campaign["captcha_enabled"])
+
+		// Check form_settings.captcha_enabled
+		formSettings, ok := campaign["form_settings"].(map[string]interface{})
+		if !ok {
+			t.Errorf("expected form_settings in response, got %v", campaign["form_settings"])
+			return
+		}
+		if formSettings["captcha_enabled"] != true {
+			t.Errorf("expected captcha_enabled to be true, got %v", formSettings["captcha_enabled"])
 		}
 	})
 }
@@ -258,12 +298,12 @@ func TestAPI_VisualEmailBuilder_Gating(t *testing.T) {
 
 		campaignID := createTestCampaign(t, token)
 
+		// Use correct API field names: html_body (not html_content), type (not trigger_type)
 		createReq := map[string]interface{}{
-			"name":         "Welcome Email",
-			"subject":      "Welcome to our waitlist!",
-			"html_content": "<html><body>Welcome!</body></html>",
-			"text_content": "Welcome!",
-			"trigger_type": "user_created",
+			"name":      "Welcome Email",
+			"subject":   "Welcome to our waitlist!",
+			"html_body": "<html><body>Welcome!</body></html>",
+			"type":      "welcome",
 		}
 		path := fmt.Sprintf("/api/v1/campaigns/%s/email-templates", campaignID)
 		resp, body := makeAuthenticatedRequest(t, http.MethodPost, path, createReq, token)
@@ -285,12 +325,12 @@ func TestAPI_VisualEmailBuilder_Gating(t *testing.T) {
 
 		campaignID := createTestCampaign(t, token)
 
+		// Use correct API field names: html_body (not html_content), type (not trigger_type)
 		createReq := map[string]interface{}{
-			"name":         "Welcome Email",
-			"subject":      "Welcome to our waitlist!",
-			"html_content": "<html><body>Welcome!</body></html>",
-			"text_content": "Welcome!",
-			"trigger_type": "user_created",
+			"name":      "Welcome Email",
+			"subject":   "Welcome to our waitlist!",
+			"html_body": "<html><body>Welcome!</body></html>",
+			"type":      "welcome",
 		}
 		path := fmt.Sprintf("/api/v1/campaigns/%s/email-templates", campaignID)
 		resp, body := makeAuthenticatedRequest(t, http.MethodPost, path, createReq, token)
@@ -312,13 +352,12 @@ func TestAPI_VisualEmailBuilder_Gating(t *testing.T) {
 
 		campaignID := createTestCampaign(t, token)
 
-		// Create a template first
+		// Create a template first (using correct field names)
 		createReq := map[string]interface{}{
-			"name":         "Welcome Email",
-			"subject":      "Welcome!",
-			"html_content": "<html><body>Welcome!</body></html>",
-			"text_content": "Welcome!",
-			"trigger_type": "user_created",
+			"name":      "Welcome Email",
+			"subject":   "Welcome!",
+			"html_body": "<html><body>Welcome!</body></html>",
+			"type":      "welcome",
 		}
 		createPath := fmt.Sprintf("/api/v1/campaigns/%s/email-templates", campaignID)
 		createResp, createBody := makeAuthenticatedRequest(t, http.MethodPost, createPath, createReq, token)
@@ -539,7 +578,8 @@ func createTestWaitlistUserWithCustomFields(t *testing.T, campaignID string, cus
 		signupReq["custom_fields"] = customFields
 	}
 
-	path := fmt.Sprintf("/api/public/v1/%s/signup", campaignID)
+	// Use the correct public API path
+	path := fmt.Sprintf("/api/v1/campaigns/%s/users", campaignID)
 	resp, body := makeRequest(t, http.MethodPost, path, signupReq, nil)
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("Failed to create waitlist user: %s", string(body))
